@@ -1,0 +1,39 @@
+name: Danger Yarn Checks
+
+on:
+  workflow_call:
+    inputs:
+      github-token:
+        description: GitHub token for Danger
+        required: true
+        type: string
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: yarn
+          cache-dependency-path: ${{ github.action_path }}/yarn.lock
+      - name: Install tool deps (from this repo)
+        working-directory: ${{ github.action_path }}
+        run: |
+          if yarn --version | grep -q '^1'; then
+            yarn install --frozen-lockfile
+          else
+            yarn install --immutable
+          fi
+      - name: Run Danger
+        working-directory: ${{ github.workspace }}
+        env:
+          DANGER_GITHUB_API_TOKEN: ${{ inputs.github-token || github.token }}
+        run: |
+          "${{ github.action_path }}/node_modules/.bin/danger" ci \
+            --use=typescript \
+            --dangerfile "${{ github.action_path }}/danger-yarn.ts"

@@ -1,0 +1,12 @@
+{
+  "name": "duchamp",
+  "version": "1.0.0",
+  "license": "MIT",
+  "private": true,
+  "dependencies": {
+    "danger": "^13.0.4",
+    "danger-plugin-yarn": "^1.6.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.2"
+  }
+}
