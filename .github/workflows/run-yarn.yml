@@ -4,7 +4,7 @@ on:
   workflow_call:
     secrets:
       DANGER_TOKEN:
-        required: true
+        required: false
 
 jobs:
   run:
