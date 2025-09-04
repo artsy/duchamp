@@ -2,6 +2,9 @@ name: Danger Yarn Checks
 
 on:
   workflow_call:
+    secrets:
+      danger-token:
+        required: true
 
 jobs:
   run:
