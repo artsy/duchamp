@@ -3,7 +3,7 @@ name: Danger Yarn Checks
 on:
   workflow_call:
     secrets:
-      github-token:
+      danger-token:
         required: true
 
 jobs:
@@ -37,7 +37,8 @@ jobs:
       - name: Run Danger
         working-directory: ${{ github.workspace }}
         env:
-          DANGER_GITHUB_API_TOKEN: ${{ secrets.github-token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DANGER_GITHUB_API_TOKEN: ${{ secrets.danger-token }}
         run: |
           .tooling/node_modules/.bin/danger ci \
             --use=typescript \
