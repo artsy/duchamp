@@ -40,6 +40,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DANGER_GITHUB_API_TOKEN: ${{ secrets.DANGER_TOKEN }}
         run: |
+          if [ -z "${DANGER_GITHUB_API_TOKEN}" ]; then
+            echo "DANGER_GITHUB_API_TOKEN is empty: true"
+          else
+            echo "DANGER_GITHUB_API_TOKEN is empty: false"
+          fi
+
           .tooling/node_modules/.bin/danger ci \
             --use=typescript \
             --dangerfile ".tooling/danger-yarn.ts"
