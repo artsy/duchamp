@@ -5,11 +5,17 @@ on:
     secrets:
       danger-token:
         required: true
+    inputs:
+      node-version:
+        default: "22"
+        required: false
+        type: string
 
 jobs:
   run:
     uses: ./.github/workflows/run-danger.yml
     with:
       dangerfile: .tooling/danger-yarn.ts
+      node-version: ${{ inputs.node-version }}
     secrets:
       danger-token: ${{ secrets.danger-token }}
