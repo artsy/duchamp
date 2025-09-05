@@ -25,13 +25,13 @@ jobs:
               We use **Conventional Commit formatting** for PR titles, but your PR title does not appear to follow this.
               Please update your title to follow [Conventional Commits](https://www.conventionalcommits.org) guidelines.  
               `;
-              // Post a comment on the PR
+
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: pr.number,
                 body: message
               });
-              // Fail the check
+
               core.setFailed("PR title does not follow Conventional Commit rules.");
             }

@@ -1,0 +1,8 @@
+name: ☢️ Run CC Check
+
+on:
+  pull_request:
+
+jobs:
+  run-danger:
+    uses: artsy/duchamp/.github/workflows/reusable-conventional-commits-check.yml@PHIRE-2172-test
