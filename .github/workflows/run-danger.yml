@@ -18,6 +18,10 @@ on:
         default: false
         required: false
         type: boolean
+      fail-on-errors:
+        default: true
+        required: false
+        type: boolean
 
 jobs:
   run:
@@ -64,4 +68,4 @@ jobs:
           "$DANGER_BIN" ci \
             --use=typescript \
             --dangerfile "${{ inputs.dangerfile }}"
-            --failOnErrors
+            ${{ inputs.fail-on-errors && '--failOnErrors' || '' }}
