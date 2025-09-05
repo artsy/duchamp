@@ -14,7 +14,7 @@ on:
         default: "22"
         required: false
         type: string
-      use-caller-repo-deps:
+      install-from-caller:
         default: false
         required: false
         type: boolean
@@ -46,11 +46,11 @@ jobs:
             .tooling/yarn.lock
 
       - name: Install caller packages
-        if: ${{ inputs.use-caller-repo-deps }}
+        if: ${{ inputs.install-from-caller }}
         run: yarn install --frozen-lockfile
 
       - name: Install tooling packages
-        if: ${{ !inputs.use-caller-repo-deps }}
+        if: ${{ !inputs.install-from-caller }}
         working-directory: .tooling
         run: yarn install --frozen-lockfile
 
@@ -59,7 +59,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DANGER_GITHUB_API_TOKEN: ${{ secrets.danger-token }}
-          DANGER_BIN: ${{ inputs.use-caller-repo-deps && 'node_modules/.bin/danger' || '.tooling/node_modules/.bin/danger' }}
+          DANGER_BIN: ${{ inputs.install-from-caller && 'node_modules/.bin/danger' || '.tooling/node_modules/.bin/danger' }}
         run: |
           "$DANGER_BIN" ci \
             --use=typescript \
