@@ -1,10 +1,15 @@
-name: Danger Yarn Checks
+name: Danger Checks
 
 on:
   workflow_call:
     secrets:
       danger-token:
         required: true
+    inputs:
+      dangerfile:
+        default: "dangerfile.ts"
+        required: false
+        type: string
 
 jobs:
   run:
@@ -42,4 +47,4 @@ jobs:
         run: |
           .tooling/node_modules/.bin/danger ci \
             --use=typescript \
-            --dangerfile ".tooling/danger-yarn.ts"
+            --dangerfile "${{ inputs.dangerfile }}"

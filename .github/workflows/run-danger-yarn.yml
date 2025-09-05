@@ -1,0 +1,15 @@
+name: Danger Yarn Checks
+
+on:
+  workflow_call:
+    secrets:
+      danger-token:
+        required: true
+
+jobs:
+  run:
+    uses: ./.github/workflows/danger.yml
+    with:
+      dangerfile: .tooling/danger-yarn.ts
+    secrets:
+      danger-token: ${{ secrets.danger-token }}
