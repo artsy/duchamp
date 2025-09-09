@@ -1,0 +1,23 @@
+name: Conventional Commit PR Titles
+
+on:
+  workflow_call:
+
+jobs:
+  validate-pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tooling repo
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .tooling
+
+      - name: Validate PR title
+        if: github.event.pull_request.draft == false
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = require('./.tooling/.github/scripts/conventional-commits-check.js')
+            await run({ github, context, core })
