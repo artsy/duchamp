@@ -51,12 +51,12 @@ jobs:
 
       - name: Install caller packages
         if: ${{ inputs.install-from-caller }}
-        run: yarn install --frozen-lockfile
+        run: yarn install
 
       - name: Install tooling packages
         if: ${{ !inputs.install-from-caller }}
         working-directory: .tooling
-        run: yarn install --frozen-lockfile
+        run: yarn install
 
       - name: Run Danger
         working-directory: ${{ github.workspace }}
