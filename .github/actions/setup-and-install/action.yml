@@ -1,0 +1,46 @@
+name: 'Setup Node and Install Dependencies'
+description: 'Sets up Node.js and installs dependencies with Yarn version detection'
+inputs:
+  node-version:
+    description: 'Node.js version to use'
+    required: false
+    default: '22'
+  install-from-caller:
+    description: 'Whether to install from caller directory or tooling directory'
+    required: false
+    default: 'false'
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: yarn
+        cache-dependency-path: |
+          yarn.lock
+          .tooling/yarn.lock
+
+    - name: Install packages
+      shell: bash
+      run: |
+        # Determine which directory to install in
+        if [ "${{ inputs.install-from-caller }}" == "true" ]; then
+          INSTALL_DIR="."
+        else
+          INSTALL_DIR=".tooling"
+        fi
+        
+        echo "Installing packages in: $INSTALL_DIR"
+        cd "$INSTALL_DIR"
+        
+        # Detect Yarn version and install with appropriate flags
+        if [ -f ".yarnrc.yml" ]; then
+          # Yarn 2+ (Berry)
+          echo "Detected Yarn 2+ (Berry), using --immutable flag"
+          yarn install --immutable
+        else
+          # Yarn 1 (Classic)
+          echo "Detected Yarn 1 (Classic), using --frozen-lockfile flag"
+          yarn install --frozen-lockfile
+        fi
