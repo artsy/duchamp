@@ -40,23 +40,11 @@ jobs:
           ref: main
           path: .tooling
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Node and Install Dependencies
+        uses: ./.tooling/.github/actions/setup-and-install
         with:
-          node-version: "${{ inputs.node-version }}"
-          cache: yarn
-          cache-dependency-path: |
-            yarn.lock
-            .tooling/yarn.lock
-
-      - name: Install caller packages
-        if: ${{ inputs.install-from-caller }}
-        run: yarn install
-
-      - name: Install tooling packages
-        if: ${{ !inputs.install-from-caller }}
-        working-directory: .tooling
-        run: yarn install
+          node-version: ${{ inputs.node-version }}
+          install-from-caller: ${{ inputs.install-from-caller }}
 
       - name: Run Danger
         working-directory: ${{ github.workspace }}
