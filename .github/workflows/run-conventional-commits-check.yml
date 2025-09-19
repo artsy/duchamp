@@ -32,18 +32,15 @@ jobs:
               return false;
             }
 
-      # - name: Check result
-      #   run: echo "${{steps.validate-title.outputs.result}}"
-
       - name: Leave comment if check failed
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const pr = context.payload.pull_request;
-            const { owner, repo } = context.repo;
-            const prNumber = pr.number;
-            if (false == false) {
+            if (${{steps.validate-title.outputs.result}} == false) {
+              const pr = context.payload.pull_request;
+              const { owner, repo } = context.repo;
+              const prNumber = pr.number;
               const allComments = await github.paginate(
                 github.rest.issues.listComments,
                 { owner, repo, issue_number: prNumber, per_page: 100 }
@@ -71,4 +68,28 @@ jobs:
               console.log('PR title is valid.');
             }
 
-      # - name: Delete existing comments # if validate PR title passes and already comment
+      - name: Delete existing comments
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            if (${{steps.validate-title.outputs.result}} == true) {
+              const pr = context.payload.pull_request;
+              const { owner, repo } = context.repo;
+              const prNumber = pr.number;
+
+              const allComments = await github.paginate(
+                github.rest.issues.listComments,
+                { owner, repo, issue_number: prNumber, per_page: 100 }
+              );
+              const existing = allComments.find(c =>
+                typeof c.body === 'string' && c.body.includes('<!-- cc-title-bot -->')
+              );
+
+              if (existing) {
+                await github.rest.issues.deleteComment({
+                  owner, repo, comment_id: existing.id
+                });
+                core.info('Conventional commit check passed, deleted existing comments.');
+              }
+            }
