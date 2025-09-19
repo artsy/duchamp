@@ -46,11 +46,11 @@ jobs:
                   owner: owner,
                   repo: repo,
                   issue_number: context.payload.pull_request.number,
-                  body: |
-                    <!-- cc-title-bot -->
-                    Hi there! :wave:
-                    We use **Conventional Commit formatting** for PR titles, but your PR title does not appear to follow this.
-                    Please update your title to follow [Conventional Commits](https://www.conventionalcommits.org) guidelines.
+                  body: `<!-- cc-title-bot -->
+            Hi there! :wave:
+            We use **Conventional Commit formatting** for PR titles, but your PR title does not appear to follow this.
+            Please update your title to follow [Conventional Commits](https://www.conventionalcommits.org) guidelines.
+                  `
                 });
               }
               else {
