@@ -32,27 +32,43 @@ jobs:
               return false;
             }
 
-      - name: Check result
-        run: echo "${{steps.validate-title.outputs.result}}"
+      # - name: Check result
+      #   run: echo "${{steps.validate-title.outputs.result}}"
 
-      # - name: Leave comment if check failed
-      #   uses: actions/github-script@v7
-      #   with:
-      #     github-token: ${{ secrets.GITHUB_TOKEN }}
-      #     script: |
-      #       await github.rest.issues.createComment({
-      #         owner: context.repo.owner,
-      #         repo: context.repo.repo,
-      #         issue_number: context.payload.pull_request.number,
-      #         body: `## 🚀Deploy reminder
-
-      #         Please **do not** manually merge this deploy PR!
-
-      #         When motion deploys it kills any running tasks in Airflow. We therefore have set up deploy windows so that it automatically deploys at times when we do not expect any tasks to be running. The deploy windows are currently:
-
-      #         - 3pm-5pm UTC
-      #         - 7pm-9pm UTC
-      #         - 11pm-12am UTC`
-      #       });
+      - name: Leave comment if check failed
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            const { owner, repo } = context.repo;
+            const prNumber = pr.number;
+            if (false == false) {
+              const allComments = await github.paginate(
+                github.rest.issues.listComments,
+                { owner, repo, issue_number: prNumber, per_page: 100 }
+              );
+              const existing = allComments.find(c =>
+                typeof c.body === 'string' && c.body.includes('<!-- cc-title-bot -->')
+              );
+              if (!existing) {
+                await github.rest.issues.createComment({
+                  owner: owner,
+                  repo: repo,
+                  issue_number: context.payload.pull_request.number,
+                  body: `<!-- cc-title-bot -->
+            Hi there! :wave:
+            We use **Conventional Commit formatting** for PR titles, but your PR title does not appear to follow this.
+            Please update your title to follow [Conventional Commits](https://www.conventionalcommits.org) guidelines.
+                  `
+                });
+              }
+              else {
+                console.log('PR title is invalid but reminder has already been posted; skipping reminder.');
+              }
+            }
+            else {
+              console.log('PR title is valid.');
+            }
 
       # - name: Delete existing comments # if validate PR title passes and already comment
