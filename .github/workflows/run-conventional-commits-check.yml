@@ -7,13 +7,6 @@ jobs:
   validate-pr-title:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout tooling repo
-        uses: actions/checkout@v4
-        with:
-          repository: artsy/duchamp
-          ref: PHIRE-2172
-          path: .tooling
-
       - name: Validate PR title
         id: validate-title
         if: github.event.pull_request.draft == false
