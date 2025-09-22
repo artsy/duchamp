@@ -390,7 +390,7 @@ create-require@^1.1.0:
   resolved "https://registry.yarnpkg.com/create-require/-/create-require-1.1.1.tgz#c1d7e8f1e5f6cfc9ff65f9cd352d37348756c333"
   integrity sha512-dcKFX3jn0MpIaXjisoRvexIJVEKzaq7z2rZKxf+MSr9TkdmHmsU4m2lcLojrj/FHl8mk5VxMmYA+ftRkP/3oKQ==
 
-danger-plugin-yarn@^1.6.0:
+danger-plugin-yarn@1.6.0:
   version "1.6.0"
   resolved "https://registry.yarnpkg.com/danger-plugin-yarn/-/danger-plugin-yarn-1.6.0.tgz#9ca1336cfe8017867d97a7ed410ab82c8397f04d"
   integrity sha512-W4l8ccD9uAkXU1SNhF25ezPZXB1WtHJjHT43wP0zjUq0pvBmslV+WhI+HZX2IFeY9T2VrrHiMGy6Mr2PcpdWLA==
@@ -401,7 +401,7 @@ danger-plugin-yarn@^1.6.0:
     node-fetch "^2.6.0"
     semver "^5.4.1"
 
-danger@^13.0.4:
+danger@13.0.4:
   version "13.0.4"
   resolved "https://registry.yarnpkg.com/danger/-/danger-13.0.4.tgz#1c597c5e4aaa45810793f9eccf2f8261b468adfa"
   integrity sha512-IAdQ5nSJyIs4zKj6AN35ixt2B0Ce3WZUm3IFe/CMnL/Op7wV7IGg4D348U0EKNaNPP58QgXbdSk9pM+IXP1QXg==
@@ -942,7 +942,7 @@ tr46@~0.0.3:
   resolved "https://registry.yarnpkg.com/tr46/-/tr46-0.0.3.tgz#8184fd347dac9cdc185992f3a6622e14b9d9ab6a"
   integrity sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==
 
-ts-node@^10.9.2:
+ts-node@10.9.2:
   version "10.9.2"
   resolved "https://registry.yarnpkg.com/ts-node/-/ts-node-10.9.2.tgz#70f021c9e185bccdca820e26dc413805c101c71f"
   integrity sha512-f0FFpIdcHgn8zcPSbf1dRevwt047YMnaiJM3u2w2RewrB+fob/zePZcrOyQoLMMO7aBIddLcQIEK5dYjkLnGrQ==
@@ -961,7 +961,7 @@ ts-node@^10.9.2:
     v8-compile-cache-lib "^3.0.1"
     yn "3.1.1"
 
-typescript@^5.9.2:
+typescript@5.9.2:
   version "5.9.2"
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-5.9.2.tgz#d93450cddec5154a2d5cabe3b8102b83316fb2a6"
   integrity sha512-CWBzXQrc/qOkhidw1OzBTQuYRbfyxDXJMVJ1XNwUHGROVmuaeiEm3OslpZ1RV96d7SKKjZKrSJu3+t/xlw3R9A==
