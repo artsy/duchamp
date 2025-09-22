@@ -7,9 +7,9 @@
     "@types/node": "^24.3.1"
   },
   "dependencies": {
-    "danger": "^13.0.4",
-    "danger-plugin-yarn": "^1.6.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.9.2"
+    "danger": "13.0.4",
+    "danger-plugin-yarn": "1.6.0",
+    "ts-node": "10.9.2",
+    "typescript": "5.9.2"
   }
 }
