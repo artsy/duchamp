@@ -1,0 +1,21 @@
+name: Add Version Label
+
+on:
+  workflow_call:
+    secrets:
+      danger-token:
+        required: true
+    inputs:
+      node-version:
+        default: "22"
+        required: false
+        type: string
+
+jobs:
+  run:
+    uses: ./.github/workflows/run-danger.yml
+    with:
+      dangerfile: .tooling/add-version-label.ts
+      node-version: ${{ inputs.node-version }}
+    secrets:
+      danger-token: ${{ secrets.danger-token }}
