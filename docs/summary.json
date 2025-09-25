@@ -1,6 +1,5 @@
 {
   "getting-started.md": "Setup and integration guide for using duchamp actions",
   "actions.md": "Detailed reference for all available GitHub Actions",
-  "examples.md": "Real-world usage patterns and configuration examples",
-  "troubleshooting.md": "Common issues and debugging solutions"
+  "examples.md": "Real-world usage patterns and configuration examples"
 }

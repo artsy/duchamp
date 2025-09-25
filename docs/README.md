@@ -11,14 +11,12 @@ Welcome to the duchamp documentation! This directory contains comprehensive guid
 | **[Getting Started](./getting-started.md)** | Basic setup and integration        | New users setting up duchamp for the first time       |
 | **[Available Actions](./actions.md)**       | Complete reference for all actions | Developers needing detailed action specifications     |
 | **[Usage Examples](./examples.md)**         | Real-world configuration examples  | Teams implementing duchamp in different project types |
-| **[Troubleshooting](./troubleshooting.md)** | Common issues and solutions        | Debugging workflow problems                           |
 
 ## 🚀 Quick Start Path
 
 1. **New to duchamp?** Start with [Getting Started](./getting-started.md)
 2. **Need specific action details?** Check [Available Actions](./actions.md)
 3. **Want to see examples?** Browse [Usage Examples](./examples.md)
-4. **Having issues?** Visit [Troubleshooting](./troubleshooting.md)
 
 ## 🔍 Find What You Need
 
@@ -27,7 +25,6 @@ Welcome to the duchamp documentation! This directory contains comprehensive guid
 - **Setting up Danger.js checks**: [Getting Started → Basic Integration](./getting-started.md#basic-integration)
 - **Auto-labeling PRs**: [Actions → run-add-version-label.yml](./actions.md#run-add-version-labelyml)
 - **Custom Danger rules**: [Examples → Custom Danger Rules](./examples.md#custom-danger-rules)
-- **Workflow not working**: [Troubleshooting](./troubleshooting.md)
 - **Node.js project setup**: [Examples → Basic Node.js Project](./examples.md#basic-nodejs-project)
 
 ### By Repository Type

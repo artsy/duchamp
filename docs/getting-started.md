@@ -49,7 +49,7 @@ mkdir -p .github/workflows
 
 Start with the most common workflows:
 
-#### Danger.js Checks (Recommended for all repos)
+#### Danger.js Checks (Recommended for all Node repos)
 
 ```yaml
 # .github/workflows/danger.yml
@@ -173,10 +173,9 @@ jobs:
 
 ### Getting Help
 
-- Check the [troubleshooting guide](./troubleshooting.md)
 - Review existing workflow runs for error messages
 - Contact [@amonkhouse](https://github.com/amonkhouse) or [@mc-jones](https://github.com/mc-jones)
-- Ask in [#practice-platform](https://artsy.slack.com/messages/practice-platform) 🔒
+- Ask in [#product-sapphire](https://artsy.slack.com/messages/product-sapphire) 🔒
 
 ## Next Steps
 
