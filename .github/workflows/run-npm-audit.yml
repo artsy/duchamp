@@ -1,0 +1,83 @@
+name: 🔒 NPM Audit
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        default: "22"
+        required: false
+        type: string
+      fail-on-vulnerabilities:
+        default: true
+        required: false
+        type: boolean
+      severity-filter:
+        default: "critical"
+        required: false
+        type: string
+
+jobs:
+  npm-audit:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: "yarn"
+
+      - name: Run Yarn Audit (JSON)
+        id: audit
+        run: |
+          set -o pipefail
+          yarn audit --recursive --json > audit.json || true
+
+      - name: Comment Vulnerabilities
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const severityFilter = '${{ inputs.severity-filter }}';
+
+            // Parse the JSON lines
+            const lines = fs.readFileSync('audit.json', 'utf8').trim().split('\n');
+            const advisories = lines
+              .map(line => { try { return JSON.parse(line); } catch { return null; } })
+              .filter(obj => obj && obj.type === 'auditAdvisory' && obj.data.advisory.severity === severityFilter)
+              .map(obj => obj.data.advisory);
+
+            if (advisories.length === 0) {
+              console.log(`No ${severityFilter} advisories found in JSON.`);
+              return;
+            }
+
+            // Build a nice PR comment
+            let body = "## 🔒 NPM Audit Results\n";
+            body += `${severityFilter.charAt(0).toUpperCase() + severityFilter.slice(1)} vulnerabilities detected:\n\n`;
+
+            for (const adv of advisories) {
+              body += `- **${adv.module_name}** ${adv.vulnerable_versions}\n`;
+              body += `  - ID: ${adv.github_advisory_id || adv.id}\n`;
+              body += `  - Title: ${adv.title}\n`;
+              body += `  - URL: ${adv.url}\n\n`;
+            }
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+            // 🚨 mark that vulns were found
+            core.exportVariable('VULNS_FOUND', 'true');
+
+      - name: Fail if vulnerabilities found
+        if: env.VULNS_FOUND == 'true' && inputs.fail-on-vulnerabilities == true
+        run: exit 1
