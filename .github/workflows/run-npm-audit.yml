@@ -25,17 +25,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
-          cache: "yarn"
 
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Prepare Yarn
-        run: corepack install
+      - run: corepack enable
+      - run: corepack install # respects packageManager field
 
       - name: Run Yarn Audit (JSON)
         id: audit
