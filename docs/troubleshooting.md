@@ -9,11 +9,13 @@ This guide helps resolve common issues when using duchamp actions in your reposi
 **Symptoms**: Workflow fails within the first few seconds without running Danger.js
 
 **Most Likely Causes**:
+
 1. Missing `DANGER_GITHUB_API_TOKEN` secret
 2. Incorrect workflow syntax
 3. Referencing non-existent duchamp action
 
 **Quick Fix**:
+
 ```bash
 # Check your workflow file syntax
 cat .github/workflows/your-workflow.yml
@@ -27,11 +29,13 @@ cat .github/workflows/your-workflow.yml
 **Symptoms**: Action runs but Danger.js reports errors or fails to comment
 
 **Most Likely Causes**:
+
 1. Token lacks required permissions
 2. Custom dangerfile has syntax errors
 3. Repository configuration issues
 
 **Quick Fix**:
+
 ```bash
 # Test Danger locally
 npx danger pr --dry-run
@@ -42,11 +46,13 @@ npx danger pr --dry-run
 ### 1. Missing DANGER_GITHUB_API_TOKEN
 
 **Error Message**:
+
 ```
 Error: Input required and not supplied: danger-token
 ```
 
 **Solution**:
+
 1. Go to your repository's Settings
 2. Navigate to "Secrets and variables" > "Actions"
 3. Add new repository secret:
@@ -56,16 +62,20 @@ Error: Input required and not supplied: danger-token
 ### 2. Permission Denied Errors
 
 **Error Message**:
+
 ```
 Error: Resource not accessible by integration
 ```
 
 **Causes**:
+
 - Token doesn't have required permissions
 - Repository has restrictive settings
 
 **Solution**:
+
 1. Verify token has these permissions:
+
    - Read access to repository
    - Write access to pull requests
    - Write access to issues (for labeling)
@@ -77,11 +87,13 @@ Error: Resource not accessible by integration
 ### 3. TypeScript Compilation Errors
 
 **Error Message**:
+
 ```
 TS2307: Cannot find module 'danger'
 ```
 
 **Solution**:
+
 ```bash
 # Install dependencies in the right location
 yarn install
@@ -94,36 +106,41 @@ yarn add -D danger @types/node
 ### 4. Custom Dangerfile Not Found
 
 **Error Message**:
+
 ```
 Could not find dangerfile at path: custom-dangerfile.ts
 ```
 
 **Solution**:
+
 1. Verify the file exists at the specified path
 2. Check the dangerfile input in your workflow:
    ```yaml
    with:
-     dangerfile: "path/to/your/dangerfile.ts"  # Must be exact path
+     dangerfile: "path/to/your/dangerfile.ts" # Must be exact path
    ```
 
 ### 5. Node Version Conflicts
 
 **Error Message**:
+
 ```
 The engine "node" is incompatible with this module
 ```
 
 **Solution**:
+
 ```yaml
 # Specify compatible Node version
 uses: artsy/duchamp/.github/workflows/run-danger-yarn.yml@main
 with:
-  node-version: "18"  # Use your project's Node version
+  node-version: "18" # Use your project's Node version
 ```
 
 ### 6. Yarn Version Issues
 
 **Error Messages**:
+
 ```
 error Package manager is not supported
 error An unexpected error occurred: "ENOENT: no such file or directory, open 'package.json'"
@@ -136,25 +153,24 @@ The setup-and-install action should handle this automatically, but if issues per
 # For Yarn 1 (Classic)
 - run: yarn install --frozen-lockfile
 
-# For Yarn 2+ (Berry)  
+# For Yarn 2+ (Berry)
 - run: yarn install --immutable
 ```
 
 ### 7. Auto-Release Configuration Missing
 
 **Error Message**:
+
 ```
 Skipping, because this repo does not have an .autorc file
 ```
 
 **Solution**:
 Create `.autorc` file in repository root:
+
 ```json
 {
-  "plugins": [
-    "npm",
-    "released"
-  ],
+  "plugins": ["npm", "released"],
   "labels": {
     "Version: Major": "major",
     "Version: Minor": "minor",
@@ -167,6 +183,7 @@ Create `.autorc` file in repository root:
 ### 8. Labels Already Exist Warning
 
 **Error Message**:
+
 ```
 HttpError: Validation Failed: Label already exists
 ```
@@ -180,11 +197,13 @@ This is usually harmless. The action will use existing labels instead of creatin
 ### 9. Rate Limiting
 
 **Error Message**:
+
 ```
 API rate limit exceeded for user
 ```
 
 **Solution**:
+
 1. Wait for rate limit to reset (usually 1 hour)
 2. Consider using a different token with higher limits
 3. Reduce frequency of workflow runs if possible
@@ -192,16 +211,18 @@ API rate limit exceeded for user
 ### 10. Large PR Timeout
 
 **Error Message**:
+
 ```
 The operation was canceled
 ```
 
 **Solution**:
+
 ```yaml
 # Increase timeout for large repositories
 jobs:
   danger:
-    timeout-minutes: 15  # Default is 5 minutes
+    timeout-minutes: 15 # Default is 5 minutes
     uses: artsy/duchamp/.github/workflows/run-danger-yarn.yml@main
 ```
 
@@ -273,6 +294,7 @@ jobs:
 **Symptoms**: Dependencies take a long time to install
 
 **Solutions**:
+
 1. **Use caching** (automatically enabled in setup-and-install)
 2. **Clean lockfile**:
    ```bash
@@ -286,6 +308,7 @@ jobs:
 **Symptoms**: Workflows timeout after 6 minutes
 
 **Solutions**:
+
 1. **Increase timeout**:
    ```yaml
    jobs:
@@ -300,11 +323,13 @@ jobs:
 ### Token Exposure
 
 **Never do**:
+
 - Log token values
 - Include tokens in error messages
 - Commit tokens to version control
 
 **If token is exposed**:
+
 1. Immediately revoke the token
 2. Generate a new token
 3. Update repository secrets
@@ -315,6 +340,7 @@ jobs:
 **Symptoms**: Actions work inconsistently across repositories
 
 **Check**:
+
 1. Token has consistent permissions across repos
 2. Repository settings allow Actions
 3. Branch protection rules don't conflict
@@ -347,6 +373,7 @@ When reporting issues, include:
 ### Emergency Support
 
 For critical issues blocking deployments:
+
 1. **Slack #practice-platform** 🔒 immediately
 2. **Disable the failing workflow** temporarily
 3. **Contact maintainers** directly
@@ -354,19 +381,20 @@ For critical issues blocking deployments:
 ## Frequently Asked Questions
 
 ### Q: Can I use duchamp actions in private repositories?
+
 **A**: Yes, duchamp actions work with both public and private repositories.
 
 ### Q: Do I need to install Danger.js in my repository?
+
 **A**: No, duchamp actions include Danger.js. Only install it locally if you want to test dangerfiles.
 
 ### Q: Can I use multiple duchamp actions in one workflow?
+
 **A**: Yes, you can use multiple actions in the same workflow file.
 
 ### Q: How do I update to new versions of duchamp?
-**A**: Update the version reference in your workflow file (e.g., `@main` to `@v2.0.0`).
 
-### Q: Can I contribute fixes to duchamp?
-**A**: Yes! See our [contributing guide](./contributing.md) for details.
+**A**: Update the version reference in your workflow file (e.g., `@main` to `@v2.0.0`).
 
 ## Known Limitations
 

@@ -46,7 +46,6 @@ For detailed documentation, see the [docs/](./docs/) directory:
 - [Getting Started](./docs/getting-started.md) - Setup and basic usage
 - [Available Actions](./docs/actions.md) - Detailed action reference
 - [Examples](./docs/examples.md) - Real-world usage examples
-- [Contributing](./docs/contributing.md) - How to contribute
 - [Troubleshooting](./docs/troubleshooting.md) - Common issues and solutions
 
 ## 🛠 Development

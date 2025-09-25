@@ -6,26 +6,19 @@ Welcome to the duchamp documentation! This directory contains comprehensive guid
 
 ### For Users
 
-| Guide | Purpose | Best For |
-|-------|---------|----------|
-| **[Getting Started](./getting-started.md)** | Basic setup and integration | New users setting up duchamp for the first time |
-| **[Available Actions](./actions.md)** | Complete reference for all actions | Developers needing detailed action specifications |
-| **[Usage Examples](./examples.md)** | Real-world configuration examples | Teams implementing duchamp in different project types |
-| **[Troubleshooting](./troubleshooting.md)** | Common issues and solutions | Debugging workflow problems |
-
-### For Contributors
-
-| Guide | Purpose | Best For |
-|-------|---------|----------|
-| **[Contributing](./contributing.md)** | Development and contribution guidelines | Contributors wanting to improve duchamp |
+| Guide                                       | Purpose                            | Best For                                              |
+| ------------------------------------------- | ---------------------------------- | ----------------------------------------------------- |
+| **[Getting Started](./getting-started.md)** | Basic setup and integration        | New users setting up duchamp for the first time       |
+| **[Available Actions](./actions.md)**       | Complete reference for all actions | Developers needing detailed action specifications     |
+| **[Usage Examples](./examples.md)**         | Real-world configuration examples  | Teams implementing duchamp in different project types |
+| **[Troubleshooting](./troubleshooting.md)** | Common issues and solutions        | Debugging workflow problems                           |
 
 ## 🚀 Quick Start Path
 
 1. **New to duchamp?** Start with [Getting Started](./getting-started.md)
-2. **Need specific action details?** Check [Available Actions](./actions.md)  
+2. **Need specific action details?** Check [Available Actions](./actions.md)
 3. **Want to see examples?** Browse [Usage Examples](./examples.md)
 4. **Having issues?** Visit [Troubleshooting](./troubleshooting.md)
-5. **Want to contribute?** Read [Contributing](./contributing.md)
 
 ## 🔍 Find What You Need
 
@@ -40,7 +33,7 @@ Welcome to the duchamp documentation! This directory contains comprehensive guid
 ### By Repository Type
 
 - **React/Frontend**: [Examples → React/Frontend Project](./examples.md#reactfrontend-project)
-- **API/Backend**: [Examples → API/Backend Project](./examples.md#apibackend-project)  
+- **API/Backend**: [Examples → API/Backend Project](./examples.md#apibackend-project)
 - **Library with releases**: [Examples → Library with Auto-Release](./examples.md#library-with-auto-release)
 - **Monorepo**: [Examples → Monorepo Configuration](./examples.md#monorepo-configuration)
 
@@ -68,4 +61,4 @@ This documentation follows [Artsy's documentation best practices](https://github
 
 ---
 
-*Last updated: [Current Date] | Maintained by Artsy Platform Practice*
+_Last updated: [Current Date] | Maintained by Artsy Platform Practice_

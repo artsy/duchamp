@@ -29,6 +29,7 @@ Most duchamp actions require the following secret to be configured in your repos
 This token allows Danger.js to comment on pull requests and perform repository operations.
 
 **Setup:**
+
 1. Go to your repository's Settings > Secrets and variables > Actions
 2. Click "New repository secret"
 3. Name: `DANGER_GITHUB_API_TOKEN`
@@ -90,13 +91,10 @@ If your repository uses automated releases, create an `.autorc` file:
 
 ```json
 {
-  "plugins": [
-    "npm",
-    "released"
-  ],
+  "plugins": ["npm", "released"],
   "labels": {
     "Version: Major": "major",
-    "Version: Minor": "minor", 
+    "Version: Minor": "minor",
     "Version: Patch": "patch",
     "Version: Trivial": "skip-release"
   }
@@ -109,17 +107,21 @@ Create a `dangerfile.ts` in your repository root for custom checks:
 
 ```typescript
 // dangerfile.ts
-import { danger, warn, fail } from "danger"
+import { danger, warn, fail } from "danger";
 
 // Example: Ensure PR has description
 if (!danger.github.pr.body || danger.github.pr.body.length < 10) {
-  warn("Please add a description to your PR.")
+  warn("Please add a description to your PR.");
 }
 
 // Example: Check for large PRs
-const bigPRThreshold = 500
+const bigPRThreshold = 500;
 if (danger.github.pr.additions + danger.github.pr.deletions > bigPRThreshold) {
-  warn(`This PR is quite large (${danger.github.pr.additions + danger.github.pr.deletions} lines). Consider breaking it into smaller PRs.`)
+  warn(
+    `This PR is quite large (${
+      danger.github.pr.additions + danger.github.pr.deletions
+    } lines). Consider breaking it into smaller PRs.`
+  );
 }
 ```
 
@@ -132,7 +134,7 @@ jobs:
   danger:
     uses: artsy/duchamp/.github/workflows/run-danger-yarn.yml@main
     with:
-      node-version: "18"  # Use Node 18 instead of default 22
+      node-version: "18" # Use Node 18 instead of default 22
     secrets:
       danger-token: ${{ secrets.DANGER_GITHUB_API_TOKEN }}
 ```
@@ -144,7 +146,7 @@ jobs:
   danger:
     uses: artsy/duchamp/.github/workflows/run-danger.yml@main
     with:
-      dangerfile: "scripts/dangerfile.ts"  # Custom path
+      dangerfile: "scripts/dangerfile.ts" # Custom path
     secrets:
       danger-token: ${{ secrets.DANGER_GITHUB_API_TOKEN }}
 ```
@@ -156,7 +158,7 @@ jobs:
   danger:
     uses: artsy/duchamp/.github/workflows/run-danger.yml@main
     with:
-      install-from-caller: true  # Install deps from your repo, not duchamp
+      install-from-caller: true # Install deps from your repo, not duchamp
     secrets:
       danger-token: ${{ secrets.DANGER_GITHUB_API_TOKEN }}
 ```
@@ -180,4 +182,3 @@ jobs:
 
 - Review [available actions](./actions.md) for additional workflows
 - See [examples](./examples.md) for real-world usage patterns
-- Check out [contributing guidelines](./contributing.md) to help improve duchamp
