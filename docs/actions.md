@@ -137,6 +137,46 @@ secrets:
 
 ---
 
+### run-npm-audit.yml
+
+**Purpose**: Run yarn audit and comment on PRs with vulnerability findings
+
+**Use Case**: For Node.js projects that need automated security vulnerability detection and reporting
+
+```yaml
+uses: artsy/duchamp/.github/workflows/run-npm-audit.yml@main
+with:
+  node-version: "22" # Node.js version (default: "22")
+  fail-on-vulnerabilities: true # Fail workflow on vulnerabilities (default: true)
+  severity-threshold: "critical" # Minimum severity level (default: "critical")
+```
+
+**Features:**
+
+- Automatically runs yarn audit on pull requests
+- Comments on PRs with vulnerability details
+- Configurable severity thresholds (low, moderate, high, critical)
+- Optional workflow failure on vulnerability detection
+- Works with both Yarn Classic and Berry versions
+
+**Inputs:**
+
+- `node-version` (optional): Node.js version to use
+- `fail-on-vulnerabilities` (optional): Whether to fail the workflow when vulnerabilities are found
+- `severity-threshold` (optional): Minimum severity level to report (low, moderate, high, critical)
+
+**Trigger Recommendations:**
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "yarn.lock"
+```
+
+---
+
 ## Reusable Action
 
 ### setup-and-install
@@ -168,13 +208,14 @@ secrets:
 
 ## Action Selection Guide
 
-| Use Case                        | Recommended Action                   | Notes                             |
-| ------------------------------- | ------------------------------------ | --------------------------------- |
-| Basic Node.js project with Yarn | `run-danger-yarn.yml`                | Includes dependency checking      |
-| Custom Danger.js rules          | `run-danger.yml`                     | Requires custom dangerfile.ts     |
-| Automated releases              | `run-add-version-label.yml`          | Requires .autorc file             |
-| Conventional commits            | `run-conventional-commits-check.yml` | Enforces commit standards         |
-| Custom workflows                | `setup-and-install` action           | Use as a step in custom workflows |
+| Use Case                        | Recommended Action                   | Notes                                |
+| ------------------------------- | ------------------------------------ | -------------------------------------|
+| Basic Node.js project with Yarn | `run-danger-yarn.yml`                | Includes dependency checking         |
+| Custom Danger.js rules          | `run-danger.yml`                     | Requires custom dangerfile.ts        |
+| Automated releases              | `run-add-version-label.yml`          | Requires .autorc file                |
+| Conventional commits            | `run-conventional-commits-check.yml` | Enforces commit standards            |
+| Security vulnerability scanning | `run-npm-audit.yml`                  | Scans yarn.lock for vulnerabilities  |
+| Custom workflows                | `setup-and-install` action           | Use as a step in custom workflows    |
 
 ## Security Considerations
 
