@@ -1,0 +1,67 @@
+name: Documentation Update Reminder
+
+on:
+  pull_request:
+    types: [created, edited, synchronize]
+
+jobs:
+  remind-to-update-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for changes in .github/workflows
+        id: check-workflow-changes
+        if: github.event.pull_request.draft == false
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.payload.pull_request.number;
+
+            // List all changed files in the PR
+            const files = await github.paginate(
+              github.rest.pulls.listFiles,
+              { owner, repo, pull_number: prNumber, per_page: 100 }
+            );
+
+            const changedWorkflowFiles = files.filter(f =>
+              typeof f.filename === 'string' &&
+              f.filename.startsWith('.github/workflows/') &&
+              // treat added/modified/renamed as triggers
+              ['added','modified','renamed'].includes(f.status)
+            ).map(f => f.filename);
+
+            core.info(`Changed workflow files: ${JSON.stringify(changedWorkflowFiles)}`);
+            return changedWorkflowFiles.length > 0;
+
+      - name: Leave docs reminder comment for workflow changes
+        if: steps.check-workflow-changes.outputs.result == 'true'
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.payload.pull_request.number;
+
+            // Deduplicate by marker
+            const allComments = await github.paginate(
+              github.rest.issues.listComments,
+              { owner, repo, issue_number: prNumber, per_page: 100 }
+            );
+            const existing = allComments.find(c =>
+              typeof c.body === 'string' && c.body.includes('<!-- docs-reminder-workflows-bot -->')
+            );
+
+            const body = `<!-- docs-reminder-workflows-bot -->
+            Detected new or modified files in \`.github/workflows/\`. Please ensure you update [the relevant documentation](https://github.com/artsy/duchamp/blob/main/docs/actions.md) alongside these workflow changes.`;
+
+            if (!existing) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body
+              });
+            } else {
+              core.info('Workflow change reminder already exists; skipping.');
+            }
