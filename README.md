@@ -22,7 +22,7 @@ jobs:
     # with:
     #   node-version: "22"              # Default: "22"
     #   fail-on-vulnerabilities: true   # Default: true
-    #   severity-filter: "critical"     # Default: "critical" (options: critical, high, moderate, low)
+    #   severity-threshold: "critical"     # Default: "critical" (options: critical, high, moderate, low)
 ```
 
 ### Danger Checks
