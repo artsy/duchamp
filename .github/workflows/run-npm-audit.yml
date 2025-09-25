@@ -38,7 +38,54 @@ jobs:
           set -o pipefail
           yarn npm audit --recursive --json > audit.json || true
 
-      - name: Run Audit Reporter
-        run: node .github/scripts/npm-audit-report.js
-        env:
-          SEVERITY_THRESHOLD: ${{ inputs.severity-threshold }}
+      - name: Comment Vulnerabilities
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+
+            const threshold = '${{ inputs.severity-threshold }}'.toLowerCase();
+            const levels = ["low", "moderate", "high", "critical"];
+
+            // Anything with index >= thresholdIndex should be reported
+            const thresholdIndex = levels.indexOf(threshold);
+            if (thresholdIndex === -1) {
+              throw new Error(`Invalid severity threshold: ${threshold}`);
+            }
+
+            const lines = fs.readFileSync('audit.json', 'utf8').trim().split('\n');
+            const advisories = lines
+            .map(line => { try { return JSON.parse(line); } catch { return null; } })
+            .filter(obj => obj && obj.type === 'auditAdvisory')
+            .map(obj => obj.data.advisory)
+            .filter(adv => levels.indexOf(adv.severity) >= thresholdIndex);
+
+            if (advisories.length === 0) {
+              console.log(`No ${threshold} or higher advisories found in JSON.`);
+              return;
+            }
+
+            let body = "## 🔒 NPM Audit Results\n";
+            body += `Vulnerabilities detected at severity **${threshold}** or higher:\n\n`;
+
+            for (const adv of advisories) {
+              body += `- **${adv.module_name}** ${adv.vulnerable_versions}\n`;
+              body += `  - Severity: ${adv.severity}\n`;
+              body += `  - ID: ${adv.github_advisory_id || adv.id}\n`;
+              body += `  - Title: ${adv.title}\n`;
+              body += `  - URL: ${adv.url}\n\n`;
+            }
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+            core.exportVariable('VULNS_FOUND', 'true');
+
+      - name: Fail if vulnerabilities found
+        if: env.VULNS_FOUND == 'true' && inputs.fail-on-vulnerabilities == true
+        run: exit 1
