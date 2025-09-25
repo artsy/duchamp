@@ -57,5 +57,3 @@ This documentation follows [Artsy's documentation best practices](https://github
 - **Follow [@ArtsyOpenSource](https://twitter.com/ArtsyOpenSource)** for Artsy engineering updates
 
 ---
-
-_Last updated: [Current Date] | Maintained by Artsy Platform Practice_
