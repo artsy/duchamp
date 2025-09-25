@@ -1,6 +1,6 @@
 # duchamp
 
-Reusable GitHub Actions and Danger.js plugins for the Artsy organization. This repository provides a centralized collection of workflows and tooling to maintain consistency and quality across Artsy's repositories.
+This repository provides a centralized collection of GitHub workflows and tooling to use across Artsy's repositories.
 
 ## 🎯 Purpose
 
@@ -11,14 +11,6 @@ Duchamp provides shared GitHub Actions and Danger.js configurations that help en
 - **Standardized CI/CD workflows** for Node.js projects
 - **Conventional commits** validation
 
-## 🏗 Architecture
-
-This repository serves as a tooling hub that other Artsy repositories can reference. It contains:
-
-- **Reusable GitHub Actions**: Workflows that can be called by other repositories
-- **Danger.js plugins**: Automated PR checking and labeling
-- **Shared configuration**: Common setup patterns for Node.js projects
-
 ## 🚀 Quick Start
 
 ### Using the Actions in Your Repository
@@ -28,23 +20,24 @@ To use duchamp's actions in your repository, reference them in your workflow fil
 ```yaml
 # .github/workflows/danger.yml
 name: Danger Checks
-on: [pull_request]
+on:
+  pull_request:
 
 jobs:
   danger:
     uses: artsy/duchamp/.github/workflows/run-danger.yml@main
     secrets:
-      danger-token: ${{ secrets.DANGER_GITHUB_API_TOKEN }}
+      danger-token: ${{ secrets.DANGER_TOKEN }}
 ```
 
 ### Available Actions
 
-| Action | Description | Usage |
-|--------|-------------|--------|
-| `run-danger.yml` | General Danger.js checks | For custom danger configurations |
-| `run-danger-yarn.yml` | Yarn-specific Danger checks | For Node.js projects using Yarn |
-| `run-add-version-label.yml` | Auto-add version labels to PRs | For repositories using auto-release |
-| `run-conventional-commits-check.yml` | Validate conventional commits | For conventional commit compliance |
+| Action                               | Description                    | Usage                               |
+| ------------------------------------ | ------------------------------ | ----------------------------------- |
+| `run-danger.yml`                     | General Danger.js checks       | For custom danger configurations    |
+| `run-danger-yarn.yml`                | Yarn-specific Danger checks    | For Node.js projects using Yarn     |
+| `run-add-version-label.yml`          | Auto-add version labels to PRs | For repositories using auto-release |
+| `run-conventional-commits-check.yml` | Validate conventional commits  | For conventional commit compliance  |
 
 ## 📚 Documentation
 
@@ -73,40 +66,23 @@ cd duchamp
 
 # Install dependencies
 yarn install
-
-# Run TypeScript checks
-npx tsc --noEmit
 ```
 
 ### Testing Changes
 
-Since this repository provides reusable actions, testing requires using them in a test repository or creating test workflows.
+To test changes you are adding on a branch, you can reference the workflow elsewhere and reference your branch name during the testing process:
 
-## 🏷 Version Labels
-
-This repository automatically applies version labels to PRs based on the changes:
-
-- `Version: Major` - Breaking changes to consuming repositories
-- `Version: Minor` - New features or actions
-- `Version: Patch` - Bug fixes or minor improvements
-- `Version: Trivial` - Documentation or non-functional changes
-
-## 📋 Requirements
-
-- Repositories must have a `.autorc` file to use version labeling
-- Danger.js actions require `DANGER_GITHUB_API_TOKEN` secret
-- Node.js actions default to Node 22 but support custom versions
-
-## 🤝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+```yaml
+uses: artsy/duchamp/.github/workflows/YOUR-WORKFLOW.yml@YOUR-BRANCH
+```
 
 ## 📞 Support
 
 For questions or support:
+
 - **Point persons**: [@amonkhouse](https://github.com/amonkhouse), [@mc-jones](https://github.com/mc-jones)
 - **Issues**: [GitHub Issues](https://github.com/artsy/duchamp/issues)
-- **Slack**: [#practice-platform](https://artsy.slack.com/messages/practice-platform) 🔒
+- **Slack**: [#product-sapphire](https://artsy.slack.com/messages/product-sapphire)
 
 ## 📄 License
 
