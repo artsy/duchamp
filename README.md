@@ -32,12 +32,7 @@ jobs:
 
 ### Available Actions
 
-| Action                               | Description                    | Usage                               |
-| ------------------------------------ | ------------------------------ | ----------------------------------- |
-| `run-danger.yml`                     | General Danger.js checks       | For custom danger configurations    |
-| `run-danger-yarn.yml`                | Yarn-specific Danger checks    | For Node.js projects using Yarn     |
-| `run-add-version-label.yml`          | Auto-add version labels to PRs | For repositories using auto-release |
-| `run-conventional-commits-check.yml` | Validate conventional commits  | For conventional commit compliance  |
+See `docs/actions.md` for detailed documentation on each action.
 
 ## 📚 Documentation
 
