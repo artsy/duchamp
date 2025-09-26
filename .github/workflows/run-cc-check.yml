@@ -1,0 +1,9 @@
+name: ☢️ Run Cc check
+
+on:
+  pull_request:
+    types: [opened, edited]
+
+jobs:
+  run-danger:
+    uses: artsy/duchamp/.github/workflows/run-conventional-commits-check.yml@PHIRE-2172
