@@ -2,6 +2,16 @@
 
 This document provides detailed reference information for all GitHub Actions available in duchamp.
 
+## Quick View
+
+| Action                               | Description                    | Usage                               |
+| ------------------------------------ | ------------------------------ | ----------------------------------- |
+| `run-danger.yml`                     | General Danger.js checks       | For custom danger configurations    |
+| `run-danger-yarn.yml`                | Yarn-specific Danger checks    | For Node projects using Yarn        |
+| `run-add-version-label.yml`          | Auto-add version labels to PRs | For repositories using auto-release |
+| `run-conventional-commits-check.yml` | Validate conventional commits  | For conventional commit compliance  |
+| `run-npm-audit.yml`                  | Discover vulnerabilities       | For Node projects                   |
+
 ## Action Reference
 
 ### run-danger.yml
