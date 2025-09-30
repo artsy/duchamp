@@ -16,6 +16,7 @@
     "typescript": "5.9.2"
   },
   "scripts": {
-    "prepare": "husky"
+    "prepare": "husky",
+    "test": "jest"
   }
 }
