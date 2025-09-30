@@ -29,8 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: artsy/duchamp
-          # TODO: Revert this before merging
-          ref: chore/do-not-comment-again
+          ref: main
           path: .tooling
 
       - uses: actions/setup-node@v4
