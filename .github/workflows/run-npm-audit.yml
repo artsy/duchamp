@@ -43,7 +43,7 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { commentVulnerabilities } = require('./scripts/npm-audit.js');
+            const { commentVulnerabilities } = require('./.tooling/scripts/npm-audit.js');
             await commentVulnerabilities({
               github,
               context,
