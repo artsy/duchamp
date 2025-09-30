@@ -59,7 +59,9 @@ describe("commentVulnerabilities", () => {
       owner: "test-owner",
       repo: "test-repo",
       comment_id: 123,
-      body: expect.stringContaining("## 🔒 NPM Audit Results"),
+      body: expect.stringContaining(
+        "## 🔒 NPM Audit Results\nVulnerabilities detected at severity **critical** or higher:"
+      ),
     })
 
     expect(mockGithub.rest.issues.createComment).not.toHaveBeenCalled()
