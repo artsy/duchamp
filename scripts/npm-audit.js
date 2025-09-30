@@ -64,7 +64,7 @@ async function commentVulnerabilities({
   })
 
   const existingComment = comments.data.find(
-    comment => comment.body && comment.body.includes("## 🔒 NPM Audit Results")
+    comment => comment.body && comment.body.includes("NPM Audit Results")
   )
 
   if (existingComment) {

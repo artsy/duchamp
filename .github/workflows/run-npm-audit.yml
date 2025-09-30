@@ -25,6 +25,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Checkout tooling repo
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          # TODO: Revert this before merging
+          ref: chore/do-not-comment-again
+          path: .tooling
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
