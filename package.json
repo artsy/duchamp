@@ -4,7 +4,8 @@
   "license": "MIT",
   "private": true,
   "devDependencies": {
-    "@types/node": "^24.3.1"
+    "@types/node": "^24.3.1",
+    "jest": "^30.2.0"
   },
   "dependencies": {
     "danger": "13.0.4",
