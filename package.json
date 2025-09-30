@@ -4,7 +4,9 @@
   "license": "MIT",
   "private": true,
   "devDependencies": {
+    "@biomejs/biome": "^2.2.4",
     "@types/node": "^24.3.1",
+    "husky": "^9.1.7",
     "jest": "^30.2.0"
   },
   "dependencies": {
@@ -12,5 +14,8 @@
     "danger-plugin-yarn": "1.6.0",
     "ts-node": "10.9.2",
     "typescript": "5.9.2"
+  },
+  "scripts": {
+    "prepare": "husky"
   }
 }

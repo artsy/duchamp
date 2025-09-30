@@ -56,7 +56,7 @@
     }
   },
   "javascript": {
-   "formatter": {
+    "formatter": {
       "jsxQuoteStyle": "double",
       "quoteProperties": "asNeeded",
       "trailingCommas": "es5",

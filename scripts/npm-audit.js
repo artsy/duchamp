@@ -1,8 +1,8 @@
-const fs = require('fs');
+const fs = require("fs")
 
 /**
  * Process NPM audit results and post them as a GitHub comment
- * 
+ *
  * @param {Object} params - Parameters
  * @param {Object} params.github - GitHub API client from actions/github-script
  * @param {Object} params.context - GitHub context from actions/github-script
@@ -10,14 +10,26 @@ const fs = require('fs');
  * @param {string} params.threshold - Severity threshold (low, moderate, high, critical)
  * @param {string} params.auditFilePath - Path to the audit JSON file
  */
-async function commentVulnerabilities({ github, context, core, threshold, auditFilePath = 'audit.json' }) {
-  const thresholdLevel = threshold.toLowerCase();
-  const levels = ["low", "moderate", "high", "critical"];
-  const thresholdIndex = levels.indexOf(thresholdLevel);
+async function commentVulnerabilities({
+  github,
+  context,
+  core,
+  threshold,
+  auditFilePath = "audit.json",
+}) {
+  const thresholdLevel = threshold.toLowerCase()
+  const levels = ["low", "moderate", "high", "critical"]
+  const thresholdIndex = levels.indexOf(thresholdLevel)
 
-  const lines = fs.readFileSync(auditFilePath, 'utf8').trim().split('\n');
+  const lines = fs.readFileSync(auditFilePath, "utf8").trim().split("\n")
   const advisories = lines
-    .map(line => { try { return JSON.parse(line); } catch { return null; } })
+    .map(line => {
+      try {
+        return JSON.parse(line)
+      } catch {
+        return null
+      }
+    })
     .filter(obj => obj && obj.children && obj.children.Severity)
     .map(obj => ({
       module: obj.value,
@@ -27,31 +39,31 @@ async function commentVulnerabilities({ github, context, core, threshold, auditF
       title: obj.children.Issue,
       url: obj.children.URL || "",
     }))
-    .filter(adv => levels.indexOf(adv.severity) >= thresholdIndex);
+    .filter(adv => levels.indexOf(adv.severity) >= thresholdIndex)
 
   if (advisories.length === 0) {
-    console.log(`No ${thresholdLevel} or higher advisories found in JSON.`);
-    return;
+    console.log(`No ${thresholdLevel} or higher advisories found in JSON.`)
+    return
   }
 
-  let body = "## 🔒 NPM Audit Results\n";
-  body += `Vulnerabilities detected at severity **${thresholdLevel}** or higher:\n\n`;
+  let body = "## 🔒 NPM Audit Results\n"
+  body += `Vulnerabilities detected at severity **${thresholdLevel}** or higher:\n\n`
   for (const adv of advisories) {
-    body += `- **${adv.module}** ${adv.versions}\n`;
-    body += `  - Severity: ${adv.severity}\n`;
-    body += `  - ID: ${adv.id}\n`;
-    body += `  - Title: ${adv.title}\n`;
-    body += `  - URL: ${adv.url}\n\n`;
+    body += `- **${adv.module}** ${adv.versions}\n`
+    body += `  - Severity: ${adv.severity}\n`
+    body += `  - ID: ${adv.id}\n`
+    body += `  - Title: ${adv.title}\n`
+    body += `  - URL: ${adv.url}\n\n`
   }
 
   await github.rest.issues.createComment({
     issue_number: context.issue.number,
     owner: context.repo.owner,
     repo: context.repo.repo,
-    body
-  });
+    body,
+  })
 
-  core.exportVariable('VULNS_FOUND', 'true');
+  core.exportVariable("VULNS_FOUND", "true")
 }
 
-module.exports = { commentVulnerabilities };
+module.exports = { commentVulnerabilities }
