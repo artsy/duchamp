@@ -56,12 +56,36 @@ async function commentVulnerabilities({
     body += `  - URL: ${adv.url}\n\n`
   }
 
-  await github.rest.issues.createComment({
+  // Check if there's already a comment with NPM Audit Results
+  const comments = await github.rest.issues.listComments({
     issue_number: context.issue.number,
     owner: context.repo.owner,
     repo: context.repo.repo,
-    body,
   })
+
+  const existingComment = comments.data.find(
+    comment => comment.body && comment.body.includes("## 🔒 NPM Audit Results")
+  )
+
+  if (existingComment) {
+    // Update the existing comment
+    await github.rest.issues.updateComment({
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      comment_id: existingComment.id,
+      body,
+    })
+    console.log(`Updated existing comment #${existingComment.id}`)
+  } else {
+    // Create a new comment
+    await github.rest.issues.createComment({
+      issue_number: context.issue.number,
+      owner: context.repo.owner,
+      repo: context.repo.repo,
+      body,
+    })
+    console.log("Created new comment")
+  }
 
   core.exportVariable("VULNS_FOUND", "true")
 }

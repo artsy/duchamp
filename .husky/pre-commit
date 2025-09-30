@@ -1,1 +1,1 @@
-yarn biome check
+yarn biome check --fix
