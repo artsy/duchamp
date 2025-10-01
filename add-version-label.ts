@@ -10,7 +10,7 @@ export const labels = {
     description: "A deploy for bug fixes or minor changes",
   },
   "Version: Minor": {
-    color: "A7DBD8", 
+    color: "A7DBD8",
     description: "A deploy for new features",
   },
   "Version: Major": {
@@ -29,7 +29,7 @@ export const labels = {
 
 /**
  * Automatically add version labels to PRs that don't already have version indicators
- * 
+ *
  * This function:
  * 1. Checks if the repository has an .autorc file (required for auto-release)
  * 2. Skips if a version label already exists
@@ -38,7 +38,7 @@ export const labels = {
  *    - Netlify CMS PRs get "Docs" label
  *    - Dependabot PRs get "Version: Trivial" label
  *    - All others default to "Version: Minor"
- * 
+ *
  * @see https://github.com/artsy/reaction/issues/1095
  */
 export default async () => {
@@ -54,7 +54,9 @@ export default async () => {
   let labelName: keyof typeof labels = "Version: Minor"
 
   // Skip if someone has already made a decision on the version
-  const hasVersionLabel = danger.github.issue.labels.find(label => Object.keys(labels).includes(label.name))
+  const hasVersionLabel = danger.github.issue.labels.find(label =>
+    Object.keys(labels).includes(label.name)
+  )
   if (hasVersionLabel) {
     console.log(`Skipping, because this PR already has a version label.`)
     return
@@ -67,12 +69,16 @@ export default async () => {
 
   const api = danger.github.api
   const existingLabels = await api.issues.listLabelsForRepo(config)
-  const versionExists = existingLabels.data.find(label => Object.keys(labels).includes(label.name))
+  const versionExists = existingLabels.data.find(label =>
+    Object.keys(labels).includes(label.name)
+  )
 
   // Create version labels if this is a new repository
   if (!versionExists) {
-    console.log(`Creating labels for release versions, because we're running on a new repo.`)
-    for (let [label, labelProperties] of Object.entries(labels)) {
+    console.log(
+      `Creating labels for release versions, because we're running on a new repo.`
+    )
+    for (const [label, labelProperties] of Object.entries(labels)) {
       await api.issues.createLabel({
         name: label,
         ...config,
