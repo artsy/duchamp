@@ -11,24 +11,33 @@ Duchamp provides shared GitHub Actions and Danger.js configurations that help en
 - **Standardized CI/CD workflows** for Node.js projects
 - **Conventional commits** validation
 
-## 🚀 Quick Start
+## Structure and Naming
+We've aimed to keep the naming convention consistent with [GitHub's definitions](https://docs.github.com/en/actions/get-started/understand-github-actions).
+
+- `actions/`: For reusable tasks that will be referenced from the `YAML` files in `workflows/`.
+- `workflows/`: A centralized repository for shared configurations that run one or more of the tasks in `/actions`.
 
 ### Using the Actions in Your Repository
 
-To use duchamp's actions in your repository, reference them in your workflow files:
+To use duchamp's actions in your repository, reference them in a workflow file:
 
 ```yaml
-# .github/workflows/danger.yml
+# ./workflows/danger.yml
 name: Danger Checks
 on:
   pull_request:
 
 jobs:
   danger:
-    uses: artsy/duchamp/.github/workflows/run-danger.yml@main
+    uses: artsy/duchamp/workflows/run-danger.yml@main
     secrets:
       danger-token: ${{ secrets.DANGER_TOKEN }}
 ```
+
+### Adding Actions to Multiple Repositories
+
+You can automate adding a workflow file to your repository by using the `add_github_action` script in artsy/opstools.
+<!-- TODO: add link when artsy/opstools script is available -->
 
 ### Available Actions
 
@@ -66,7 +75,7 @@ yarn install
 To test changes you are adding on a branch, you can reference the workflow elsewhere and reference your branch name during the testing process:
 
 ```yaml
-uses: artsy/duchamp/.github/workflows/YOUR-WORKFLOW.yml@YOUR-BRANCH
+uses: artsy/duchamp/workflows/YOUR-WORKFLOW.yml@YOUR-BRANCH
 ```
 
 ## 📞 Support

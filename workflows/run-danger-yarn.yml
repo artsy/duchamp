@@ -1,0 +1,9 @@
+name: ☢️ Danger - Yarn
+
+on:
+  pull_request:
+    types: [opened, edited]
+
+jobs:
+  run-danger:
+    uses: artsy/duchamp/actions/danger-yarn.yml@main

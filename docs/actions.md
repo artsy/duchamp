@@ -21,7 +21,7 @@ This document provides detailed reference information for all GitHub Actions ava
 **Use Case**: When you need custom Danger.js rules or want to use your own dangerfile
 
 ```yaml
-uses: artsy/duchamp/.github/workflows/run-danger.yml@main
+uses: artsy/duchamp/workflows/run-danger.yml@main
 with:
   dangerfile: "dangerfile.ts" # Path to dangerfile (default: "dangerfile.ts")
   node-version: "22" # Node.js version (default: "22")
@@ -51,7 +51,7 @@ secrets:
 **Use Case**: For Node.js projects using Yarn that want standard dependency checking
 
 ```yaml
-uses: artsy/duchamp/.github/workflows/run-danger-yarn.yml@main
+uses: artsy/duchamp/workflows/run-danger-yarn.yml@main
 with:
   node-version: "22" # Node.js version (default: "22")
 secrets:
@@ -82,7 +82,7 @@ secrets:
 **Use Case**: Repositories using automated release workflows that need version categorization
 
 ```yaml
-uses: artsy/duchamp/.github/workflows/run-add-version-label.yml@main
+uses: artsy/duchamp/workflows/run-add-version-label.yml@main
 with:
   node-version: "22" # Node.js version (default: "22")
 secrets:
@@ -125,7 +125,7 @@ secrets:
 **Use Case**: Repositories that enforce conventional commit standards
 
 ```yaml
-uses: artsy/duchamp/.github/workflows/run-conventional-commits-check.yml@main
+uses: artsy/duchamp/workflows/run-conventional-commits-check.yml@main
 with:
   node-version: "22" # Node.js version (default: "22")
 secrets:
@@ -154,7 +154,7 @@ secrets:
 **Use Case**: For Node.js projects that need automated security vulnerability detection and reporting
 
 ```yaml
-uses: artsy/duchamp/.github/workflows/run-npm-audit.yml@main
+uses: artsy/duchamp/workflows/run-npm-audit.yml@main
 with:
   node-version: "22" # Node.js version (default: "22")
   fail-on-vulnerabilities: true # Fail workflow on vulnerabilities (default: true)
@@ -189,14 +189,14 @@ on:
 
 ## Reusable Action
 
-### setup-and-install
+### setup-tooling
 
 **Purpose**: Set up Node.js environment and install dependencies with Yarn version detection
 
-**Location**: `.github/actions/setup-and-install/`
+**Location**: `.github/actions/setup-tooling.yml`
 
 ```yaml
-- uses: artsy/duchamp/.github/actions/setup-and-install@main
+- uses: artsy/duchamp/actions/setup-tooling.yml@main
   with:
     node-version: "22" # Node.js version (default: "22")
     install-from-caller: false # Install from caller directory (default: false)
@@ -225,7 +225,7 @@ on:
 | Automated releases              | `run-add-version-label.yml`          | Requires .autorc file                |
 | Conventional commits            | `run-conventional-commits-check.yml` | Enforces commit standards            |
 | Security vulnerability scanning | `run-npm-audit.yml`                  | Scans yarn.lock for vulnerabilities  |
-| Custom workflows                | `setup-and-install` action           | Use as a step in custom workflows    |
+| Custom workflows                | `setup-tooling`                      | Use as a step in custom workflows    |
 
 ## Security Considerations
 

@@ -1,0 +1,9 @@
+name: ☢️ NPM Audit
+
+on:
+  pull_request:
+    types: [opened, edited]
+
+jobs:
+  run-danger:
+    uses: artsy/duchamp/actions/npm-audit.yml@main

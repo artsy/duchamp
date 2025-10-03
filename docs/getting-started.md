@@ -61,7 +61,7 @@ on:
 
 jobs:
   danger:
-    uses: artsy/duchamp/.github/workflows/run-danger-yarn.yml@main
+    uses: artsy/duchamp/workflows/run-danger-yarn.yml@main
     secrets:
       danger-token: ${{ secrets.DANGER_GITHUB_API_TOKEN }}
 ```
@@ -78,7 +78,7 @@ on:
 
 jobs:
   version-label:
-    uses: artsy/duchamp/.github/workflows/run-add-version-label.yml@main
+    uses: artsy/duchamp/workflows/run-add-version-label.yml@main
     secrets:
       danger-token: ${{ secrets.DANGER_GITHUB_API_TOKEN }}
 ```
@@ -132,7 +132,7 @@ if (danger.github.pr.additions + danger.github.pr.deletions > bigPRThreshold) {
 ```yaml
 jobs:
   danger:
-    uses: artsy/duchamp/.github/workflows/run-danger-yarn.yml@main
+    uses: artsy/duchamp/workflows/run-danger-yarn.yml@main
     with:
       node-version: "18" # Use Node 18 instead of default 22
     secrets:
@@ -144,7 +144,7 @@ jobs:
 ```yaml
 jobs:
   danger:
-    uses: artsy/duchamp/.github/workflows/run-danger.yml@main
+    uses: artsy/duchamp/workflows/run-danger.yml@main
     with:
       dangerfile: "scripts/dangerfile.ts" # Custom path
     secrets:
@@ -156,7 +156,7 @@ jobs:
 ```yaml
 jobs:
   danger:
-    uses: artsy/duchamp/.github/workflows/run-danger.yml@main
+    uses: artsy/duchamp/workflows/run-danger.yml@main
     with:
       install-from-caller: true # Install deps from your repo, not duchamp
     secrets:

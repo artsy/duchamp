@@ -1,0 +1,9 @@
+name: ☢️ Add Version Label
+
+on:
+  pull_request:
+    types: [opened, edited]
+
+jobs:
+  run-danger:
+    uses: artsy/duchamp/actions/add-version-label.yml@main

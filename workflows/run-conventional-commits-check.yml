@@ -1,0 +1,9 @@
+name: ☢️ Conventional Commits Check
+
+on:
+  pull_request:
+    types: [opened, edited]
+
+jobs:
+  run-danger:
+    uses: artsy/duchamp/actions/conventional-commits-check.yml@main
