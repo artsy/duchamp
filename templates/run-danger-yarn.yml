@@ -6,4 +6,4 @@ on:
 
 jobs:
   run-danger:
-    uses: artsy/duchamp/actions/danger-yarn.yml@main
+    uses: artsy/duchamp/.github/workflows/danger-yarn.yml@main

@@ -196,7 +196,7 @@ on:
 **Location**: `.github/actions/setup-tooling.yml`
 
 ```yaml
-- uses: artsy/duchamp/actions/setup-tooling.yml@main
+- uses: artsy/duchamp/.github/workflows/setup-tooling.yml@main
   with:
     node-version: "22" # Node.js version (default: "22")
     install-from-caller: false # Install from caller directory (default: false)

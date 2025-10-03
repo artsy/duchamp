@@ -6,4 +6,4 @@ on:
 
 jobs:
   run-danger:
-    uses: artsy/duchamp/actions/conventional-commits-check.yml@main
+    uses: artsy/duchamp/.github/workflows/conventional-commits-check.yml@main

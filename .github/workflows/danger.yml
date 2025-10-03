@@ -41,7 +41,7 @@ jobs:
           path: .tooling
 
       - name: Setup Node and Install Dependencies
-        uses: ./actions/setup-tooling
+        uses: ./setup-tooling
         with:
           node-version: ${{ inputs.node-version }}
           install-from-caller: ${{ inputs.install-from-caller }}

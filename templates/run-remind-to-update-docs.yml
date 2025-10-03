@@ -6,4 +6,4 @@ on:
 
 jobs:
   run-danger:
-    uses: artsy/duchamp/actions/remind-to-update-docs.yml@main
+    uses: artsy/duchamp/.github/workflows/remind-to-update-docs.yml@main

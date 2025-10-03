@@ -6,4 +6,4 @@ on:
 
 jobs:
   run-danger:
-    uses: artsy/duchamp/actions/add-version-label.yml@main
+    uses: artsy/duchamp/.github/workflows/add-version-label.yml@main
