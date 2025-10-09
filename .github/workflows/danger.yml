@@ -41,7 +41,7 @@ jobs:
           path: .tooling
 
       - name: Setup Node and Install Dependencies
-        uses: ./.github/actions/setup-tooling.yml@main
+        uses: ./.github/workflows/setup-tooling.yml@main
         with:
           node-version: ${{ inputs.node-version }}
           install-from-caller: ${{ inputs.install-from-caller }}
