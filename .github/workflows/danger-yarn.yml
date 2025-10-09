@@ -13,7 +13,7 @@ on:
 
 jobs:
   run:
-    uses: ./github/workflows/danger.yml
+    uses: ./.github/workflows/danger.yml
     with:
       dangerfile: .tooling/danger-yarn.ts
       node-version: ${{ inputs.node-version }}

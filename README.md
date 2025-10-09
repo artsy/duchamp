@@ -29,7 +29,7 @@ on:
 
 jobs:
   danger:
-    uses: artsy/duchamp/.github/workflowsrun-danger.yml@main
+    uses: artsy/duchamp/.github/workflows/danger.yml@main
     secrets:
       danger-token: ${{ secrets.DANGER_TOKEN }}
 ```
@@ -75,7 +75,7 @@ yarn install
 To test changes you are adding on a branch, you can reference the workflow elsewhere and reference your branch name during the testing process:
 
 ```yaml
-uses: artsy/duchamp/.github/workflowsYOUR-WORKFLOW.yml@YOUR-BRANCH
+uses: artsy/duchamp/.github/workflows/[YOUR-WORKFLOW].yml@[YOUR-BRANCH]
 ```
 
 ## 📞 Support
