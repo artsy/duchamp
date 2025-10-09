@@ -19,13 +19,13 @@ on:
 jobs:
   danger:
     name: Danger Checks
-    uses: artsy/duchamp/.github/workflowsrun-danger-yarn.yml@main
+    uses: artsy/duchamp/.github/workflows/run-danger-yarn.yml@main
     secrets:
       danger-token: ${{ secrets.DANGER_GITHUB_API_TOKEN }}
 
   version-label:
     name: Version Label
-    uses: artsy/duchamp/.github/workflowsrun-add-version-label.yml@main
+    uses: artsy/duchamp/.github/workflows/run-add-version-label.yml@main
     secrets:
       danger-token: ${{ secrets.DANGER_GITHUB_API_TOKEN }}
 ```
@@ -45,13 +45,13 @@ on:
 jobs:
   version-label:
     name: Add Version Label
-    uses: artsy/duchamp/.github/workflowsrun-add-version-label.yml@main
+    uses: artsy/duchamp/.github/workflows/run-add-version-label.yml@main
     secrets:
       danger-token: ${{ secrets.DANGER_GITHUB_API_TOKEN }}
 
   conventional-commits:
     name: Check Conventional Commits
-    uses: artsy/duchamp/.github/workflowsrun-conventional-commits-check.yml@main
+    uses: artsy/duchamp/.github/workflows/run-conventional-commits-check.yml@main
     secrets:
       danger-token: ${{ secrets.DANGER_GITHUB_API_TOKEN }}
 ```
@@ -82,7 +82,7 @@ on: [pull_request]
 
 jobs:
   danger:
-    uses: artsy/duchamp/.github/workflowsrun-danger.yml@main
+    uses: artsy/duchamp/.github/workflows/run-danger.yml@main
     with:
       dangerfile: "scripts/dangerfile.ts"
     secrets:

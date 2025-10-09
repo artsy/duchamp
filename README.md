@@ -22,7 +22,7 @@ We've aimed to keep the naming convention consistent with [GitHub's definitions]
 To use duchamp's actions in your repository, reference them in a workflow file:
 
 ```yaml
-# ./workflows/danger.yml
+# .github/workflows/danger.yml
 name: Danger Checks
 on:
   pull_request:
