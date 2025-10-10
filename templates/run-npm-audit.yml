@@ -5,5 +5,5 @@ on:
     types: [opened, edited]
 
 jobs:
-  run-danger:
+  run-npm-audit:
     uses: artsy/duchamp/.github/workflows/npm-audit.yml@main

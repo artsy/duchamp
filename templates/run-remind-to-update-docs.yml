@@ -5,5 +5,5 @@ on:
     types: [opened, edited]
 
 jobs:
-  run-danger:
+  run-remind-to-update-docs:
     uses: artsy/duchamp/.github/workflows/remind-to-update-docs.yml@main

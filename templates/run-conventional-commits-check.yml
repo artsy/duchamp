@@ -5,5 +5,5 @@ on:
     types: [opened, edited]
 
 jobs:
-  run-danger:
+  run-conventional-commits-check:
     uses: artsy/duchamp/.github/workflows/conventional-commits-check.yml@main

@@ -5,5 +5,5 @@ on:
     types: [opened, edited]
 
 jobs:
-  run-danger:
+  run-add-version-label:
     uses: artsy/duchamp/.github/workflows/add-version-label.yml@main

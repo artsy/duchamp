@@ -5,5 +5,5 @@ on:
     types: [opened, edited]
 
 jobs:
-  run-danger:
+  run-danger-yarn:
     uses: artsy/duchamp/.github/workflows/danger-yarn.yml@main
