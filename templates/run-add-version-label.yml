@@ -1,8 +1,7 @@
 name: ☢️ Add Version Label
 
 on:
-  pull_request:
-    types: [opened, edited]
+  push:
 
 jobs:
   run-add-version-label:

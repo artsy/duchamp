@@ -1,9 +1,0 @@
-name: ☢️ Danger
-
-on:
-  pull_request:
-    types: [opened, edited]
-
-jobs:
-  run-danger:
-    uses: artsy/duchamp/.github/workflows/danger.yml@main

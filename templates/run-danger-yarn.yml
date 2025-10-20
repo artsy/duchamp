@@ -1,8 +1,8 @@
 name: ☢️ Danger - Yarn
 
+# Edit the triggers as needed by the dangerfile
 on:
-  pull_request:
-    types: [opened, edited]
+  push:
 
 jobs:
   run-danger-yarn:

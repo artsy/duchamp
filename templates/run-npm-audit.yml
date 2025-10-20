@@ -1,8 +1,7 @@
 name: ☢️ NPM Audit
 
 on:
-  pull_request:
-    types: [opened, edited]
+  push:
 
 jobs:
   run-npm-audit:
