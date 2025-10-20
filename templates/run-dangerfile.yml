@@ -1,0 +1,9 @@
+name: ☢️ Danger
+
+# Update triggers based on the requirements of the dangerfile being run
+on:
+  push:
+
+jobs:
+  run-danger:
+    uses: artsy/duchamp/.github/workflows/danger.yml@main
