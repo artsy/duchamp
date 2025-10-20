@@ -1,6 +1,5 @@
 name: ☢️ Danger - Yarn
 
-# Edit the triggers as needed by the dangerfile
 on:
   push:
 
