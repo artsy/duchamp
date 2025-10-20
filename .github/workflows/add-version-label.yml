@@ -15,7 +15,7 @@ jobs:
   run:
     uses: ./.github/workflows/danger.yml
     with:
-      dangerfile: .tooling/add-version-label.ts
+      dangerfile: .tooling/scripts/add-version-label.ts
       node-version: ${{ inputs.node-version }}
     secrets:
       danger-token: ${{ secrets.danger-token }}
