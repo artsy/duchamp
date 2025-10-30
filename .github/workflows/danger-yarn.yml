@@ -1,4 +1,4 @@
-name: Add Version Label
+name: Danger Yarn Checks
 
 on:
   workflow_call:
@@ -13,9 +13,9 @@ on:
 
 jobs:
   run:
-    uses: ./.github/workflows/run-danger.yml
+    uses: ./.github/workflows/danger.yml
     with:
-      dangerfile: .tooling/add-version-label.ts
+      dangerfile: .tooling/scripts/danger-yarn.ts
       node-version: ${{ inputs.node-version }}
     secrets:
       danger-token: ${{ secrets.danger-token }}
