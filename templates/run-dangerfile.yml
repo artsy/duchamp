@@ -3,7 +3,7 @@ name: ☢️ Danger
 # Update triggers based on the requirements of the dangerfile being run
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened]
 
 jobs:
   run-danger:
