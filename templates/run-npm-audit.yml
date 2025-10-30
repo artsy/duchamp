@@ -2,7 +2,7 @@ name: ☢️ NPM Audit
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, reopened, synchronize]
 
 jobs:
   run-npm-audit:
