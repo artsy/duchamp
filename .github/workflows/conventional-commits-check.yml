@@ -52,6 +52,7 @@ jobs:
             Please update your title to follow [Conventional Commits](https://www.conventionalcommits.org) guidelines.
                   `
                 });
+              core.setFailed("Failed conventional commit check on PR title.");
               }
               else {
                 console.log('PR title is invalid but reminder has already been posted; skipping reminder.');
