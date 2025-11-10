@@ -8,3 +8,5 @@ on:
 jobs:
   run-danger:
     uses: artsy/duchamp/.github/workflows/danger.yml@main
+    secrets:
+      danger-token: ${{ secrets.DANGER_TOKEN }}
