@@ -17,9 +17,7 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         cache: yarn
-        cache-dependency-path: |
-          yarn.lock
-          .tooling/yarn.lock
+        cache-dependency-path: ${{ inputs.install-from-caller == 'true' && 'yarn.lock' || '.tooling/yarn.lock' }}
 
     - name: Install packages
       shell: bash
