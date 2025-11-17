@@ -6,4 +6,4 @@ on:
 
 jobs:
   run-conventional-commits-check:
-    uses: artsy/duchamp/.github/workflows/conventional-commits-check.yml@main
+    uses: artsy/duchamp/.github/workflows/conventional-commits-check.yml@conventional-commits-lowercase-check
