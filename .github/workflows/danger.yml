@@ -40,6 +40,9 @@ jobs:
           ref: main
           path: .tooling
 
+      - name: Enable Corepack
+        run: corepack enable
+
       - name: Setup Node and Install Dependencies
         uses: ./.tooling/.github/actions/setup-and-install
         with:
