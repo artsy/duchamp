@@ -2,7 +2,11 @@ name: Merge On Green
 
 on:
   workflow_call:
-  
+    inputs:
+      sha:
+        required: true
+        type: string
+
 permissions:
   contents: write
   pull-requests: write
@@ -11,22 +15,11 @@ permissions:
 jobs:
   merge-on-green:
     runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'status' && github.event.state == 'success') ||
-      (github.event_name == 'check_suite' && github.event.check_suite.conclusion == 'success') ||
-      (github.event_name == 'check_run' && github.event.check_run.conclusion == 'success')
 
     steps:
       - name: Get commit SHA
         id: get_sha
-        run: |
-          if [ "${{ github.event_name }}" == "status" ]; then
-            echo "sha=${{ github.event.sha }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" == "check_suite" ]; then
-            echo "sha=${{ github.event.check_suite.head_sha }}" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" == "check_run" ]; then
-            echo "sha=${{ github.event.check_run.head_sha }}" >> $GITHUB_OUTPUT
-          fi
+        run: echo "sha=${{ inputs.sha }}" >> $GITHUB_OUTPUT
 
       - name: Check if all statuses are green
         id: check_status
@@ -37,7 +30,7 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
 
-            // Get combined status for the commit
+            // Combined status (old-school checks)
             const { data: combinedStatus } = await github.rest.repos.getCombinedStatusForRef({
               owner,
               repo,
@@ -51,7 +44,7 @@ jobs:
               return { shouldMerge: false };
             }
 
-            // Also check check runs (for GitHub Actions checks)
+            // GitHub Actions check runs
             const { data: checkRuns } = await github.rest.checks.listForRef({
               owner,
               repo,
@@ -59,7 +52,10 @@ jobs:
             });
 
             const allChecksPassed = checkRuns.check_runs.every(
-              check => check.conclusion === 'success' || check.conclusion === 'skipped' || check.conclusion === 'neutral'
+              check =>
+                check.conclusion === 'success' ||
+                check.conclusion === 'skipped' ||
+                check.conclusion === 'neutral'
             );
 
             if (!allChecksPassed) {
@@ -79,15 +75,11 @@ jobs:
             const repo = context.repo.repo;
 
             const labelMap = {
-              'Merge On Green': {
-                mergeMethod: 'merge'
-              },
-              'Squash On Green': {
-                mergeMethod: 'squash'
-              }
+              'Merge On Green': { mergeMethod: 'merge' },
+              'Squash On Green': { mergeMethod: 'squash' }
             };
 
-            // Search for open PRs with this commit
+            // Find open PRs at this commit
             const { data: searchResults } = await github.rest.search.issuesAndPullRequests({
               q: `${sha} type:pr is:open repo:${owner}/${repo}`
             });
@@ -97,30 +89,25 @@ jobs:
             for (const item of searchResults.items) {
               const prNumber = item.number;
 
-              // Get PR details
               const { data: pr } = await github.rest.issues.get({
                 owner,
                 repo,
                 issue_number: prNumber
               });
 
-              // Check for merge-on-green labels
               const prLabels = pr.labels.map(l => l.name);
               const mergeLabel = Object.keys(labelMap).find(label => prLabels.includes(label));
 
               if (!mergeLabel) {
-                console.log(`PR #${prNumber} does not have Merge on Green-type label`);
+                console.log(`PR #${prNumber} does not have a Merge-on-Green label`);
                 continue;
               }
 
               console.log(`PR #${prNumber} has "${mergeLabel}" label`);
 
-              // Generate commit title
-              // Strip any "@user =>" prefixes from the pr title
               const prTitle = pr.title.replace(/@(\w|-)+\s+=>\s+/, '');
               const commitTitle = `${prTitle} (#${prNumber})`;
 
-              // Merge the PR
               try {
                 await github.rest.pulls.merge({
                   owner,
