@@ -208,7 +208,11 @@ secrets:
 - Full codebase context with `fetch-depth: 0`
 - Customizable review focus via `.claude-review.yml` config file
 - Comments directly on the PR with findings
-- Skips draft PRs automatically
+- Automatically skips:
+  - Draft PRs
+  - Bot authors (dependabot, renovate, `[bot]`)
+  - Deploy PRs (title starts with "Deploy ")
+  - Schema update PRs (title contains "Update schema")
 
 **Inputs:**
 
