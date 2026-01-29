@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "license": "MIT",
   "private": true,
+  "packageManager": "yarn@1.22.22",
   "devDependencies": {
     "@biomejs/biome": "^2.2.4",
     "@types/node": "^24.3.1",
