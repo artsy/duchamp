@@ -11,6 +11,7 @@ This document provides detailed reference information for all GitHub Actions ava
 | `run-add-version-label.yml`          | Auto-add version labels to PRs | For repositories using auto-release |
 | `run-conventional-commits-check.yml` | Validate conventional commits  | For conventional commit compliance  |
 | `run-npm-audit.yml`                  | Discover vulnerabilities       | For Node projects                   |
+| `run-claude-review.yml`              | AI-powered PR review           | For Claude-based code review        |
 
 ## Action Reference
 
@@ -187,6 +188,109 @@ on:
 
 ---
 
+### run-claude-review.yml
+
+**Purpose**: AI-powered pull request review using Claude
+
+**Use Case**: Automated code review with customizable focus areas for any repository
+
+```yaml
+uses: artsy/duchamp/.github/workflows/claude-review.yml@main
+with:
+  model: "claude-opus-4-20250514" # Claude model (default)
+  timeout-minutes: 30 # Maximum review time (default: 30)
+secrets:
+  anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }} # Required
+```
+
+**Features:**
+
+- Full codebase context with `fetch-depth: 0`
+- Customizable review focus via `.claude-review.yml` config file
+- Comments directly on the PR with findings
+- Skips draft PRs automatically
+
+**Inputs:**
+
+- `model` (optional): Claude model to use for the review
+- `timeout-minutes` (optional): Maximum time for the review job
+
+**Secrets:**
+
+- `anthropic-api-key` (required): Anthropic API key for Claude access
+
+**Setting Up the API Key:**
+
+The `ANTHROPIC_API_KEY` secret must be configured in GitHub before this workflow can run. There are two ways to do this:
+
+1. **Organization-level secret** (recommended for Artsy): An admin can set this once at https://github.com/organizations/artsy/settings/secrets/actions, and it will be available to all repos in the org.
+
+2. **Repository-level secret**: Go to your repo → Settings → Secrets and variables → Actions → New repository secret. Name it `ANTHROPIC_API_KEY` and paste your Anthropic API key as the value.
+
+You can get an API key from https://console.anthropic.com/settings/keys.
+
+**Repo Configuration:**
+
+Create a `.claude-review.yml` file in your repository root to customize reviews:
+
+```yaml
+focus_areas:
+  - "Watch for N+1 queries in database operations"
+  - "Ensure new endpoints have authentication"
+  - "Check that new features have tests"
+
+ignore_paths:
+  - "**/*.generated.ts"
+  - "**/migrations/**"
+
+context: |
+  This is a Ruby on Rails API. We use GraphQL with graphql-ruby.
+  Authentication is handled via JWT tokens.
+```
+
+**Configuration Options:**
+
+- `prompt`: Complete custom prompt (overrides everything else - use this for full control)
+- `focus_areas`: Array of specific concerns for Claude to watch for (added to default prompt)
+- `ignore_paths`: Glob patterns for files Claude should skip reviewing
+- `context`: Additional context about your codebase architecture
+
+**Complete Prompt Override:**
+
+For full control over the review prompt, use the `prompt` field:
+
+```yaml
+prompt: |
+  You are a security-focused code reviewer.
+
+  Only look for:
+  - SQL injection vulnerabilities
+  - XSS vulnerabilities
+  - Authentication/authorization issues
+
+  Ignore style and formatting issues entirely.
+```
+
+**Security Notes:**
+
+- Requires approval for external contributors to prevent prompt injection
+- Read-only code access - Claude comments but cannot push changes
+- Works with branch protection rules
+
+**Trigger Recommendations:**
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+    # Optional: skip docs-only PRs to reduce costs
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+```
+
+---
+
 ## Reusable Action
 
 ### setup-and-install
@@ -225,6 +329,7 @@ on:
 | Automated releases              | `run-add-version-label.yml`          | Requires .autorc file                |
 | Conventional commits            | `run-conventional-commits-check.yml` | Enforces commit standards            |
 | Security vulnerability scanning | `run-npm-audit.yml`                  | Scans yarn.lock for vulnerabilities  |
+| AI-powered code review          | `run-claude-review.yml`              | Uses Claude to review PRs            |
 | Custom workflows                | `setup-and-install` action           | Use as a step in custom workflows    |
 
 ## Security Considerations
