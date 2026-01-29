@@ -1,0 +1,9 @@
+name: Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  test:
+    uses: artsy/duchamp/.github/workflows/tests.yml@main
