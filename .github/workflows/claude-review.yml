@@ -58,6 +58,8 @@ jobs:
       - name: Install tooling dependencies
         run: yarn install --frozen-lockfile
         working-directory: .tooling
+        env:
+          YARN_IGNORE_PATH: 1
 
       - name: Build review prompt
         id: prompt
