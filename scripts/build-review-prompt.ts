@@ -126,17 +126,15 @@ export const buildPrompt = (): string => {
 const main = (): void => {
   const prompt = buildPrompt()
 
-  // Escape the prompt for GitHub Actions output
-  // GitHub Actions requires escaping %, \n, and \r
-  const escapedPrompt = prompt
-    .replace(/%/g, "%25")
-    .replace(/\n/g, "%0A")
-    .replace(/\r/g, "%0D")
-
   // Set the output for GitHub Actions
   const outputPath = process.env.GITHUB_OUTPUT
   if (outputPath) {
-    fs.appendFileSync(outputPath, `review_prompt=${escapedPrompt}\n`)
+    // Use heredoc-style delimiter for multiline output (modern GitHub Actions approach)
+    const delimiter = `EOF_${Date.now()}`
+    fs.appendFileSync(
+      outputPath,
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\n`
+    )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {
     // For local testing, just print the prompt

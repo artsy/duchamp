@@ -16,11 +16,15 @@ on:
         default: 30
         required: false
         type: number
+      require-org-membership:
+        description: "GitHub org to require membership in (empty to disable)"
+        default: "artsy"
+        required: false
+        type: string
 
 jobs:
-  review:
+  check:
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ inputs.timeout-minutes }}
     # Skip: drafts, bots, deploy PRs, schema update PRs
     if: |
       github.event.pull_request.draft == false &&
@@ -29,6 +33,60 @@ jobs:
       github.event.pull_request.user.login != 'renovate' &&
       github.event.pull_request.title != 'Deploy' &&
       !contains(github.event.pull_request.title, 'graphql schema')
+    permissions:
+      pull-requests: write
+    outputs:
+      should-review: ${{ steps.org-check.outputs.should-review }}
+    steps:
+      - name: Verify org membership
+        id: org-check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const org = '${{ inputs.require-org-membership }}';
+            const username = context.payload.pull_request.user.login;
+            const prNumber = context.payload.pull_request.number;
+
+            // If no org requirement, always allow
+            if (!org) {
+              console.log('No org membership requirement configured');
+              core.setOutput('should-review', 'true');
+              return;
+            }
+
+            try {
+              await github.rest.orgs.checkMembershipForUser({
+                org: org,
+                username: username
+              });
+              console.log(`✓ ${username} is a member of ${org}`);
+              core.setOutput('should-review', 'true');
+            } catch (error) {
+              if (error.status === 404 || error.status === 302) {
+                console.log(`✗ ${username} is not a member of ${org}. Skipping AI review.`);
+
+                // Post comment explaining why review was skipped
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: `🤖 **AI Review skipped** - PR author is not a member of the ${org} organization.`
+                });
+
+                core.setOutput('should-review', 'false');
+                return;
+              }
+              throw error;
+            }
+
+  review:
+    needs: check
+    if: needs.check.outputs.should-review == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    concurrency:
+      group: claude-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     permissions:
       contents: read
       pull-requests: write
