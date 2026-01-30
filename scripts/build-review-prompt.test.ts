@@ -1,5 +1,9 @@
 import * as fs from "fs"
-import { buildPrompt, loadRepoConfig, DEFAULT_PROMPT } from "./build-review-prompt"
+import {
+  buildPrompt,
+  DEFAULT_PROMPT,
+  loadRepoConfig,
+} from "./build-review-prompt"
 
 jest.mock("fs")
 

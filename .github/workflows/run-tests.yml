@@ -6,4 +6,5 @@ on:
 
 jobs:
   test:
-    uses: artsy/duchamp/.github/workflows/tests.yml@main
+    # TODO: Change back to @main before merging!
+    uses: artsy/duchamp/.github/workflows/tests.yml@pr-review-specialist

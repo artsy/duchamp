@@ -43,7 +43,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: artsy/duchamp
-          ref: main
+          # TODO: Change back to main before merging!
+          ref: pr-review-specialist
           path: .tooling
 
       - name: Setup Node.js

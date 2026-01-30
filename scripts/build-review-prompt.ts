@@ -1,6 +1,6 @@
 import * as fs from "fs"
-import * as path from "path"
 import * as yaml from "js-yaml"
+import * as path from "path"
 
 /**
  * Build a review prompt by merging default Artsy guidelines with repo-specific configuration.
@@ -101,7 +101,7 @@ export const buildPrompt = (): string => {
     // Add focus areas
     if (repoConfig.focus_areas && repoConfig.focus_areas.length > 0) {
       const focusItems = repoConfig.focus_areas
-        .map((area) => `- ${area}`)
+        .map(area => `- ${area}`)
         .join("\n")
       sections.push(
         `\n## Additional Focus Areas\n\nPay special attention to:\n${focusItems}\n`
@@ -111,7 +111,7 @@ export const buildPrompt = (): string => {
     // Add ignore paths
     if (repoConfig.ignore_paths && repoConfig.ignore_paths.length > 0) {
       const ignoreItems = repoConfig.ignore_paths
-        .map((pattern) => `- ${pattern}`)
+        .map(pattern => `- ${pattern}`)
         .join("\n")
       sections.push(
         `\n## Files to Skip\n\nDo not review changes in:\n${ignoreItems}\n`
