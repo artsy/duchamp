@@ -6,7 +6,6 @@ on:
 
 jobs:
   claude-review:
-    # TODO: Change back to @main before merging!
-    uses: artsy/duchamp/.github/workflows/claude-review.yml@pr-review-specialist
+    uses: artsy/duchamp/.github/workflows/claude-review.yml@main
     secrets:
       anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
