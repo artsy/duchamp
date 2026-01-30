@@ -51,9 +51,13 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install tooling dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: .tooling
+
       - name: Build review prompt
         id: prompt
-        run: node .tooling/scripts/build-review-prompt.js
+        run: npx ts-node .tooling/scripts/build-review-prompt.ts
 
       - name: Run Claude Code Review
         uses: anthropics/claude-code-action@v1

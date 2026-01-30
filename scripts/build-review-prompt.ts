@@ -1,5 +1,6 @@
-const fs = require("fs")
-const path = require("path")
+import * as fs from "fs"
+import * as path from "path"
+import * as yaml from "js-yaml"
 
 /**
  * Build a review prompt by merging default Artsy guidelines with repo-specific configuration.
@@ -9,23 +10,16 @@ const path = require("path")
  * - focus_areas: Array of specific things to watch for (added to default prompt)
  * - ignore_paths: Glob patterns for files to skip
  * - context: Additional context about the codebase
- *
- * Example .claude-review.yml:
- *   focus_areas:
- *     - "Watch for N+1 queries in database operations"
- *     - "Ensure new endpoints have authentication"
- *   ignore_paths:
- *     - "**\/*.generated.ts"
- *   context: |
- *     This is a Ruby on Rails API using GraphQL.
- *
- * Or for complete control:
- *   prompt: |
- *     You are a security-focused reviewer...
- *     (your entire custom prompt here)
  */
 
-const DEFAULT_PROMPT = `You are a senior staff engineer conducting a code review.
+interface RepoConfig {
+  prompt?: string
+  focus_areas?: string[]
+  ignore_paths?: string[]
+  context?: string
+}
+
+export const DEFAULT_PROMPT = `You are a senior staff engineer conducting a code review.
 You have access to the full codebase. The PR branch has been checked out.
 
 ## Your Task
@@ -70,76 +64,7 @@ One of:
 Be constructive and explain your reasoning. Focus on substantive issues, not style nitpicks.
 `
 
-function parseYaml(content) {
-  // Simple YAML parser for our specific config format
-  const config = {
-    prompt: "",
-    focus_areas: [],
-    ignore_paths: [],
-    context: "",
-  }
-
-  const lines = content.split("\n")
-  let currentKey = null
-  let inMultiline = false
-  let multilineContent = []
-
-  for (const line of lines) {
-    // Check for multiline indicator
-    if (line.match(/^(\w+):\s*\|$/)) {
-      const match = line.match(/^(\w+):\s*\|$/)
-      currentKey = match[1]
-      inMultiline = true
-      multilineContent = []
-      continue
-    }
-
-    // Handle multiline content
-    if (inMultiline) {
-      if (line.match(/^\s{2}/) || line === "") {
-        multilineContent.push(line.replace(/^\s{2}/, ""))
-        continue
-      } else {
-        config[currentKey] = multilineContent.join("\n").trim()
-        inMultiline = false
-      }
-    }
-
-    // Check for array key
-    if (line.match(/^(\w+):$/)) {
-      const match = line.match(/^(\w+):$/)
-      currentKey = match[1]
-      continue
-    }
-
-    // Check for array item
-    if (line.match(/^\s+-\s+"(.+)"$/) || line.match(/^\s+-\s+'(.+)'$/)) {
-      const match =
-        line.match(/^\s+-\s+"(.+)"$/) || line.match(/^\s+-\s+'(.+)'$/)
-      if (currentKey && Array.isArray(config[currentKey])) {
-        config[currentKey].push(match[1])
-      }
-      continue
-    }
-
-    // Check for unquoted array item
-    if (line.match(/^\s+-\s+(.+)$/)) {
-      const match = line.match(/^\s+-\s+(.+)$/)
-      if (currentKey && Array.isArray(config[currentKey])) {
-        config[currentKey].push(match[1])
-      }
-    }
-  }
-
-  // Handle any remaining multiline content
-  if (inMultiline) {
-    config[currentKey] = multilineContent.join("\n").trim()
-  }
-
-  return config
-}
-
-function loadRepoConfig() {
+export const loadRepoConfig = (): RepoConfig | null => {
   const configPath = path.join(process.cwd(), ".claude-review.yml")
 
   if (!fs.existsSync(configPath)) {
@@ -148,53 +73,56 @@ function loadRepoConfig() {
 
   try {
     const content = fs.readFileSync(configPath, "utf8")
-    return parseYaml(content)
+    return yaml.load(content) as RepoConfig
   } catch (error) {
-    console.error(
-      `Warning: Failed to parse .claude-review.yml: ${error.message}`
-    )
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`Warning: Failed to parse .claude-review.yml: ${message}`)
     return null
   }
 }
 
-function buildPrompt() {
+export const buildPrompt = (): string => {
   const repoConfig = loadRepoConfig()
 
   // If repo provides a complete custom prompt, use it directly
-  if (repoConfig && repoConfig.prompt) {
+  if (repoConfig?.prompt) {
     return repoConfig.prompt
   }
 
   // Otherwise, build from default + customizations
-  let prompt = DEFAULT_PROMPT
+  const sections = [DEFAULT_PROMPT]
 
   if (repoConfig) {
     // Add repo-specific context
     if (repoConfig.context) {
-      prompt += `\n## Repository Context\n\n${repoConfig.context}\n`
+      sections.push(`\n## Repository Context\n\n${repoConfig.context}\n`)
     }
 
     // Add focus areas
     if (repoConfig.focus_areas && repoConfig.focus_areas.length > 0) {
-      prompt += "\n## Additional Focus Areas\n\nPay special attention to:\n"
-      for (const area of repoConfig.focus_areas) {
-        prompt += `- ${area}\n`
-      }
+      const focusItems = repoConfig.focus_areas
+        .map((area) => `- ${area}`)
+        .join("\n")
+      sections.push(
+        `\n## Additional Focus Areas\n\nPay special attention to:\n${focusItems}\n`
+      )
     }
 
     // Add ignore paths
     if (repoConfig.ignore_paths && repoConfig.ignore_paths.length > 0) {
-      prompt += "\n## Files to Skip\n\nDo not review changes in:\n"
-      for (const pattern of repoConfig.ignore_paths) {
-        prompt += `- ${pattern}\n`
-      }
+      const ignoreItems = repoConfig.ignore_paths
+        .map((pattern) => `- ${pattern}`)
+        .join("\n")
+      sections.push(
+        `\n## Files to Skip\n\nDo not review changes in:\n${ignoreItems}\n`
+      )
     }
   }
 
-  return prompt
+  return sections.join("")
 }
 
-function main() {
+const main = (): void => {
   const prompt = buildPrompt()
 
   // Escape the prompt for GitHub Actions output
@@ -217,8 +145,6 @@ function main() {
     console.log("---")
   }
 }
-
-module.exports = { buildPrompt, parseYaml, loadRepoConfig, DEFAULT_PROMPT }
 
 // Run main if this is the entry point
 if (require.main === module) {
