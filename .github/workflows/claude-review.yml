@@ -1,0 +1,68 @@
+name: Claude AI PR Review
+
+on:
+  workflow_call:
+    secrets:
+      anthropic-api-key:
+        required: true
+    inputs:
+      model:
+        description: "Claude model to use for the review"
+        default: "claude-opus-4-20250514"
+        required: false
+        type: string
+      timeout-minutes:
+        description: "Maximum time for the review job"
+        default: 30
+        required: false
+        type: number
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    # Skip: drafts, bots, deploy PRs, schema update PRs
+    if: |
+      github.event.pull_request.draft == false &&
+      !contains(github.event.pull_request.user.login, '[bot]') &&
+      github.event.pull_request.user.login != 'dependabot' &&
+      github.event.pull_request.user.login != 'renovate' &&
+      !startsWith(github.event.pull_request.title, 'Deploy ') &&
+      !contains(github.event.pull_request.title, 'Update schema')
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout tooling repo
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .tooling
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install tooling dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: .tooling
+
+      - name: Build review prompt
+        id: prompt
+        run: npx ts-node .tooling/scripts/build-review-prompt.ts
+
+      - name: Run Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.anthropic-api-key }}
+          claude_args: "--model ${{ inputs.model }}"
+          prompt: ${{ steps.prompt.outputs.review_prompt }}

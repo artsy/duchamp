@@ -1,0 +1,15 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+jobs:
+  claude-review:
+    uses: artsy/duchamp/.github/workflows/claude-review.yml@main
+    secrets:
+      anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+    # Optional: customize the model or timeout
+    # with:
+    #   model: "claude-opus-4-20250514"
+    #   timeout-minutes: 30
