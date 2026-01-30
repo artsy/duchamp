@@ -27,8 +27,8 @@ jobs:
       !contains(github.event.pull_request.user.login, '[bot]') &&
       github.event.pull_request.user.login != 'dependabot' &&
       github.event.pull_request.user.login != 'renovate' &&
-      !startsWith(github.event.pull_request.title, 'Deploy ') &&
-      !contains(github.event.pull_request.title, 'Update schema')
+      github.event.pull_request.title != 'Deploy' &&
+      !contains(github.event.pull_request.title, 'graphql schema')
     permissions:
       contents: read
       pull-requests: write
