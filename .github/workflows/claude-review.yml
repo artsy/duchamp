@@ -32,6 +32,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      id-token: write
 
     steps:
       - name: Checkout repo
@@ -64,5 +65,5 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.anthropic-api-key }}
-          model: ${{ inputs.model }}
+          claude_args: "--model ${{ inputs.model }}"
           prompt: ${{ steps.prompt.outputs.review_prompt }}
