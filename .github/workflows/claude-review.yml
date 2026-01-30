@@ -52,6 +52,10 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Enable Corepack
+        run: corepack enable
+        working-directory: .tooling
+
       - name: Install tooling dependencies
         run: yarn install --frozen-lockfile
         working-directory: .tooling
