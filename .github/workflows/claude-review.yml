@@ -64,5 +64,14 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.anthropic-api-key }}
-          claude_args: "--model ${{ inputs.model }}"
-          prompt: ${{ steps.prompt.outputs.review_prompt }}
+          claude_args: '--model ${{ inputs.model }} --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"'
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            ${{ steps.prompt.outputs.review_prompt }}
+
+            ## How to Post Your Review
+            Use `gh pr comment ${{ github.event.pull_request.number }}` for your main review.
+            Use `mcp__github_inline_comment__create_inline_comment` for inline code comments.
+            Only post GitHub comments - do not submit review text as messages.
