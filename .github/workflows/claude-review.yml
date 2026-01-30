@@ -54,7 +54,6 @@ jobs:
 
       - name: Enable Corepack
         run: corepack enable
-        working-directory: .tooling
 
       - name: Install tooling dependencies
         run: yarn install --frozen-lockfile
