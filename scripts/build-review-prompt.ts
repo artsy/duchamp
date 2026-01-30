@@ -27,6 +27,7 @@ You have access to the full codebase. The PR branch has been checked out.
 2. Read related files to understand how changes integrate with existing code
 3. Check if tests exist for the changed code
 4. Provide a focused code review
+5. **Post your review as a comment on this pull request**
 
 ## Review Format
 
