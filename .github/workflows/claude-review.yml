@@ -16,11 +16,6 @@ on:
         default: 30
         required: false
         type: number
-      require-org-membership:
-        description: "GitHub org to require membership in (empty to disable)"
-        default: "artsy"
-        required: false
-        type: string
 
 jobs:
   check:
@@ -38,45 +33,35 @@ jobs:
     outputs:
       should-review: ${{ steps.org-check.outputs.should-review }}
     steps:
-      - name: Verify org membership
+      - name: Check author association
         id: org-check
         uses: actions/github-script@v7
         with:
           script: |
-            const org = '${{ inputs.require-org-membership }}';
             const username = context.payload.pull_request.user.login;
+            const association = context.payload.pull_request.author_association;
             const prNumber = context.payload.pull_request.number;
 
-            // If no org requirement, always allow
-            if (!org) {
-              console.log('No org membership requirement configured');
-              core.setOutput('should-review', 'true');
-              return;
-            }
+            // MEMBER, OWNER, COLLABORATOR are trusted
+            // CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR, FIRST_TIMER, NONE are not
+            const trustedAssociations = ['MEMBER', 'OWNER', 'COLLABORATOR'];
 
-            try {
-              await github.rest.orgs.checkMembershipForUser({
-                org: org,
-                username: username
+            console.log(`Author: ${username}, Association: ${association}`);
+
+            if (trustedAssociations.includes(association)) {
+              console.log(`✓ ${username} has trusted association: ${association}`);
+              core.setOutput('should-review', 'true');
+            } else {
+              console.log(`✗ ${username} has untrusted association: ${association}. Skipping AI review.`);
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: `🤖 **AI Review skipped** - PR author does not have a trusted association with this repository (${association}).`
               });
-              console.log(`✓ ${username} is a member of ${org}`);
-              core.setOutput('should-review', 'true');
-            } catch (error) {
-              if (error.status === 404 || error.status === 302) {
-                console.log(`✗ ${username} is not a member of ${org}. Skipping AI review.`);
 
-                // Post comment explaining why review was skipped
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: prNumber,
-                  body: `🤖 **AI Review skipped** - PR author is not a member of the ${org} organization.`
-                });
-
-                core.setOutput('should-review', 'false');
-                return;
-              }
-              throw error;
+              core.setOutput('should-review', 'false');
             }
 
   review:
