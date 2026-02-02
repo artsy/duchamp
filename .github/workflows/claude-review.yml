@@ -29,11 +29,12 @@ jobs:
       github.event.pull_request.title != 'Deploy' &&
       !contains(github.event.pull_request.title, 'graphql schema')
     permissions:
+      contents: read
       pull-requests: write
     outputs:
       should-review: ${{ steps.org-check.outputs.should-review }}
     steps:
-      - name: Check author association
+      - name: Check if author can write to repo
         id: org-check
         uses: actions/github-script@v7
         with:
@@ -41,34 +42,42 @@ jobs:
             const username = context.payload.pull_request.user.login;
             const prNumber = context.payload.pull_request.number;
 
-            // Fetch fresh author_association from API (event payload can be stale)
-            const { data: pr } = await github.rest.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: prNumber
-            });
+            // Check if user has write permission to the repo (members/collaborators do)
+            try {
+              const { data: permissionLevel } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: username
+              });
 
-            const association = pr.author_association;
+              const permission = permissionLevel.permission;
+              console.log(`Author: ${username}, Permission: ${permission}`);
 
-            // MEMBER, OWNER, COLLABORATOR are trusted
-            // CONTRIBUTOR, FIRST_TIME_CONTRIBUTOR, FIRST_TIMER, NONE are not
-            const trustedAssociations = ['MEMBER', 'OWNER', 'COLLABORATOR'];
+              // admin, write, maintain = trusted; read, none = not trusted
+              const trustedPermissions = ['admin', 'write', 'maintain'];
 
-            console.log(`Author: ${username}, Association: ${association}`);
-
-            if (trustedAssociations.includes(association)) {
-              console.log(`✓ ${username} has trusted association: ${association}`);
-              core.setOutput('should-review', 'true');
-            } else {
-              console.log(`✗ ${username} has untrusted association: ${association}. Skipping AI review.`);
-
+              if (trustedPermissions.includes(permission)) {
+                console.log(`✓ ${username} has trusted permission: ${permission}`);
+                core.setOutput('should-review', 'true');
+              } else {
+                console.log(`✗ ${username} has permission: ${permission}. Skipping AI review.`);
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  body: `🤖 **AI Review skipped** - PR author does not have write access to this repository.`
+                });
+                core.setOutput('should-review', 'false');
+              }
+            } catch (error) {
+              // If we can't check permissions, user is likely not a collaborator
+              console.log(`✗ Could not verify permissions for ${username}: ${error.message}`);
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: prNumber,
-                body: `🤖 **AI Review skipped** - PR author does not have a trusted association with this repository (${association}).`
+                body: `🤖 **AI Review skipped** - Could not verify PR author has access to this repository.`
               });
-
               core.setOutput('should-review', 'false');
             }
 
