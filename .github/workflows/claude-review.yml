@@ -144,6 +144,6 @@ jobs:
             ${{ steps.prompt.outputs.review_prompt }}
 
             ## How to Post Your Review
-            Use `gh pr comment ${{ github.event.pull_request.number }}` for your main review.
-            Use `mcp__github_inline_comment__create_inline_comment` for inline code comments.
+            Use `gh pr comment ${{ github.event.pull_request.number }}` for your main review. Start it with: <!-- claude-ai-review-main -->
+            Use `mcp__github_inline_comment__create_inline_comment` for inline code comments. Start each comment body with: <!-- claude-ai-review-inline -->
             Only post GitHub comments - do not submit review text as messages.
