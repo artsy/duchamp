@@ -4,37 +4,51 @@
  * DELETE THIS FILE AFTER TESTING.
  */
 
-// Issue 1: Hardcoded API key (security issue - should trigger inline comment)
-const API_KEY = "sk-1234567890abcdef"
+// FIXED: Now using environment variable instead of hardcoded key
+const API_KEY = process.env.API_KEY
 
-// Issue 2: No error handling on async operation
+// FIXED: Added basic error handling
 async function fetchUserData(userId) {
-  const response = await fetch(`https://api.example.com/users/${userId}`)
-  const data = await response.json()
-  return data
+  try {
+    const response = await fetch(`https://api.example.com/users/${userId}`)
+    if (!response.ok) {
+      throw new Error(`HTTP error: ${response.status}`)
+    }
+    return await response.json()
+  } catch (error) {
+    console.error("Failed to fetch user:", error)
+    return null
+  }
 }
 
-// Issue 3: SQL injection vulnerability
+// STILL BROKEN: SQL injection vulnerability (left intentionally)
 function findUser(username) {
   const query = `SELECT * FROM users WHERE name = '${username}'`
   return database.execute(query)
 }
 
-// Issue 4: Potential null reference
+// FIXED: Added null check
 function processItems(items) {
-  return items.map(item => item.name.toUpperCase())
+  if (!items) return []
+  return items.map(item => item?.name?.toUpperCase() ?? "UNKNOWN")
 }
 
-// Issue 5: Race condition / no mutex
-let counter = 0
-async function incrementCounter() {
-  const current = counter
-  await delay(100)
-  counter = current + 1
+// NEW ISSUE: Infinite loop if condition never met
+async function waitForCondition(checkFn) {
+  while (!checkFn()) {
+    await delay(100)
+  }
+  return true
+}
+
+// NEW ISSUE: Memory leak - growing array never cleared
+const eventLog = []
+function logEvent(event) {
+  eventLog.push({ ...event, timestamp: Date.now() })
 }
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-module.exports = { fetchUserData, findUser, processItems, incrementCounter }
+module.exports = { fetchUserData, findUser, processItems, waitForCondition, logEvent }
