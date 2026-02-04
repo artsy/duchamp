@@ -9,7 +9,7 @@ describe("cleanupPreviousAIReviews", () => {
         deleteComment: jest.fn().mockResolvedValue({}),
       },
     },
-    graphql: jest.fn().mockImplementation((query) => {
+    graphql: jest.fn().mockImplementation(query => {
       if (query.includes("query")) {
         return Promise.resolve({
           repository: {
@@ -36,11 +36,19 @@ describe("cleanupPreviousAIReviews", () => {
     jest.clearAllMocks()
   })
 
-  it("should delete comments with AI review markers", async () => {
+  it("should delete comments from Claude bot (type=Bot, login=claude[bot])", async () => {
     const comments = [
-      { id: 1, body: "<!-- claude-ai-review-main -->\n## Code Review" },
-      { id: 2, body: "Regular comment without marker" },
-      { id: 3, body: "<!-- claude-ai-review-main -->\nAnother AI review" },
+      { id: 1, user: { type: "Bot", login: "claude[bot]" }, body: "AI review" },
+      {
+        id: 2,
+        user: { type: "User", login: "human-user" },
+        body: "Human comment",
+      },
+      {
+        id: 3,
+        user: { type: "Bot", login: "claude[bot]" },
+        body: "Another AI review",
+      },
     ]
 
     const mockGithub = createMockGithub(comments)
@@ -64,25 +72,28 @@ describe("cleanupPreviousAIReviews", () => {
     })
   })
 
-  it("should resolve inline threads with AI review markers", async () => {
+  it("should resolve inline threads started by Claude bot (__typename=Bot, login=claude)", async () => {
+    // GraphQL returns "claude" not "claude[bot]", and __typename instead of type
     const threads = [
       {
         id: "thread-1",
         isResolved: false,
         comments: {
-          nodes: [{ body: "<!-- claude-ai-review-inline -->\nInline comment" }],
+          nodes: [{ author: { __typename: "Bot", login: "claude" } }],
         },
       },
       {
         id: "thread-2",
         isResolved: false,
-        comments: { nodes: [{ body: "Human comment" }] },
+        comments: {
+          nodes: [{ author: { __typename: "User", login: "human-user" } }],
+        },
       },
       {
         id: "thread-3",
         isResolved: true,
         comments: {
-          nodes: [{ body: "<!-- claude-ai-review-inline -->\nAlready resolved" }],
+          nodes: [{ author: { __typename: "Bot", login: "claude" } }],
         },
       },
     ]
@@ -95,7 +106,6 @@ describe("cleanupPreviousAIReviews", () => {
       core: mockCore,
     })
 
-    // Should only resolve the unresolved AI thread
     const mutationCalls = mockGithub.graphql.mock.calls.filter(([query]) =>
       query.includes("mutation")
     )
@@ -103,10 +113,43 @@ describe("cleanupPreviousAIReviews", () => {
     expect(mutationCalls[0][1]).toEqual({ threadId: "thread-1" })
   })
 
-  it("should not delete comments without AI markers", async () => {
+  it("should not delete comments from other bots", async () => {
     const comments = [
-      { id: 1, body: "Regular comment" },
-      { id: 2, body: "Another regular comment" },
+      {
+        id: 1,
+        user: { type: "Bot", login: "dependabot[bot]" },
+        body: "Dependabot comment",
+      },
+      {
+        id: 2,
+        user: { type: "Bot", login: "github-actions[bot]" },
+        body: "Actions comment",
+      },
+    ]
+
+    const mockGithub = createMockGithub(comments)
+
+    await cleanupPreviousAIReviews({
+      github: mockGithub,
+      context: mockContext,
+      core: mockCore,
+    })
+
+    expect(mockGithub.rest.issues.deleteComment).not.toHaveBeenCalled()
+  })
+
+  it("should not delete comments from users", async () => {
+    const comments = [
+      {
+        id: 1,
+        user: { type: "User", login: "human-user" },
+        body: "Regular comment",
+      },
+      {
+        id: 2,
+        user: { type: "User", login: "another-user" },
+        body: "Another comment",
+      },
     ]
 
     const mockGithub = createMockGithub(comments)
@@ -137,14 +180,14 @@ describe("cleanupPreviousAIReviews", () => {
 
   it("should log cleanup summary", async () => {
     const comments = [
-      { id: 1, body: "<!-- claude-ai-review-main -->\nReview" },
+      { id: 1, user: { type: "Bot", login: "claude[bot]" }, body: "Review" },
     ]
     const threads = [
       {
         id: "thread-1",
         isResolved: false,
         comments: {
-          nodes: [{ body: "<!-- claude-ai-review-inline -->\nInline" }],
+          nodes: [{ author: { __typename: "Bot", login: "claude" } }],
         },
       },
     ]
