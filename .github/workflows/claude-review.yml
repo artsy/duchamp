@@ -90,7 +90,7 @@ jobs:
       group: claude-review-${{ github.repository }}-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     permissions:
-      contents: read
+      contents: write  # Required for resolveReviewThread GraphQL mutation
       pull-requests: write
       id-token: write
 
