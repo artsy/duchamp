@@ -125,6 +125,13 @@ jobs:
         id: prompt
         run: npx ts-node .tooling/scripts/build-review-prompt.ts
 
+      - name: Cleanup previous AI review comments
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { cleanupPreviousAIReviews } = require('./.tooling/scripts/cleanup-ai-reviews.js');
+            await cleanupPreviousAIReviews({ github, context, core });
+
       - name: Run Claude Code Review
         uses: anthropics/claude-code-action@v1
         with:
