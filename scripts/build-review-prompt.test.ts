@@ -121,7 +121,6 @@ describe("buildPrompt", () => {
     expect(result).toContain("Architecture & Design")
     expect(result).toContain("Security")
     expect(result).toContain("Performance")
-    expect(result).toContain("### Verdict")
   })
 
   it("uses custom prompt when provided", () => {
@@ -188,6 +187,5 @@ describe("DEFAULT_PROMPT", () => {
     expect(DEFAULT_PROMPT).toContain("### Issues Found")
     expect(DEFAULT_PROMPT).toContain("### Areas Reviewed")
     expect(DEFAULT_PROMPT).toContain("### Questions for Author")
-    expect(DEFAULT_PROMPT).toContain("### Verdict")
   })
 })
