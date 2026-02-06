@@ -77,14 +77,6 @@ Briefly note any concerns in these areas (skip if nothing notable):
 ### Questions for Author
 List anything unclear that needs clarification before you can fully assess the PR.
 
-### Verdict
-One of:
-- ✅ **Approve**: Good to merge (possibly with minor suggestions)
-- 🔄 **Request Changes**: Has blocking issues that must be addressed
-- 💬 **Needs Discussion**: Requires clarification or team input on approach
-
-**Default to Approve** unless you have verified blocking issues. When in doubt, approve with questions.
-
 ---
 Be constructive and explain your reasoning. Focus on substantive issues, not style nitpicks.
 
