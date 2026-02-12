@@ -12,11 +12,17 @@ import * as path from "path"
  * - context: Additional context about the codebase
  */
 
+interface ExcludeConfig {
+  title_patterns?: string[]
+  disable_defaults?: boolean
+}
+
 interface RepoConfig {
   prompt?: string
   focus_areas?: string[]
   ignore_paths?: string[]
   context?: string
+  exclude?: ExcludeConfig
 }
 
 export const DEFAULT_PROMPT = `You are a senior staff engineer conducting a code review.
