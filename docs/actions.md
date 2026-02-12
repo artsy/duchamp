@@ -207,12 +207,13 @@ secrets:
 
 - Full codebase context with `fetch-depth: 0`
 - Customizable review focus via `.claude-review.yml` config file
+- Configurable PR exclusions (see below)
 - Comments directly on the PR with findings
-- Automatically skips:
+- Default exclusions (configurable per-repo):
   - Draft PRs
-  - Bot authors (dependabot, renovate, `[bot]`)
-  - Deploy PRs (title starts with "Deploy ")
-  - Schema update PRs (title contains "Update schema")
+  - Bot authors (dependabot, renovate, usernames containing `[bot]`)
+  - PRs titled exactly "Deploy"
+  - PRs with "graphql schema" in the title
 
 **Inputs:**
 
@@ -258,6 +259,28 @@ context: |
 - `focus_areas`: Array of specific concerns for Claude to watch for (added to default prompt)
 - `ignore_paths`: Glob patterns for files Claude should skip reviewing
 - `context`: Additional context about your codebase architecture
+- `exclude`: PR exclusion rules (see below)
+
+**PR Exclusions:**
+
+Repos can configure custom PR exclusions to skip AI review for specific PRs:
+
+```yaml
+# .claude-review.yml
+exclude:
+  title_patterns:
+    - "eigen query map" # Case-insensitive regex
+    - "schema sync"
+  disable_defaults: false # Set to true to only use repo patterns
+```
+
+- `title_patterns`: Array of regex patterns to match against PR titles (case-insensitive)
+- `disable_defaults`: When `true`, only repo-specific patterns are used; default exclusions are disabled
+
+Default exclusions:
+
+- **Always excluded** (cannot be disabled): Draft PRs, bots (username contains `[bot]`), `dependabot`, `renovate`
+- **Title patterns** (disabled with `disable_defaults: true`): `^Deploy$` (exact match), `graphql schema` (contains)
 
 **Complete Prompt Override:**
 
