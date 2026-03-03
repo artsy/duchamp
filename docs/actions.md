@@ -12,6 +12,7 @@ This document provides detailed reference information for all GitHub Actions ava
 | `run-conventional-commits-check.yml` | Validate conventional commits  | For conventional commit compliance  |
 | `run-npm-audit.yml`                  | Discover vulnerabilities       | For Node projects                   |
 | `run-claude-review.yml`              | AI-powered PR review           | For Claude-based code review        |
+| `link-pr-to-notion.yml`             | Link PRs to Notion tasks       | For repos using Notion task tracking |
 
 ## Action Reference
 
@@ -318,6 +319,54 @@ on:
 
 ---
 
+### link-pr-to-notion.yml
+
+**Purpose**: Automatically link pull requests to Notion tasks referenced by short ID (e.g. `PM-42`) in the PR title, body, or commits
+
+**Use Case**: Repositories that track work in Notion and want PRs automatically connected to their corresponding tasks
+
+```yaml
+uses: artsy/duchamp/.github/workflows/link-pr-to-notion.yml@main
+secrets:
+  notion-token: ${{ secrets.NOTION_TOKEN }}       # Required
+  root-page-id: ${{ secrets.NOTION_ROOT_PAGE_ID }} # Required
+```
+
+**Features:**
+
+- Scans PR title, body, and all commit messages for short IDs (e.g. `PM-42`, `ENG-7`)
+- Discovers all teams and their task databases automatically via Notion API
+- Appends the PR URL to the `PR Links` field on the matching Notion task
+- Skips gracefully if the task is not found or the URL is already linked
+
+**Secrets:**
+
+- `notion-token` (required): Notion API integration token
+- `root-page-id` (required): Notion root page ID used for team and database discovery
+
+**Optional Inputs** (configure via the action directly if needed):
+
+- `unique-id-property`: Name of the Unique ID property on Tasks databases (default: `"ID"`)
+- `pr-links-property`: Name of the Rich Text property where PR URLs are stored (default: `"PR Links"`)
+- `github-token`: GitHub token used to list PR commits (default: `${{ github.token }}`)
+
+**Trigger Recommendations:**
+
+```yaml
+on:
+  pull_request:
+    types: [opened, edited]
+```
+
+**Required Secrets Setup:**
+
+The `NOTION_TOKEN` and `NOTION_ROOT_PAGE_ID` secrets must be configured before this workflow can run:
+
+1. **Organization-level secrets** (recommended for Artsy): Set once at https://github.com/organizations/artsy/settings/secrets/actions and available to all repos.
+2. **Repository-level secrets**: Go to your repo → Settings → Secrets and variables → Actions → New repository secret.
+
+---
+
 ## Reusable Action
 
 ### setup-and-install
@@ -357,6 +406,7 @@ on:
 | Conventional commits            | `run-conventional-commits-check.yml` | Enforces commit standards            |
 | Security vulnerability scanning | `run-npm-audit.yml`                  | Scans yarn.lock for vulnerabilities  |
 | AI-powered code review          | `run-claude-review.yml`              | Uses Claude to review PRs            |
+| Notion task tracking            | `link-pr-to-notion.yml`             | Links PRs to Notion tasks by short ID |
 | Custom workflows                | `setup-and-install` action           | Use as a step in custom workflows    |
 
 ## Security Considerations
