@@ -1,0 +1,24 @@
+name: Link PR to Notion (Reusable)
+on:
+  workflow_call:
+    secrets:
+      notion-token:
+        required: true
+      root-page-id:
+        required: true
+jobs:
+  link:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node .github/actions/link-pr-to-notion/dist/index.js
+        env:
+          INPUT_NOTION-TOKEN: ${{ secrets.notion-token }}
+          INPUT_ROOT-PAGE-ID: ${{ secrets.root-page-id }}
+          INPUT_GITHUB-TOKEN: ${{ github.token }}
