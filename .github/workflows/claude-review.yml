@@ -8,7 +8,7 @@ on:
     inputs:
       model:
         description: "Claude model to use for the review"
-        default: "claude-opus-4-20250514"
+        default: "claude-opus-4-6"
         required: false
         type: string
       timeout-minutes:
