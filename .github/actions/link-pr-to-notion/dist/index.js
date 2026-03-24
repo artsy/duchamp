@@ -35108,7 +35108,7 @@ async function getPrCommitMessages(octokit, owner, repo, prNumber) {
         repo,
         pull_number: prNumber,
     });
-    return commits.map((c) => c.commit.message).join("\n");
+    return commits.map(c => c.commit.message).join("\n");
 }
 async function buildPrefixMap(notion, teams, uniqueIdProperty) {
     const prefixMap = new Map();
@@ -35134,6 +35134,11 @@ async function buildPrefixMap(notion, teams, uniqueIdProperty) {
     }
     return prefixMap;
 }
+function notionPageUrl(pageId) {
+    return `https://www.notion.so/${pageId.replace(/-/g, "")}`;
+}
+// Returns the Notion page URL if the task was found (whether or not the PR was
+// newly linked), or null if the task could not be found.
 async function linkPrToTask(notion, shortId, tasksDbId, prUrl, uniqueIdProperty, prLinksProperty) {
     const dashIdx = shortId.lastIndexOf("-");
     const number = parseInt(shortId.substring(dashIdx + 1), 10);
@@ -35141,23 +35146,27 @@ async function linkPrToTask(notion, shortId, tasksDbId, prUrl, uniqueIdProperty,
         database_id: tasksDbId,
         // unique_id filter may not be in older @notionhq/client typedefs
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        filter: { property: uniqueIdProperty, unique_id: { equals: number } },
+        filter: {
+            property: uniqueIdProperty,
+            unique_id: { equals: number },
+        },
     });
     const pages = queryResponse.results.filter((p) => "properties" in p);
     if (pages.length === 0) {
         core.warning(`No task found for ${shortId}. Skipping.`);
-        return;
+        return null;
     }
     const page = pages[0];
+    const pageUrl = notionPageUrl(page.id);
     const prLinksProp = page.properties[prLinksProperty];
     const existingLinks = [];
     if (prLinksProp?.type === "rich_text") {
-        const allText = prLinksProp.rich_text.map((rt) => rt.plain_text).join("");
-        existingLinks.push(...allText.split("\n").filter((l) => l.trim() !== ""));
+        const allText = prLinksProp.rich_text.map(rt => rt.plain_text).join("");
+        existingLinks.push(...allText.split("\n").filter(l => l.trim() !== ""));
     }
     if (existingLinks.includes(prUrl)) {
         core.info(`${shortId}: PR URL already linked. Skipping.`);
-        return;
+        return pageUrl;
     }
     const newLinks = [...existingLinks, prUrl];
     const richText = newLinks.flatMap((url, i) => {
@@ -35173,6 +35182,65 @@ async function linkPrToTask(notion, shortId, tasksDbId, prUrl, uniqueIdProperty,
         },
     });
     core.info(`${shortId}: Appended PR URL to "${prLinksProperty}".`);
+    return pageUrl;
+}
+// Resolves a Notion page ID (from a URL in the PR body) to a task shortId,
+// links the PR to that task, and returns the shortId + page URL.
+async function linkNotionUrlToTask(notion, pageId, prUrl, uniqueIdProperty, prLinksProperty, prefixMap) {
+    const page = (await notion.pages.retrieve({
+        page_id: pageId,
+    }));
+    if (!("properties" in page))
+        return null;
+    const idProp = page.properties[uniqueIdProperty];
+    if (idProp?.type !== "unique_id")
+        return null;
+    const prefix = idProp.unique_id.prefix;
+    const number = idProp.unique_id.number;
+    if (!prefix || !number)
+        return null;
+    const shortId = `${prefix}-${number}`;
+    const tasksDbId = prefixMap.get(prefix.toUpperCase());
+    if (!tasksDbId) {
+        core.warning(`No team found for prefix "${prefix}" (from Notion URL). Skipping.`);
+        return null;
+    }
+    const pageUrl = await linkPrToTask(notion, shortId, tasksDbId, prUrl, uniqueIdProperty, prLinksProperty);
+    if (!pageUrl)
+        return null;
+    return { shortId, pageUrl };
+}
+// Extracts Notion page IDs from any notion.so URLs present in the given text.
+function extractNotionPageIds(text) {
+    const pattern = /https?:\/\/(?:www\.)?notion\.so\/\S*?([a-f0-9]{8}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{12})/gi;
+    const ids = new Set();
+    for (const match of text.matchAll(pattern)) {
+        const raw = match[1].replace(/-/g, "");
+        const id = `${raw.slice(0, 8)}-${raw.slice(8, 12)}-${raw.slice(12, 16)}-${raw.slice(16, 20)}-${raw.slice(20)}`;
+        ids.add(id);
+    }
+    return [...ids];
+}
+// Updates the PR description to include a link back to the Notion task.
+// - If the shortId appears as bare text in the body, it is linkified in-place.
+// - Otherwise, a "related to" line is appended to the bottom.
+// - If the task is already linked (markdown link or page URL present), skips.
+// Returns the (possibly updated) body.
+function buildUpdatedBody(body, shortId, pageUrl) {
+    // Skip if there's already a markdown link for this ID or the Notion URL is present
+    if (body.includes(`[${shortId}]`) || body.includes(pageUrl)) {
+        core.info(`${shortId}: Already linked in PR description. Skipping.`);
+        return null;
+    }
+    // Linkify the bare ID if it appears in the body
+    const bareIdPattern = new RegExp(`\\b${shortId}\\b`);
+    if (bareIdPattern.test(body)) {
+        core.info(`${shortId}: Linkifying mention in PR description.`);
+        return body.replace(bareIdPattern, `[${shortId}](${pageUrl})`);
+    }
+    // Not in the body — append a "related to" line
+    core.info(`${shortId}: Appending Notion link to PR description.`);
+    return `${body}\n\n> This change is related to [${shortId}](${pageUrl})`;
 }
 async function run() {
     try {
@@ -35190,34 +35258,82 @@ async function run() {
         }
         const prUrl = pr.html_url;
         const prNumber = pr.number;
+        const prBody = pr.body ?? "";
         const githubToken = core.getInput("github-token", { required: true });
         const octokit = github.getOctokit(githubToken);
         const { owner, repo } = github.context.repo;
         const commitMessages = await getPrCommitMessages(octokit, owner, repo, prNumber);
-        const searchText = `${pr.title}\n${pr.body ?? ""}\n${commitMessages}`;
+        const searchText = `${pr.title}\n${prBody}\n${commitMessages}`;
         const notion = new client_1.Client({ auth: notionToken });
         core.info("Discovering teams...");
         const teams = await (0, team_discovery_1.discoverTeams)(notion, rootPageId);
         const prefixMap = await buildPrefixMap(notion, teams, uniqueIdProperty);
-        const shortIds = [...new Set(searchText.match(/\b([A-Z]{1,10}-\d+)\b/g) ?? [])];
-        if (shortIds.length === 0) {
-            core.info("No short IDs found in PR title, body, or commits. Nothing to do.");
-            return;
+        // Track handled shortIds to avoid touching the same task twice
+        const handledIds = new Set();
+        // Thread the body through so multiple IDs are batched into one update
+        let currentBody = prBody;
+        // --- Path 1: short IDs found in title, body, or commits ---
+        const shortIds = [
+            ...new Set(searchText.match(/\b([A-Z]{1,10}-\d+)\b/g) ?? []),
+        ];
+        if (shortIds.length > 0) {
+            core.info(`Found short IDs: ${shortIds.join(", ")}`);
         }
-        core.info(`Found short IDs: ${shortIds.join(", ")}`);
         for (const shortId of shortIds) {
-            const prefix = shortId.substring(0, shortId.lastIndexOf("-")).toUpperCase();
+            const prefix = shortId
+                .substring(0, shortId.lastIndexOf("-"))
+                .toUpperCase();
             const tasksDbId = prefixMap.get(prefix);
             if (!tasksDbId) {
                 core.warning(`No team found with prefix "${prefix}". Skipping ${shortId}.`);
                 continue;
             }
             try {
-                await linkPrToTask(notion, shortId, tasksDbId, prUrl, uniqueIdProperty, prLinksProperty);
+                const pageUrl = await linkPrToTask(notion, shortId, tasksDbId, prUrl, uniqueIdProperty, prLinksProperty);
+                if (pageUrl) {
+                    handledIds.add(shortId);
+                    const updated = buildUpdatedBody(currentBody, shortId, pageUrl);
+                    if (updated !== null)
+                        currentBody = updated;
+                }
             }
             catch (err) {
                 core.warning(`Failed to update task ${shortId}: ${err}`);
             }
+        }
+        // --- Path 2: Notion URLs in the PR body ---
+        const notionPageIds = extractNotionPageIds(prBody);
+        if (notionPageIds.length > 0) {
+            core.info(`Found Notion URLs with page IDs: ${notionPageIds.join(", ")}`);
+        }
+        for (const pageId of notionPageIds) {
+            try {
+                const result = await linkNotionUrlToTask(notion, pageId, prUrl, uniqueIdProperty, prLinksProperty, prefixMap);
+                if (result && !handledIds.has(result.shortId)) {
+                    handledIds.add(result.shortId);
+                    const updated = buildUpdatedBody(currentBody, result.shortId, result.pageUrl);
+                    if (updated !== null)
+                        currentBody = updated;
+                }
+            }
+            catch (err) {
+                core.warning(`Failed to process Notion URL for page ${pageId}: ${err}`);
+            }
+        }
+        // Flush description update if anything changed
+        if (currentBody !== prBody) {
+            await octokit.rest.pulls.update({
+                owner,
+                repo,
+                pull_number: prNumber,
+                body: currentBody,
+            });
+            core.info("Updated PR description with Notion task link(s).");
+        }
+        if (handledIds.size === 0 &&
+            shortIds.length === 0 &&
+            notionPageIds.length === 0) {
+            core.info("No short IDs or Notion URLs found in PR title, body, or commits. Nothing to do.");
         }
     }
     catch (err) {
@@ -35262,7 +35378,7 @@ async function discoverTeams(client, rootPageId) {
             const teamName = teamBlock.child_page.title;
             // Discover databases for this team
             const databases = await discoverTeamDatabases(client, teamPageId);
-            const tasksDb = databases.find((db) => db.type === "Tasks");
+            const tasksDb = databases.find(db => db.type === "Tasks");
             if (tasksDb) {
                 teams.push({
                     teamName,
@@ -35337,9 +35453,9 @@ async function validateDatabaseSchema(client, databaseId, expectedType) {
             database_id: databaseId,
         });
         const propertyNames = Object.keys(database.properties);
-        const hasAllRequired = database_constants_1.REQUIRED_TASKS_PROPERTIES.every((prop) => propertyNames.includes(prop));
+        const hasAllRequired = database_constants_1.REQUIRED_TASKS_PROPERTIES.every(prop => propertyNames.includes(prop));
         if (!hasAllRequired) {
-            const missingProps = database_constants_1.REQUIRED_TASKS_PROPERTIES.filter((prop) => !propertyNames.includes(prop));
+            const missingProps = database_constants_1.REQUIRED_TASKS_PROPERTIES.filter(prop => !propertyNames.includes(prop));
             console.warn(`Database ${databaseId} (Tasks) is missing properties: ${missingProps.join(", ")}`);
         }
         return hasAllRequired;
@@ -35358,7 +35474,7 @@ async function validateDatabaseSchema(client, databaseId, expectedType) {
  */
 async function getTeamByName(client, rootPageId, teamName) {
     const teams = await discoverTeams(client, rootPageId);
-    return (teams.find((team) => team.teamName.toLowerCase() === teamName.toLowerCase()) || null);
+    return (teams.find(team => team.teamName.toLowerCase() === teamName.toLowerCase()) || null);
 }
 
 
