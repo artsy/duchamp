@@ -176,22 +176,31 @@ function extractNotionPageIds(text: string): string[] {
 }
 
 // Updates the PR description to include a link back to the Notion task.
-// - If the shortId appears as bare text in the body, it is linkified in-place.
+// - If the shortId is already a markdown link (any URL), or the Notion URL is present, skips.
+// - If the shortId appears bracketed but not linked ([TEAM-123]), appends the URL in-place.
+// - If the shortId appears as bare text, it is linkified in-place.
 // - Otherwise, a "related to" line is appended to the bottom.
-// - If the task is already linked (markdown link or page URL present), skips.
 // Returns the (possibly updated) body.
 function buildUpdatedBody(
   body: string,
   shortId: string,
   pageUrl: string
 ): string | null {
-  // Skip if there's already a markdown link for this ID or the Notion URL is present
-  if (body.includes(`[${shortId}]`) || body.includes(pageUrl)) {
+  // Skip if already linked: Notion URL present, or shortId already has a markdown link
+  const alreadyLinkedPattern = new RegExp(`\\[${shortId}\\]\\(`)
+  if (body.includes(pageUrl) || alreadyLinkedPattern.test(body)) {
     core.info(`${shortId}: Already linked in PR description. Skipping.`)
     return null
   }
 
-  // Linkify the bare ID if it appears in the body
+  // Linkify bracketed-but-not-linked: [TEAM-123] → [TEAM-123](url)
+  // Safe to use includes() here since [TEAM-123]( was already ruled out above.
+  if (body.includes(`[${shortId}]`)) {
+    core.info(`${shortId}: Linkifying bracketed mention in PR description.`)
+    return body.replace(`[${shortId}]`, `[${shortId}](${pageUrl})`)
+  }
+
+  // Linkify bare ID — [TEAM-123] case is already handled above, so \b is sufficient
   const bareIdPattern = new RegExp(`\\b${shortId}\\b`)
   if (bareIdPattern.test(body)) {
     core.info(`${shortId}: Linkifying mention in PR description.`)
