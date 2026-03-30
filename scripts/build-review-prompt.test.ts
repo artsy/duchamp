@@ -1,5 +1,6 @@
 import * as fs from "fs"
 import {
+  APRIL_FOOLS_PROMPT,
   buildPrompt,
   DEFAULT_PROMPT,
   loadRepoConfig,
@@ -177,6 +178,31 @@ ignore_paths:
 
     expect(result).toContain("## Files to Skip")
     expect(result).toContain("- **/*.generated.ts")
+  })
+
+  describe("April Fools' Prompt", () => {
+    it("is included in the default prompt", () => {
+      mockFs.existsSync.mockReturnValue(false)
+
+      const result = buildPrompt()
+
+      expect(result).toContain(APRIL_FOOLS_PROMPT)
+      expect(result).toContain("senior staff engineer")
+    })
+
+    it("is included in custom repo prompt", () => {
+      mockFs.existsSync.mockReturnValue(true)
+      mockFs.readFileSync.mockReturnValue(`
+prompt: |
+  You are a custom security reviewer.
+  Only look for security issues.
+`)
+
+      const result = buildPrompt()
+
+      expect(result).toContain(APRIL_FOOLS_PROMPT)
+      expect(result).toContain("You are a custom security reviewer.")
+    })
   })
 })
 
