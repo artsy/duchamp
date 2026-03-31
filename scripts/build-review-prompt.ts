@@ -89,6 +89,19 @@ Be constructive and explain your reasoning. Focus on substantive issues, not sty
 Remember: An empty "Issues Found" section is a valid and often correct outcome. The goal is accurate review, not comprehensive critique.
 `
 
+export const APRIL_FOOLS_PROMPT = `**IMPORTANT**: Write the code review in a style that makes generous use of humorous Gen Z slang. The review should be entertaining, but must not skimp on actual constructive feedback.\n\n`
+
+function getAprilFoolsPrompt(): string {
+  const now = new Date()
+  const year = now.getUTCFullYear()
+  const start = new Date(`${year}-04-01T04:00:00Z`) // NYC Apr 1  00:00 / LON Apr 1  05:00 / BER Apr 1  06:00
+  const end = new Date(`${year}-04-01T21:59:00Z`) // NYC Apr 1  17:59 / LON Apr 1  22:59 / BER Apr 1  23:59
+  if (now >= start && now <= end) {
+    return APRIL_FOOLS_PROMPT
+  }
+  return ""
+}
+
 export const loadRepoConfig = (): RepoConfig | null => {
   const configPath = path.join(process.cwd(), ".claude-review.yml")
 
@@ -111,7 +124,8 @@ export const buildPrompt = (): string => {
 
   // If repo provides a complete custom prompt, use it directly
   if (repoConfig?.prompt) {
-    return repoConfig.prompt
+    // return repoConfig.prompt
+    return `${getAprilFoolsPrompt()}${repoConfig.prompt}`
   }
 
   // Otherwise, build from default + customizations
@@ -144,7 +158,8 @@ export const buildPrompt = (): string => {
     }
   }
 
-  return sections.join("")
+  // return sections.join("")
+  return `${getAprilFoolsPrompt()}${sections.join("")}`
 }
 
 const main = (): void => {
