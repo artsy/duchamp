@@ -1,6 +1,5 @@
 import * as fs from "fs"
 import {
-  APRIL_FOOLS_PROMPT,
   buildPrompt,
   DEFAULT_PROMPT,
   loadRepoConfig,
@@ -178,77 +177,6 @@ ignore_paths:
 
     expect(result).toContain("## Files to Skip")
     expect(result).toContain("- **/*.generated.ts")
-  })
-
-  describe("April Fools' Prompt", () => {
-    // Window: 2026-04-01T04:00:00Z – 2026-04-01T21:59:00Z (exclusive)
-    describe("within the prank window", () => {
-      beforeEach(() => {
-        jest.useFakeTimers()
-        jest.setSystemTime(new Date("2026-04-01T12:00:00Z"))
-      })
-
-      afterEach(() => {
-        jest.useRealTimers()
-      })
-
-      it("is included in the default prompt", () => {
-        mockFs.existsSync.mockReturnValue(false)
-
-        const result = buildPrompt()
-
-        expect(result).toContain(APRIL_FOOLS_PROMPT)
-        expect(result).toContain("senior staff engineer")
-      })
-
-      it("is included in custom repo prompt", () => {
-        mockFs.existsSync.mockReturnValue(true)
-        mockFs.readFileSync.mockReturnValue(`
-prompt: |
-  You are a custom security reviewer.
-  Only look for security issues.
-`)
-
-        const result = buildPrompt()
-
-        expect(result).toContain(APRIL_FOOLS_PROMPT)
-        expect(result).toContain("You are a custom security reviewer.")
-      })
-    })
-
-    describe("outside the prank window", () => {
-      beforeEach(() => {
-        jest.useFakeTimers()
-        jest.setSystemTime(new Date("2026-03-30"))
-      })
-
-      afterEach(() => {
-        jest.useRealTimers()
-      })
-
-      it("is not included in the default prompt", () => {
-        mockFs.existsSync.mockReturnValue(false)
-
-        const result = buildPrompt()
-
-        expect(result).not.toContain(APRIL_FOOLS_PROMPT)
-        expect(result).toContain("senior staff engineer")
-      })
-
-      it("is not included in custom repo prompt", () => {
-        mockFs.existsSync.mockReturnValue(true)
-        mockFs.readFileSync.mockReturnValue(`
-prompt: |
-  You are a custom security reviewer.
-  Only look for security issues.
-`)
-
-        const result = buildPrompt()
-
-        expect(result).not.toContain(APRIL_FOOLS_PROMPT)
-        expect(result).toContain("You are a custom security reviewer.")
-      })
-    })
   })
 })
 
