@@ -25,7 +25,8 @@ jobs:
       github.event.pull_request.draft == false &&
       !contains(github.event.pull_request.user.login, '[bot]') &&
       github.event.pull_request.user.login != 'dependabot' &&
-      github.event.pull_request.user.login != 'renovate'
+      github.event.pull_request.user.login != 'renovate' &&
+      github.event.pull_request.title !== 'Deploy'
     permissions:
       contents: read
       pull-requests: write
