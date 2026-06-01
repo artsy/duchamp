@@ -17,7 +17,8 @@ jobs:
             const title = pr.title;
             const conventionalCommitFormat = /^(fix|feat|build|chore|ci|docs|style|refactor|perf|test|revert)(?:\(.+\))?!?:.+$/;
             const githubRevertFormat = /^Revert.*/;
-            const titlePasses = title === 'Deploy' || githubRevertFormat.test(title) || conventionalCommitFormat.test(title);
+            const rfcFormat = /^RFC:.+$/;
+            const titlePasses = title === 'Deploy' || githubRevertFormat.test(title) || conventionalCommitFormat.test(title) || rfcFormat.test(title);
 
             if (titlePasses) {
               console.log("Conventional commit check passed.");
