@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@notionhq/client": "^2.2.2",
-    "danger": "13.0.4",
+    "danger": "13.0.10",
     "danger-plugin-yarn": "1.6.0",
     "js-yaml": "^4.1.1",
     "ts-node": "10.9.2",
