@@ -1,5 +1,5 @@
 name: 'Setup Node and Install Dependencies'
-description: 'Sets up Node.js and installs dependencies with Yarn version detection'
+description: 'Sets up Node.js and installs dependencies'
 inputs:
   node-version:
     description: 'Node.js version to use'
@@ -20,7 +20,7 @@ runs:
     - name: Cache Yarn packages
       uses: actions/cache@v4
       with:
-        path: ~/.cache/yarn/v6
+        path: ~/.yarn/berry/cache
         key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock', '.tooling/yarn.lock') }}
         restore-keys: |
           ${{ runner.os }}-yarn-
@@ -28,7 +28,6 @@ runs:
     - name: Install packages
       shell: bash
       run: |
-        # Determine which directory to install in
         if [ "${{ inputs.install-from-caller }}" == "true" ]; then
           INSTALL_DIR="."
         else
@@ -37,24 +36,4 @@ runs:
 
         echo "Installing packages in: $INSTALL_DIR"
         cd "$INSTALL_DIR"
-
-        PKG_MANAGER=$(node -e "try{process.stdout.write(require('./package.json').packageManager||'')}catch(e){}" 2>/dev/null || echo "")
-
-        if [[ "$PKG_MANAGER" =~ ^yarn@1\. ]]; then
-          echo "Detected Yarn 1 (Classic)"
-          YARN_SPEC="${PKG_MANAGER%%+*}"
-          npm install --no-save --prefix /tmp/yarn-classic "$YARN_SPEC"
-          node /tmp/yarn-classic/node_modules/yarn/bin/yarn.js install --frozen-lockfile
-        elif [[ -n "$PKG_MANAGER" && "$PKG_MANAGER" =~ ^yarn@ ]]; then
-          echo "Detected Yarn (Berry)"
-          yarn install --no-immutable
-        else
-          YARN_VERSION=$(yarn --version)
-          if [[ "$YARN_VERSION" =~ ^[234] ]]; then
-            echo "Detected Yarn $YARN_VERSION (Berry)"
-            yarn install --no-immutable
-          else
-            echo "Detected Yarn $YARN_VERSION (Classic)"
-            yarn install --frozen-lockfile
-          fi
-        fi
+        yarn install --immutable
