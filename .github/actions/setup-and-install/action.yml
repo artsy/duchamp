@@ -16,10 +16,18 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
-        cache: yarn
-        cache-dependency-path: |
-          yarn.lock
-          .tooling/yarn.lock
+
+    - name: Enable Corepack
+      shell: bash
+      run: corepack enable
+
+    - name: Cache Yarn packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/yarn/v6
+        key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock', '.tooling/yarn.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-yarn-
 
     - name: Install packages
       shell: bash
@@ -33,6 +41,13 @@ runs:
 
         echo "Installing packages in: $INSTALL_DIR"
         cd "$INSTALL_DIR"
+
+        # Activate the packageManager version via corepack so the global Yarn isn't used instead of the project's version
+        PKG_MANAGER=$(node -e "try{process.stdout.write(require('./package.json').packageManager||'')}catch(e){}" 2>/dev/null || echo "")
+        if [[ -n "$PKG_MANAGER" && "$PKG_MANAGER" =~ ^yarn@ ]]; then
+          echo "Activating $PKG_MANAGER via corepack"
+          corepack prepare "$PKG_MANAGER" --activate
+        fi
 
         # Detect Yarn version and install with appropriate flags
         YARN_VERSION=$(yarn --version)
