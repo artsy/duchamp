@@ -38,13 +38,13 @@ runs:
         echo "Installing packages in: $INSTALL_DIR"
         cd "$INSTALL_DIR"
 
-        # Detect the Yarn version from the packageManager field and install with appropriate flags.
-        # For Yarn 1, npx is used to invoke the exact version rather than the global Yarn binary.
         PKG_MANAGER=$(node -e "try{process.stdout.write(require('./package.json').packageManager||'')}catch(e){}" 2>/dev/null || echo "")
 
         if [[ "$PKG_MANAGER" =~ ^yarn@1\. ]]; then
           echo "Detected Yarn 1 (Classic)"
-          npx --yes "${PKG_MANAGER%%+*}" install --frozen-lockfile
+          YARN_SPEC="${PKG_MANAGER%%+*}"
+          npm install --no-save --prefix /tmp/yarn-classic "$YARN_SPEC"
+          node /tmp/yarn-classic/node_modules/yarn/bin/yarn.js install --frozen-lockfile
         elif [[ -n "$PKG_MANAGER" && "$PKG_MANAGER" =~ ^yarn@ ]]; then
           echo "Detected Yarn (Berry)"
           yarn install --no-immutable
