@@ -17,10 +17,6 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
 
-    - name: Enable Corepack
-      shell: bash
-      run: corepack enable
-
     - name: Cache Yarn packages
       uses: actions/cache@v4
       with:
@@ -42,21 +38,23 @@ runs:
         echo "Installing packages in: $INSTALL_DIR"
         cd "$INSTALL_DIR"
 
-        # Activate the packageManager version via corepack so the global Yarn isn't used instead of the project's version
+        # Detect the Yarn version from the packageManager field and install with appropriate flags.
+        # For Yarn 1, npx is used to invoke the exact version rather than the global Yarn binary.
         PKG_MANAGER=$(node -e "try{process.stdout.write(require('./package.json').packageManager||'')}catch(e){}" 2>/dev/null || echo "")
-        if [[ -n "$PKG_MANAGER" && "$PKG_MANAGER" =~ ^yarn@ ]]; then
-          echo "Activating $PKG_MANAGER via corepack"
-          corepack prepare "$PKG_MANAGER" --activate
-        fi
 
-        # Detect Yarn version and install with appropriate flags
-        YARN_VERSION=$(yarn --version)
-        if [[ "$YARN_VERSION" =~ ^[234] ]]; then
-          # Yarn 2+ (Berry)
-          echo "Detected Yarn $YARN_VERSION (Berry)"
+        if [[ "$PKG_MANAGER" =~ ^yarn@1 ]]; then
+          echo "Detected Yarn 1 (Classic)"
+          npx --yes "$PKG_MANAGER" install --frozen-lockfile
+        elif [[ -n "$PKG_MANAGER" && "$PKG_MANAGER" =~ ^yarn@ ]]; then
+          echo "Detected Yarn (Berry)"
           yarn install --no-immutable
         else
-          # Yarn 1 (Classic)
-          echo "Detected Yarn $YARN_VERSION (Classic)"
-          yarn install --frozen-lockfile
+          YARN_VERSION=$(yarn --version)
+          if [[ "$YARN_VERSION" =~ ^[234] ]]; then
+            echo "Detected Yarn $YARN_VERSION (Berry)"
+            yarn install --no-immutable
+          else
+            echo "Detected Yarn $YARN_VERSION (Classic)"
+            yarn install --frozen-lockfile
+          fi
         fi
