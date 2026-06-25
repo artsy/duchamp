@@ -4,7 +4,7 @@ inputs:
   node-version:
     description: 'Node.js version to use'
     required: false
-    default: '22.22.0'
+    default: '22'
   install-from-caller:
     description: 'Whether to install from caller directory or tooling directory'
     required: false

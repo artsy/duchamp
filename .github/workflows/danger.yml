@@ -11,7 +11,7 @@ on:
         required: false
         type: string
       node-version:
-        default: "22.22.0"
+        default: "22"
         required: false
         type: string
       install-from-caller:
