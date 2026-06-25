@@ -37,7 +37,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: artsy/duchamp
-          ref: ${{ github.repository == 'artsy/duchamp' && github.sha || 'main' }}
+          ref: main
           path: .tooling
 
       - name: Enable Corepack

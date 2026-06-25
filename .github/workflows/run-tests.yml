@@ -6,4 +6,4 @@ on:
 
 jobs:
   test:
-    uses: ./.github/workflows/tests.yml
+    uses: artsy/duchamp/.github/workflows/tests.yml@main
