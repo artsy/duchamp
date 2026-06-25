@@ -44,7 +44,7 @@ runs:
 
         if [[ "$PKG_MANAGER" =~ ^yarn@1 ]]; then
           echo "Detected Yarn 1 (Classic)"
-          npx --yes "$PKG_MANAGER" install --frozen-lockfile
+          npx --yes "${PKG_MANAGER%%+*}" install --frozen-lockfile
         elif [[ -n "$PKG_MANAGER" && "$PKG_MANAGER" =~ ^yarn@ ]]; then
           echo "Detected Yarn (Berry)"
           yarn install --no-immutable
