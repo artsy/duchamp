@@ -24,7 +24,6 @@ runs:
     - name: Install packages
       shell: bash
       run: |
-        # Determine which directory to install in
         if [ "${{ inputs.install-from-caller }}" == "true" ]; then
           INSTALL_DIR="."
         else
@@ -34,14 +33,19 @@ runs:
         echo "Installing packages in: $INSTALL_DIR"
         cd "$INSTALL_DIR"
 
-        # Detect Yarn version and install with appropriate flags
+        echo "=== Yarn diagnostics ==="
+        echo "which yarn: $(which yarn)"
+        echo "yarn --version: $(yarn --version)"
+        echo "corepack --version: $(corepack --version)"
+        echo "packageManager field: $(node -e "console.log(require('./package.json').packageManager)")"
+        echo "COREPACK_ENABLE_STRICT: $COREPACK_ENABLE_STRICT"
+        echo "========================"
+
         YARN_VERSION=$(yarn --version)
         if [[ "$YARN_VERSION" =~ ^[234] ]]; then
-          # Yarn 2+ (Berry)
           echo "Detected Yarn $YARN_VERSION (Berry)"
           yarn install --no-immutable
         else
-          # Yarn 1 (Classic)
           echo "Detected Yarn $YARN_VERSION (Classic)"
           yarn install --frozen-lockfile
         fi
