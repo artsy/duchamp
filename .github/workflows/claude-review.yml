@@ -55,7 +55,7 @@ jobs:
         run: corepack enable
 
       - name: Install tooling dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
         working-directory: .tooling
         env:
           YARN_IGNORE_PATH: 1
@@ -172,7 +172,7 @@ jobs:
         run: corepack enable
 
       - name: Install tooling dependencies
-        run: yarn install --frozen-lockfile
+        run: yarn install --immutable
         working-directory: .tooling
         env:
           YARN_IGNORE_PATH: 1
