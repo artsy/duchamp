@@ -1,5 +1,5 @@
 name: 'Setup Node and Install Dependencies'
-description: 'Sets up Node.js and installs dependencies'
+description: 'Sets up Node.js and installs dependencies with Yarn version detection'
 inputs:
   node-version:
     description: 'Node.js version to use'
@@ -16,18 +16,15 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
-
-    - name: Cache Yarn packages
-      uses: actions/cache@v4
-      with:
-        path: ~/.yarn/berry/cache
-        key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock', '.tooling/yarn.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-yarn-
+        cache: yarn
+        cache-dependency-path: |
+          yarn.lock
+          .tooling/yarn.lock
 
     - name: Install packages
       shell: bash
       run: |
+        # Determine which directory to install in
         if [ "${{ inputs.install-from-caller }}" == "true" ]; then
           INSTALL_DIR="."
         else
@@ -36,4 +33,15 @@ runs:
 
         echo "Installing packages in: $INSTALL_DIR"
         cd "$INSTALL_DIR"
-        yarn install --immutable
+
+        # Detect Yarn version and install with appropriate flags
+        YARN_VERSION=$(yarn --version)
+        if [[ "$YARN_VERSION" =~ ^[234] ]]; then
+          # Yarn 2+ (Berry)
+          echo "Detected Yarn $YARN_VERSION (Berry)"
+          yarn install --no-immutable
+        else
+          # Yarn 1 (Classic)
+          echo "Detected Yarn $YARN_VERSION (Classic)"
+          yarn install --frozen-lockfile
+        fi
