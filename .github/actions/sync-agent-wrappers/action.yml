@@ -1,0 +1,22 @@
+name: Sync agent wrappers
+description: Generates .cursorrules and .github/copilot-instructions.md from AGENTS.md. Add new agent formats here to propagate to all consuming repos automatically.
+
+runs:
+  using: composite
+  steps:
+    - name: Generate wrapper files
+      shell: bash
+      run: |
+        set -euo pipefail
+        AGENTS_MD="$GITHUB_WORKSPACE/AGENTS.md"
+        HEADER="<!-- Auto-generated from AGENTS.md — do not edit directly. Use artsy/duchamp/.github/actions/sync-agent-wrappers to regenerate. -->"
+        generate() {
+          local dest="$1"
+          mkdir -p "$(dirname "$dest")"
+          { printf '%s\n\n' "$HEADER"; cat "$AGENTS_MD"; } > "$dest"
+          echo "  wrote $dest"
+        }
+        echo "Syncing agent wrappers from AGENTS.md..."
+        generate "$GITHUB_WORKSPACE/.cursorrules"
+        generate "$GITHUB_WORKSPACE/.github/copilot-instructions.md"
+        echo "Done."
