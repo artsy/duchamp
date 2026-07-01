@@ -1,0 +1,11 @@
+name: Sync agent wrappers
+description: Generates .cursorrules and .github/copilot-instructions.md from AGENTS.md. Add new agent formats in scripts/sync-agent-wrappers.sh to propagate to all consuming repos.
+
+runs:
+  using: composite
+  steps:
+    - name: Generate wrapper files
+      shell: bash
+      run: |
+        curl -sS https://raw.githubusercontent.com/artsy/duchamp/main/scripts/sync-agent-wrappers.sh | \
+          REPO_ROOT="$GITHUB_WORKSPACE" bash
