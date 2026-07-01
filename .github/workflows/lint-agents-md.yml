@@ -1,0 +1,36 @@
+name: Lint AGENTS.md
+
+on:
+  workflow_call:
+
+jobs:
+  lint:
+    name: Check AGENTS.md is tool-agnostic
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail on Claude-specific patterns in AGENTS.md
+        run: |
+          PATTERNS=(
+            'mcp__claude_ai_'
+            'mcp__claude_'
+            '\bClaude will\b'
+            '\bClaude should\b'
+            "Claude's "
+            '/plugin marketplace'
+            '/plugin install'
+            'claude --plugin-dir'
+            'claude plugin validate'
+            '\${CLAUDE_PLUGIN_ROOT}'
+            'PreToolUse'
+          )
+          failed=0
+          for pattern in "${PATTERNS[@]}"; do
+            if grep -Pn "$pattern" AGENTS.md; then
+              echo "::error file=AGENTS.md::Found Claude-specific pattern: $pattern"
+              echo "  → Move this content to CLAUDE.md instead."
+              failed=1
+            fi
+          done
+          if [ "$failed" -eq 1 ]; then exit 1; fi
+          echo "AGENTS.md is clean — no Claude-specific patterns found."
