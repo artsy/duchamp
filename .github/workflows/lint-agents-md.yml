@@ -32,7 +32,5 @@ jobs:
               failed=1
             fi
           done
-          if [ "$failed" -eq 1 ]; then
-            exit 1
-          fi
+          if [ "$failed" -eq 1 ]; then exit 1; fi
           echo "AGENTS.md is clean — no Claude-specific patterns found."
