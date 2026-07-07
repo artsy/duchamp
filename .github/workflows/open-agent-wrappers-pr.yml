@@ -39,7 +39,13 @@ jobs:
           GH_TOKEN: ${{ secrets.sync-token }}
         run: |
           set -euo pipefail
-          if git diff --quiet .cursorrules .github/copilot-instructions.md; then
+          # Use `git status --porcelain` rather than `git diff`: on a repo's
+          # first-time bootstrap the wrapper files don't exist yet, so the
+          # freshly-generated ones are untracked — `git diff` (working tree
+          # vs index) ignores untracked files and would report "no change",
+          # skipping the PR. `git status --porcelain` reports untracked files
+          # (as `??`) as well as modifications.
+          if [ -z "$(git status --porcelain -- .cursorrules .github/copilot-instructions.md)" ]; then
             echo "Wrappers already in sync with AGENTS.md — nothing to do."
             exit 0
           fi
