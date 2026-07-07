@@ -21,7 +21,15 @@ jobs:
     name: Open agent wrappers sync PR
     runs-on: ubuntu-latest
     steps:
+      # Check out with the sync-token so its credentials are the ones
+      # persisted into git config (as http.extraheader). Otherwise
+      # actions/checkout persists the default GITHUB_TOKEN, whose header
+      # takes precedence over `gh auth setup-git` and would make the raw
+      # `git push` below authenticate as GITHUB_TOKEN — which does not
+      # trigger the opened PR's required checks, so auto-merge would hang.
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.sync-token }}
 
       - name: Generate wrapper files
         uses: artsy/duchamp/.github/actions/sync-agent-wrappers@main
@@ -41,12 +49,10 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # gh auth only covers gh's own calls; setup-git lets raw git
-          # (push) authenticate with the same token.
-          gh auth setup-git
 
           # Rebuild the sync branch fresh from the pushed commit and
-          # force-push, so it never accumulates stale history.
+          # force-push, so it never accumulates stale history. The push
+          # authenticates with the sync-token persisted at checkout.
           git checkout -b "$BRANCH"
           git add .cursorrules .github/copilot-instructions.md
           git commit -m "chore: sync agent wrappers from AGENTS.md"
