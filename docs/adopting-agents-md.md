@@ -104,28 +104,3 @@ merges to the default branch, the sync workflow runs and opens a
 
 You do **not** need to commit the wrapper files by hand — and you shouldn't; the
 lint guard rejects hand-edits to them.
-
-## How it fits together (in this repo)
-
-- `.github/workflows/lint-agents-md.yml` — reusable lint (tool-agnostic check +
-  hand-edit guard).
-- `.github/workflows/open-agent-wrappers-pr.yml` — reusable post-merge sync that
-  opens the auto-merging wrapper PR.
-- `.github/actions/sync-agent-wrappers/action.yml` — composite action that
-  regenerates the wrappers (used by the sync workflow).
-- `scripts/sync-agent-wrappers.sh` — the generator script (source of truth for
-  which wrapper files are produced; also runnable locally).
-
-## Notes & gotchas
-
-- **Token, not `GITHUB_TOKEN`.** The sync workflow checks out and pushes with
-  `sync-token` so its commits/PRs trigger required checks and auto-merge can
-  complete.
-- **Deploy/release PRs are exempt.** The hand-edit guard only runs on PRs into
-  the default branch, so `staging → release`-style deploy PRs (which carry
-  already-merged wrapper commits) aren't flagged.
-- **The sync branch is exempt.** The hand-edit guard skips the
-  `chore/sync-agent-wrappers` branch, so the automated wrapper PR passes.
-- **Adding a new wrapper format** (e.g. another agent tool): update
-  `scripts/sync-agent-wrappers.sh` here in duchamp — every consuming repo picks
-  it up automatically.
