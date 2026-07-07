@@ -34,3 +34,32 @@ jobs:
           done
           if [ "$failed" -eq 1 ]; then exit 1; fi
           echo "AGENTS.md is clean — no Claude-specific patterns found."
+
+  wrappers:
+    name: Check agent wrappers are not hand-edited
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reject manual edits to generated wrapper files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+
+          # The automated sync PR is the one place these files are meant to
+          # change, so let it through.
+          if [ "$HEAD_REF" = "chore/sync-agent-wrappers" ]; then
+            echo "Automated sync branch — wrapper changes allowed."
+            exit 0
+          fi
+
+          CHANGED=$(gh pr view "$PR" --repo "$REPO" --json files --jq '.files[].path')
+          if echo "$CHANGED" | grep -qE '^(\.cursorrules|\.github/copilot-instructions\.md)$'; then
+            echo "::error::.cursorrules and .github/copilot-instructions.md are auto-generated from AGENTS.md — do not edit them directly."
+            echo "  → Edit AGENTS.md instead. The wrapper files are synced automatically once your AGENTS.md change merges to the default branch."
+            exit 1
+          fi
+          echo "No manual edits to generated wrapper files."
