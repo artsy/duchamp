@@ -105,13 +105,6 @@ merges to the default branch, the sync workflow runs and opens a
 You do **not** need to commit the wrapper files by hand — and you shouldn't; the
 lint guard rejects hand-edits to them.
 
-## Day-to-day usage
-
-- **Change agent guidance** → edit `AGENTS.md`, open a PR, merge. The wrappers
-  sync automatically afterward.
-- **Never edit** `.cursorrules` or `.github/copilot-instructions.md` directly —
-  the lint guard will fail the PR and point you back to `AGENTS.md`.
-
 ## How it fits together (in this repo)
 
 - `.github/workflows/lint-agents-md.yml` — reusable lint (tool-agnostic check +
