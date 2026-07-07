@@ -36,6 +36,7 @@ flowchart TD
    that imports `AGENTS.md`:
 
    ```md
+   <!-- CLAUDE.md -->
    # <Repo> Development Guidelines
 
    See @AGENTS.md for shared development guidance.
@@ -46,9 +47,7 @@ flowchart TD
 
 2. **A `CONVENTIONS_SYNC_TOKEN` secret** on the repo — a fine-grained PAT (or
    GitHub App token) with **Contents: Read and write** and **Pull requests: Read
-   and write** on this repo. The default `GITHUB_TOKEN` is intentionally not used:
-   commits/PRs it creates don't trigger required status checks, so auto-merge
-   would hang.
+   and write** on this repo.
 
 3. **"Allow auto-merge" enabled** in the repo's Settings → General, so the sync
    PR can merge itself once checks pass.
