@@ -10,7 +10,7 @@ Duchamp provides shared GitHub Actions and Danger.js configurations that help en
 - **Dependency management** checks via Danger
 - **Standardized CI/CD workflows** for Node.js projects
 - **Conventional commits** validation
-- **AGENTS.md tooling** — lint and auto-sync agent instruction files across repos
+- **AGENTS.md lint** — keep agent instruction files tool-agnostic across repos
 
 ## 🚀 Quick Start
 
@@ -42,7 +42,7 @@ For detailed documentation, see the [docs/](./docs/) directory:
 - [Getting Started](./docs/getting-started.md) - Setup and basic usage
 - [Available Actions](./docs/actions.md) - Detailed action reference
 - [Examples](./docs/examples.md) - Real-world usage examples
-- [Adopting AGENTS.md tooling](./docs/adopting-agents-md.md) - Add AGENTS.md lint + wrapper auto-sync to a repo
+- [Adopting AGENTS.md lint](./docs/adopting-agents-md.md) - Add the AGENTS.md lint to a repo
 
 ## 🛠 Development
 
