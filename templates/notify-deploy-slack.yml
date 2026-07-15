@@ -1,0 +1,10 @@
+name: Notify Deploy to Slack
+on:
+  pull_request:
+    types: [closed]
+jobs:
+  notify:
+    if: github.event.pull_request.merged == true
+    uses: artsy/duchamp/.github/workflows/notify-deploy-slack.yml@main
+    secrets:
+      slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}

@@ -1,0 +1,48 @@
+name: Notify Deploy to Slack (Reusable)
+on:
+  workflow_call:
+    inputs:
+      deploy-pr-title:
+        description: 'Title of the deploy PR to react to (default "Deploy")'
+        required: false
+        type: string
+        default: Deploy
+      project-name:
+        description: "Override the display name from config (defaults to config or repo name)"
+        required: false
+        type: string
+        default: ""
+      slack-channel:
+        description: "Override the Slack channel from config (for testing)"
+        required: false
+        type: string
+        default: ""
+      config-path:
+        description: "Path to the repo/channel subscription config in duchamp"
+        required: false
+        type: string
+        default: config/notify-deploy-slack.yml
+    secrets:
+      slack-bot-token:
+        required: true
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node .github/actions/notify-deploy-slack/dist/index.js
+        env:
+          INPUT_SLACK-BOT-TOKEN: ${{ secrets.slack-bot-token }}
+          INPUT_CONFIG-PATH: ${{ inputs.config-path }}
+          INPUT_SLACK-CHANNEL: ${{ inputs.slack-channel }}
+          INPUT_DEPLOY-PR-TITLE: ${{ inputs.deploy-pr-title }}
+          INPUT_PROJECT-NAME: ${{ inputs.project-name }}
+          INPUT_GITHUB-TOKEN: ${{ github.token }}

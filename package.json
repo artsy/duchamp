@@ -26,6 +26,7 @@
   },
   "scripts": {
     "build:action:link-pr-to-notion": "cd .github/actions/link-pr-to-notion && ncc build index.ts -o dist",
+    "build:action:notify-deploy-slack": "cd .github/actions/notify-deploy-slack && ncc build index.ts -o dist",
     "prepare": "husky",
     "test": "jest"
   }

@@ -13,6 +13,7 @@ This document provides detailed reference information for all GitHub Actions ava
 | `run-npm-audit.yml`                  | Discover vulnerabilities       | For Node projects                   |
 | `run-claude-review.yml`              | AI-powered PR review           | For Claude-based code review        |
 | `link-pr-to-notion.yml`             | Link PRs to Notion tasks       | For repos using Notion task tracking |
+| `notify-deploy-slack.yml`           | Post deploy summaries to Slack | For Horizon-managed deploy PRs       |
 
 ## Action Reference
 
@@ -367,6 +368,82 @@ The `NOTION_TOKEN` and `NOTION_ROOT_PAGE_ID` secrets must be configured before t
 
 ---
 
+### notify-deploy-slack.yml
+
+**Purpose**: Announce deploys in Slack when a Horizon-managed deploy PR is merged
+
+**Use Case**: Repositories that use Horizon to open `Deploy` PRs from `staging` → `release` and want a non-technical Slack announcement for their product channel
+
+```yaml
+uses: artsy/duchamp/.github/workflows/notify-deploy-slack.yml@main
+secrets:
+  slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }} # Required
+```
+
+**Features:**
+
+- Triggers when a deploy PR is merged (title must match `deploy-pr-title`, default `"Deploy"`)
+- Looks up the Slack channel and project name from `config/notify-deploy-slack.yml` in duchamp
+- Fetches each included PR's title and description for non-technical copy
+- Detects product areas — ArtOS covers the partner CMS (catalog, lists, settings, Instagram/Mailchimp/Tearsheet/Checklist Studio editors), plus Artworks, Conversations, etc.
+- Links to the source PR (`PR`) and any Notion or Jira ticket found in the PR description
+- Posts a top-level message with the deploy PR link and any new user-facing features, then replies in-thread with Fixes and Improvements & Maintenance groups
+
+**Subscription config** (`config/notify-deploy-slack.yml`):
+
+```yaml
+subscriptions:
+  artsy/volt:
+    slack-channel: "#product-amber"
+    project-name: Volt
+```
+
+To subscribe a new repository, add an entry to this file in duchamp and merge to `main`. Repos not listed in the config are skipped silently.
+
+**Secrets:**
+
+- `slack-bot-token` (required): Slack bot token with `chat:write` scope (incoming webhooks cannot post thread replies)
+
+**Inputs:**
+
+- `deploy-pr-title` (optional): Title of the deploy PR to react to (default: `"Deploy"`)
+- `project-name` (optional): Override the display name from config
+- `slack-channel` (optional): Override the Slack channel from config (useful for testing)
+- `config-path` (optional): Path to the subscription config in duchamp (default: `config/notify-deploy-slack.yml`)
+- `dry-run` (optional): Print the Slack message to the console instead of posting (default: `false`)
+
+**Local preview (no Slack token needed):**
+
+```bash
+./scripts/run-notify-deploy-slack-local.sh --dry-run 11777
+```
+
+Writes `tmp/deploy-slack-preview-{owner}-{repo}-{pr}.md` and prints a `file://` link to open it.
+
+**Trigger Recommendations:**
+
+```yaml
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  notify:
+    if: github.event.pull_request.merged == true
+    uses: artsy/duchamp/.github/workflows/notify-deploy-slack.yml@main
+    secrets:
+      slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
+```
+
+**Required Secrets Setup:**
+
+1. Create or reuse a Slack app bot token with `chat:write` access to the target channel(s).
+2. Add the token as a repository secret, e.g. `SLACK_BOT_TOKEN`.
+3. Add the repository to `config/notify-deploy-slack.yml` in duchamp.
+4. Copy `templates/notify-deploy-slack.yml` into your repo's `.github/workflows/`.
+
+---
+
 ## Reusable Action
 
 ### setup-and-install
@@ -407,6 +484,7 @@ The `NOTION_TOKEN` and `NOTION_ROOT_PAGE_ID` secrets must be configured before t
 | Security vulnerability scanning | `run-npm-audit.yml`                  | Scans yarn.lock for vulnerabilities  |
 | AI-powered code review          | `run-claude-review.yml`              | Uses Claude to review PRs            |
 | Notion task tracking            | `link-pr-to-notion.yml`             | Links PRs to Notion tasks by short ID |
+| Deploy notifications            | `notify-deploy-slack.yml`           | Posts deploy summaries to Slack       |
 | Custom workflows                | `setup-and-install` action           | Use as a step in custom workflows    |
 
 ## Security Considerations
