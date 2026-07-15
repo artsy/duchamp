@@ -4,6 +4,7 @@ import {
   type EnrichedDeployChange,
   enrichFromCommit,
   enrichFromPullRequest,
+  formatCopySourceSummary,
 } from "./enrich-changes"
 import { formatSlackMessages } from "./format-slack-message"
 import { parseDeployChanges } from "./parse-commits"
@@ -12,6 +13,12 @@ import {
   resolveSubscription,
 } from "./resolve-subscription"
 import { postSlackMessage } from "./slack-api"
+import {
+  type ClaudeSummaryInput,
+  DEFAULT_CLAUDE_MODEL,
+  mergeClaudeSummaries,
+  summarizeWithClaude,
+} from "./summarize-with-claude"
 import { toFileUrl, writeDryRunPreview } from "./write-dry-run-preview"
 
 const DEFAULT_CONFIG_PATH = "config/notify-deploy-slack.yml"
@@ -38,9 +45,15 @@ async function enrichDeployChanges(
   changes: ReturnType<typeof parseDeployChanges>,
   octokit: ReturnType<typeof github.getOctokit>,
   owner: string,
-  repo: string
+  repo: string,
+  options?: {
+    anthropicApiKey?: string
+    claudeModel?: string
+    useClaude?: boolean
+  }
 ): Promise<EnrichedDeployChange[]> {
   const enriched: EnrichedDeployChange[] = []
+  const claudeInputs: ClaudeSummaryInput[] = []
 
   for (const change of changes) {
     if (change.prNumber !== undefined) {
@@ -50,20 +63,53 @@ async function enrichDeployChanges(
         pull_number: change.prNumber,
       })
 
-      enriched.push(
-        enrichFromPullRequest(change, {
-          title: pr.title,
-          body: pr.body ?? "",
-          html_url: pr.html_url,
-        })
-      )
+      const enrichedChange = enrichFromPullRequest(change, {
+        title: pr.title,
+        body: pr.body ?? "",
+        html_url: pr.html_url,
+      })
+      enriched.push(enrichedChange)
+
+      claudeInputs.push({
+        prNumber: change.prNumber,
+        prTitle: pr.title,
+        prBody: pr.body ?? "",
+        category: enrichedChange.category,
+        area: enrichedChange.area,
+      })
       continue
     }
 
     enriched.push(enrichFromCommit(change))
   }
 
-  return enriched
+  const anthropicApiKey = options?.anthropicApiKey?.trim()
+  const useClaude = options?.useClaude !== false
+  if (!anthropicApiKey || !useClaude || claudeInputs.length === 0) {
+    return enriched
+  }
+
+  try {
+    core.info(
+      `Summarizing ${claudeInputs.length} PR(s) with Claude (${options?.claudeModel ?? DEFAULT_CLAUDE_MODEL})...`
+    )
+    const summaries = await summarizeWithClaude(
+      anthropicApiKey,
+      claudeInputs,
+      options?.claudeModel ?? DEFAULT_CLAUDE_MODEL
+    )
+    const merged = mergeClaudeSummaries(enriched, summaries)
+    const claudeCount = merged.filter(
+      change => change.descriptionSource === "claude"
+    ).length
+    core.info(`Claude summarized ${claudeCount}/${claudeInputs.length} PR(s).`)
+    return merged
+  } catch (err) {
+    core.warning(
+      `Claude summarization failed, using rule-based copy: ${err instanceof Error ? err.message : err}`
+    )
+    return enriched
+  }
 }
 
 async function run(): Promise<void> {
@@ -72,6 +118,9 @@ async function run(): Promise<void> {
     const slackBotToken = core.getInput("slack-bot-token", {
       required: !dryRun,
     })
+    const anthropicApiKey = core.getInput("anthropic-api-key")
+    const claudeModel = core.getInput("claude-model") || DEFAULT_CLAUDE_MODEL
+    const disableClaude = core.getInput("use-claude") === "false"
     const configPath = core.getInput("config-path") || DEFAULT_CONFIG_PATH
     const slackChannelOverride = core.getInput("slack-channel")
     const projectNameOverride = core.getInput("project-name")
@@ -79,6 +128,9 @@ async function run(): Promise<void> {
 
     if (slackBotToken) {
       core.setSecret(slackBotToken)
+    }
+    if (anthropicApiKey) {
+      core.setSecret(anthropicApiKey)
     }
 
     const pr = github.context.payload.pull_request
@@ -139,7 +191,12 @@ async function run(): Promise<void> {
       changes,
       octokit,
       owner,
-      repo
+      repo,
+      {
+        anthropicApiKey,
+        claudeModel,
+        useClaude: !disableClaude,
+      }
     )
     const messages = formatSlackMessages(
       resolvedProjectName,
@@ -157,6 +214,7 @@ async function run(): Promise<void> {
         deployPrNumber: prNumber,
         slackChannel,
         changeCount: enrichedChanges.length,
+        copySourceSummary: formatCopySourceSummary(enrichedChanges),
         messages,
         outputPath,
       })

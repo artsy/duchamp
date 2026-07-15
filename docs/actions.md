@@ -378,6 +378,7 @@ The `NOTION_TOKEN` and `NOTION_ROOT_PAGE_ID` secrets must be configured before t
 uses: artsy/duchamp/.github/workflows/notify-deploy-slack.yml@main
 secrets:
   slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }} # Required
+  anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }} # Optional — improves product copy via Claude
 ```
 
 **Features:**
@@ -385,6 +386,7 @@ secrets:
 - Triggers when a deploy PR is merged (title must match `deploy-pr-title`, default `"Deploy"`)
 - Looks up the Slack channel and project name from `config/notify-deploy-slack.yml` in duchamp
 - Fetches each included PR's title and description for non-technical copy
+- Optionally rewrites titles and descriptions with Claude (Haiku) when `ANTHROPIC_API_KEY` is provided; falls back to rule-based copy on failure
 - Detects product areas — ArtOS covers the partner CMS (catalog, lists, settings, Instagram/Mailchimp/Tearsheet/Checklist Studio editors), plus Artworks, Conversations, etc.
 - Links to the source PR (`PR`) and any Notion or Jira ticket found in the PR description
 - Posts a top-level message with the deploy PR link and any new user-facing features, then replies in-thread with Fixes and Improvements & Maintenance groups
@@ -403,6 +405,7 @@ To subscribe a new repository, add an entry to this file in duchamp and merge to
 **Secrets:**
 
 - `slack-bot-token` (required): Slack bot token with `chat:write` scope (incoming webhooks cannot post thread replies)
+- `anthropic-api-key` (optional): Anthropic API key for Claude-powered product copy. Same key as `run-claude-review.yml`. When omitted, rule-based copy is used.
 
 **Inputs:**
 
@@ -410,6 +413,8 @@ To subscribe a new repository, add an entry to this file in duchamp and merge to
 - `project-name` (optional): Override the display name from config
 - `slack-channel` (optional): Override the Slack channel from config (useful for testing)
 - `config-path` (optional): Path to the subscription config in duchamp (default: `config/notify-deploy-slack.yml`)
+- `claude-model` (optional): Claude model for summarization (default: `claude-haiku-4-5-20251001`)
+- `use-claude` (optional): Set to `"false"` to disable Claude even when an API key is provided (default: `"true"`)
 - `dry-run` (optional): Print the Slack message to the console instead of posting (default: `false`)
 
 **Local preview (no Slack token needed):**
@@ -418,7 +423,7 @@ To subscribe a new repository, add an entry to this file in duchamp and merge to
 ./scripts/run-notify-deploy-slack-local.sh --dry-run 11777
 ```
 
-Writes `tmp/deploy-slack-preview-{owner}-{repo}-{pr}.md` and prints a `file://` link to open it.
+Writes `tmp/deploy-slack-preview-{owner}-{repo}-{pr}.md` and prints a `file://` link to open it. Set `ANTHROPIC_API_KEY` to preview Claude-generated copy locally.
 
 **Trigger Recommendations:**
 
@@ -433,14 +438,16 @@ jobs:
     uses: artsy/duchamp/.github/workflows/notify-deploy-slack.yml@main
     secrets:
       slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
+      anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
 **Required Secrets Setup:**
 
 1. Create or reuse a Slack app bot token with `chat:write` access to the target channel(s).
 2. Add the token as a repository secret, e.g. `SLACK_BOT_TOKEN`.
-3. Add the repository to `config/notify-deploy-slack.yml` in duchamp.
-4. Copy `templates/notify-deploy-slack.yml` into your repo's `.github/workflows/`.
+3. Optionally add `ANTHROPIC_API_KEY` (org-level or repo secret) for Claude-powered copy.
+4. Add the repository to `config/notify-deploy-slack.yml` in duchamp.
+5. Copy `templates/notify-deploy-slack.yml` into your repo's `.github/workflows/`.
 
 ---
 

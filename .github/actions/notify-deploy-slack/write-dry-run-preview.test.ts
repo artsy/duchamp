@@ -12,6 +12,7 @@ describe("formatDryRunMarkdown", () => {
       deployPrNumber: 11777,
       slackChannel: "#product-amber",
       changeCount: 2,
+      copySourceSummary: "2 claude, 1 rules",
       messages: {
         mainMessage: ":rocket: A new batch of Volt changes just went live!",
         threadMessage: "Fixes\n\nArtOS: Example — description (PR)",
@@ -20,6 +21,7 @@ describe("formatDryRunMarkdown", () => {
     })
 
     expect(markdown).toContain("# Volt deploy Slack preview")
+    expect(markdown).toContain("- **Copy source:** 2 claude, 1 rules")
     expect(markdown).toContain(
       "[#11777](https://github.com/artsy/volt/pull/11777)"
     )

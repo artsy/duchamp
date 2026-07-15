@@ -13,10 +13,12 @@ export interface EnrichedDeployChange {
   area?: string
   title: string
   description: string
+  prNumber?: number
   prUrl?: string
   ticketUrl?: string
   ticketLabel?: "Notion" | "Jira"
   featureFlag?: FeatureFlagReference
+  descriptionSource?: "claude" | "rules"
 }
 
 interface PullRequestDetails {
@@ -339,10 +341,12 @@ export function enrichFromPullRequest(
     description:
       (specialTitle && inferSpecialDescription(specialTitle, pr.body)) ??
       humanizeDescription(pr.title, pr.body),
+    prNumber: change.prNumber,
     prUrl: pr.html_url,
     ticketUrl: ticket?.url,
     ticketLabel: ticket?.label,
     featureFlag,
+    descriptionSource: "rules",
   }
 }
 
@@ -354,5 +358,17 @@ export function enrichFromCommit(change: DeployChange): EnrichedDeployChange {
     area: detectArea(change.description, "", change.scope),
     title,
     description: humanizeFallbackDescription(change.description),
+    prNumber: change.prNumber,
+    descriptionSource: "rules",
   }
+}
+
+export function formatCopySourceSummary(
+  changes: EnrichedDeployChange[]
+): string {
+  const claudeCount = changes.filter(
+    change => change.descriptionSource === "claude"
+  ).length
+  const rulesCount = changes.length - claudeCount
+  return `${claudeCount} claude, ${rulesCount} rules`
 }

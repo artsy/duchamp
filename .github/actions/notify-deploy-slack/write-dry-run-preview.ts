@@ -8,6 +8,7 @@ export interface DryRunPreviewOptions {
   deployPrNumber: number
   slackChannel: string
   changeCount: number
+  copySourceSummary?: string
   messages: SlackDeployMessages
   outputPath: string
 }
@@ -19,6 +20,7 @@ export function formatDryRunMarkdown(options: DryRunPreviewOptions): string {
     deployPrNumber,
     slackChannel,
     changeCount,
+    copySourceSummary,
     messages,
   } = options
 
@@ -28,11 +30,13 @@ export function formatDryRunMarkdown(options: DryRunPreviewOptions): string {
     `- **Deploy PR:** [#${deployPrNumber}](${deployPrUrl})`,
     `- **Channel:** ${slackChannel}`,
     `- **Changes:** ${changeCount}`,
-    "",
-    "## Main message",
-    "",
-    messages.mainMessage,
   ]
+
+  if (copySourceSummary) {
+    sections.push(`- **Copy source:** ${copySourceSummary}`)
+  }
+
+  sections.push("", "## Main message", "", messages.mainMessage)
 
   if (messages.threadMessage.length > 0) {
     sections.push("", "## Thread reply", "", messages.threadMessage)

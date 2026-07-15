@@ -34050,16 +34050,12 @@ exports.extractConciseTitle = extractConciseTitle;
 exports.humanizeDescription = humanizeDescription;
 exports.enrichFromPullRequest = enrichFromPullRequest;
 exports.enrichFromCommit = enrichFromCommit;
+exports.formatCopySourceSummary = formatCopySourceSummary;
 const parse_commits_1 = __nccwpck_require__(7834);
 const VOLT_AREAS = [
     {
         name: "Artworks",
-        patterns: [
-            /artwork/i,
-            /edition set/i,
-            /\beditions?\b/i,
-            /dimension/i,
-        ],
+        patterns: [/artwork/i, /edition set/i, /\beditions?\b/i, /dimension/i],
     },
     {
         name: "ArtOS",
@@ -34295,10 +34291,12 @@ function enrichFromPullRequest(change, pr) {
         title: specialTitle ?? extractConciseTitle(pr.title),
         description: (specialTitle && inferSpecialDescription(specialTitle, pr.body)) ??
             humanizeDescription(pr.title, pr.body),
+        prNumber: change.prNumber,
         prUrl: pr.html_url,
         ticketUrl: ticket?.url,
         ticketLabel: ticket?.label,
         featureFlag,
+        descriptionSource: "rules",
     };
 }
 function enrichFromCommit(change) {
@@ -34308,7 +34306,14 @@ function enrichFromCommit(change) {
         area: detectArea(change.description, "", change.scope),
         title,
         description: humanizeFallbackDescription(change.description),
+        prNumber: change.prNumber,
+        descriptionSource: "rules",
     };
+}
+function formatCopySourceSummary(changes) {
+    const claudeCount = changes.filter(change => change.descriptionSource === "claude").length;
+    const rulesCount = changes.length - claudeCount;
+    return `${claudeCount} claude, ${rulesCount} rules`;
 }
 
 
@@ -34424,6 +34429,7 @@ const format_slack_message_1 = __nccwpck_require__(2900);
 const parse_commits_1 = __nccwpck_require__(7834);
 const resolve_subscription_1 = __nccwpck_require__(718);
 const slack_api_1 = __nccwpck_require__(8427);
+const summarize_with_claude_1 = __nccwpck_require__(5463);
 const write_dry_run_preview_1 = __nccwpck_require__(4180);
 const DEFAULT_CONFIG_PATH = "config/notify-deploy-slack.yml";
 async function getPrCommitHeadlines(octokit, owner, repo, prNumber) {
@@ -34437,8 +34443,9 @@ async function getPrCommitHeadlines(octokit, owner, repo, prNumber) {
         return headline ?? "";
     });
 }
-async function enrichDeployChanges(changes, octokit, owner, repo) {
+async function enrichDeployChanges(changes, octokit, owner, repo, options) {
     const enriched = [];
+    const claudeInputs = [];
     for (const change of changes) {
         if (change.prNumber !== undefined) {
             const { data: pr } = await octokit.rest.pulls.get({
@@ -34446,16 +34453,40 @@ async function enrichDeployChanges(changes, octokit, owner, repo) {
                 repo,
                 pull_number: change.prNumber,
             });
-            enriched.push((0, enrich_changes_1.enrichFromPullRequest)(change, {
+            const enrichedChange = (0, enrich_changes_1.enrichFromPullRequest)(change, {
                 title: pr.title,
                 body: pr.body ?? "",
                 html_url: pr.html_url,
-            }));
+            });
+            enriched.push(enrichedChange);
+            claudeInputs.push({
+                prNumber: change.prNumber,
+                prTitle: pr.title,
+                prBody: pr.body ?? "",
+                category: enrichedChange.category,
+                area: enrichedChange.area,
+            });
             continue;
         }
         enriched.push((0, enrich_changes_1.enrichFromCommit)(change));
     }
-    return enriched;
+    const anthropicApiKey = options?.anthropicApiKey?.trim();
+    const useClaude = options?.useClaude !== false;
+    if (!anthropicApiKey || !useClaude || claudeInputs.length === 0) {
+        return enriched;
+    }
+    try {
+        core.info(`Summarizing ${claudeInputs.length} PR(s) with Claude (${options?.claudeModel ?? summarize_with_claude_1.DEFAULT_CLAUDE_MODEL})...`);
+        const summaries = await (0, summarize_with_claude_1.summarizeWithClaude)(anthropicApiKey, claudeInputs, options?.claudeModel ?? summarize_with_claude_1.DEFAULT_CLAUDE_MODEL);
+        const merged = (0, summarize_with_claude_1.mergeClaudeSummaries)(enriched, summaries);
+        const claudeCount = merged.filter(change => change.descriptionSource === "claude").length;
+        core.info(`Claude summarized ${claudeCount}/${claudeInputs.length} PR(s).`);
+        return merged;
+    }
+    catch (err) {
+        core.warning(`Claude summarization failed, using rule-based copy: ${err instanceof Error ? err.message : err}`);
+        return enriched;
+    }
 }
 async function run() {
     try {
@@ -34463,12 +34494,18 @@ async function run() {
         const slackBotToken = core.getInput("slack-bot-token", {
             required: !dryRun,
         });
+        const anthropicApiKey = core.getInput("anthropic-api-key");
+        const claudeModel = core.getInput("claude-model") || summarize_with_claude_1.DEFAULT_CLAUDE_MODEL;
+        const disableClaude = core.getInput("use-claude") === "false";
         const configPath = core.getInput("config-path") || DEFAULT_CONFIG_PATH;
         const slackChannelOverride = core.getInput("slack-channel");
         const projectNameOverride = core.getInput("project-name");
         const deployPrTitle = core.getInput("deploy-pr-title") || "Deploy";
         if (slackBotToken) {
             core.setSecret(slackBotToken);
+        }
+        if (anthropicApiKey) {
+            core.setSecret(anthropicApiKey);
         }
         const pr = github.context.payload.pull_request;
         if (!pr) {
@@ -34490,7 +34527,9 @@ async function run() {
         const prNumber = pr.number;
         const config = (0, resolve_subscription_1.loadDeploySlackConfig)(configPath);
         const subscription = (0, resolve_subscription_1.resolveSubscription)(config, repository);
-        const slackChannel = slackChannelOverride || subscription?.["slack-channel"] || "(not configured)";
+        const slackChannel = slackChannelOverride ||
+            subscription?.["slack-channel"] ||
+            "(not configured)";
         if (!dryRun && !slackChannelOverride && !subscription?.["slack-channel"]) {
             core.info(`No Slack subscription configured for ${repository}. Add it to ${configPath} to enable deploy notifications.`);
             return;
@@ -34501,7 +34540,11 @@ async function run() {
             : `Processing deploy PR #${prNumber} for ${resolvedProjectName} → ${slackChannel}...`);
         const commitHeadlines = await getPrCommitHeadlines(octokit, owner, repo, prNumber);
         const changes = (0, parse_commits_1.parseDeployChanges)(commitHeadlines);
-        const enrichedChanges = await enrichDeployChanges(changes, octokit, owner, repo);
+        const enrichedChanges = await enrichDeployChanges(changes, octokit, owner, repo, {
+            anthropicApiKey,
+            claudeModel,
+            useClaude: !disableClaude,
+        });
         const messages = (0, format_slack_message_1.formatSlackMessages)(resolvedProjectName, pr.html_url, enrichedChanges);
         if (dryRun) {
             const outputPath = core.getInput("dry-run-output") ||
@@ -34512,6 +34555,7 @@ async function run() {
                 deployPrNumber: prNumber,
                 slackChannel,
                 changeCount: enrichedChanges.length,
+                copySourceSummary: (0, enrich_changes_1.formatCopySourceSummary)(enrichedChanges),
                 messages,
                 outputPath,
             });
@@ -34781,6 +34825,153 @@ async function postSlackMessage(token, channel, text, threadTs) {
 
 /***/ }),
 
+/***/ 5463:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DEFAULT_CLAUDE_MODEL = void 0;
+exports.buildClaudePrompt = buildClaudePrompt;
+exports.parseClaudeResponse = parseClaudeResponse;
+exports.mergeClaudeSummaries = mergeClaudeSummaries;
+exports.summarizeWithClaude = summarizeWithClaude;
+exports.DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5-20251001";
+const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION = "2023-06-01";
+const MAX_PR_BODY_LENGTH = 2000;
+const MAX_DESCRIPTION_LENGTH = 120;
+function truncateBody(body) {
+    const trimmed = body.trim();
+    if (trimmed.length <= MAX_PR_BODY_LENGTH)
+        return trimmed;
+    return `${trimmed.slice(0, MAX_PR_BODY_LENGTH - 1).trimEnd()}…`;
+}
+function categoryLabel(category) {
+    switch (category) {
+        case "features":
+            return "New feature";
+        case "fixes":
+            return "Bug fix";
+        default:
+            return "Improvement or maintenance";
+    }
+}
+function buildClaudePrompt(inputs) {
+    const prBlocks = inputs
+        .map(input => {
+        const lines = [
+            `PR #${input.prNumber}`,
+            `Category: ${categoryLabel(input.category)} (do not change)`,
+            input.area ? `Suggested area: ${input.area}` : undefined,
+            `Title: ${input.prTitle}`,
+            `Body:\n${truncateBody(input.prBody)}`,
+        ].filter((line) => line !== undefined);
+        return lines.join("\n");
+    })
+        .join("\n\n---\n\n");
+    return `You write product-friendly Slack copy for Artsy engineering deploy announcements. The audience is non-technical product and design teammates.
+
+Rewrite each PR below into a short title and one-sentence description suitable for Slack.
+
+Rules:
+- Title: plain language, title case, no conventional-commit prefixes (no "feat:", scopes, or ticket IDs)
+- Description: one sentence, max ${MAX_DESCRIPTION_LENGTH} characters, explain user-visible impact in plain language
+- Do not mention code, files, libraries, tests, CI, feature flags, or implementation details unless the category is "Improvement or maintenance" and the change is a routine dependency or tooling update — then say it has no visible changes
+- Do not invent links, ticket numbers, or features not supported by the PR text
+- Area must be one of: Artworks, ArtOS, Conversations, Inventory, Orders — or omit if unclear. ArtOS covers partner CMS (catalog, lists, settings, Studio editors, Instagram/Mailchimp/Tearsheet/Checklist)
+- Keep the category exactly as given — never promote chores to features
+- Return ONLY valid JSON: an array of objects with keys prNumber (number), title (string), description (string), area (string, optional)
+
+PRs:
+
+${prBlocks}`;
+}
+function parseClaudeResponse(text) {
+    const trimmed = text.trim();
+    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    const jsonText = (fenced?.[1] ?? trimmed).trim();
+    const parsed = JSON.parse(jsonText);
+    if (!Array.isArray(parsed)) {
+        throw new Error("Claude response was not a JSON array");
+    }
+    const results = [];
+    for (const item of parsed) {
+        if (typeof item?.prNumber !== "number" ||
+            typeof item?.title !== "string" ||
+            typeof item?.description !== "string") {
+            continue;
+        }
+        const description = item.description.length > MAX_DESCRIPTION_LENGTH
+            ? `${item.description.slice(0, MAX_DESCRIPTION_LENGTH - 1).trimEnd()}…`
+            : item.description;
+        results.push({
+            prNumber: item.prNumber,
+            title: item.title.trim(),
+            description: description.trim(),
+            area: typeof item.area === "string" ? item.area.trim() : undefined,
+        });
+    }
+    if (results.length === 0) {
+        throw new Error("Claude response did not contain any valid summaries");
+    }
+    return results;
+}
+function mergeClaudeSummaries(ruleBased, summaries) {
+    const summaryByPr = new Map(summaries.map(summary => [summary.prNumber, summary]));
+    return ruleBased.map(change => {
+        if (change.prNumber === undefined) {
+            return change;
+        }
+        const summary = summaryByPr.get(change.prNumber);
+        if (!summary) {
+            return change;
+        }
+        return {
+            ...change,
+            title: summary.title,
+            description: summary.description,
+            area: summary.area ?? change.area,
+            descriptionSource: "claude",
+        };
+    });
+}
+async function summarizeWithClaude(apiKey, inputs, model = exports.DEFAULT_CLAUDE_MODEL, fetchImpl = fetch) {
+    if (inputs.length === 0) {
+        return [];
+    }
+    const response = await fetchImpl(ANTHROPIC_API_URL, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "x-api-key": apiKey,
+            "anthropic-version": ANTHROPIC_VERSION,
+        },
+        body: JSON.stringify({
+            model,
+            max_tokens: 4096,
+            messages: [{ role: "user", content: buildClaudePrompt(inputs) }],
+        }),
+    });
+    if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`Anthropic API error (${response.status}): ${errorBody.slice(0, 200)}`);
+    }
+    const payload = (await response.json());
+    const text = payload.content
+        ?.filter(block => block.type === "text")
+        .map(block => block.text ?? "")
+        .join("\n")
+        .trim();
+    if (!text) {
+        throw new Error("Anthropic API returned an empty response");
+    }
+    return parseClaudeResponse(text);
+}
+
+
+/***/ }),
+
 /***/ 4180:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
@@ -34793,18 +34984,18 @@ exports.toFileUrl = toFileUrl;
 const node_fs_1 = __nccwpck_require__(3024);
 const node_path_1 = __nccwpck_require__(6760);
 function formatDryRunMarkdown(options) {
-    const { projectName, deployPrUrl, deployPrNumber, slackChannel, changeCount, messages, } = options;
+    const { projectName, deployPrUrl, deployPrNumber, slackChannel, changeCount, copySourceSummary, messages, } = options;
     const sections = [
         `# ${projectName} deploy Slack preview`,
         "",
         `- **Deploy PR:** [#${deployPrNumber}](${deployPrUrl})`,
         `- **Channel:** ${slackChannel}`,
         `- **Changes:** ${changeCount}`,
-        "",
-        "## Main message",
-        "",
-        messages.mainMessage,
     ];
+    if (copySourceSummary) {
+        sections.push(`- **Copy source:** ${copySourceSummary}`);
+    }
+    sections.push("", "## Main message", "", messages.mainMessage);
     if (messages.threadMessage.length > 0) {
         sections.push("", "## Thread reply", "", messages.threadMessage);
     }

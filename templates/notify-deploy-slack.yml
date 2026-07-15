@@ -8,3 +8,4 @@ jobs:
     uses: artsy/duchamp/.github/workflows/notify-deploy-slack.yml@main
     secrets:
       slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
+      anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}

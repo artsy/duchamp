@@ -9,6 +9,10 @@ set -euo pipefail
 # Dry-run (write preview markdown, no Slack token needed):
 #   ./scripts/run-notify-deploy-slack-local.sh --dry-run 11777
 #
+# Dry-run with Claude copy (optional):
+#   export ANTHROPIC_API_KEY=sk-ant-...
+#   ./scripts/run-notify-deploy-slack-local.sh --dry-run 11777
+#
 # Post to Slack:
 #   export SLACK_BOT_TOKEN=xoxb-...
 #   ./scripts/run-notify-deploy-slack-local.sh 11777 '#hack16-deploy-slack-notification'
@@ -63,6 +67,7 @@ env \
   GITHUB_EVENT_PATH="${EVENT_FILE}" \
   "INPUT_GITHUB-TOKEN=$(gh auth token)" \
   "INPUT_SLACK-BOT-TOKEN=${SLACK_BOT_TOKEN:-dry-run}" \
+  "INPUT_ANTHROPIC-API-KEY=${ANTHROPIC_API_KEY:-}" \
   "INPUT_SLACK-CHANNEL=${SLACK_CHANNEL}" \
   "INPUT_CONFIG-PATH=${CONFIG_PATH}" \
   "INPUT_DRY-RUN=${DRY_RUN}" \

@@ -22,9 +22,21 @@ on:
         required: false
         type: string
         default: config/notify-deploy-slack.yml
+      claude-model:
+        description: "Claude model for product-friendly copy (default claude-haiku-4-5-20251001)"
+        required: false
+        type: string
+        default: claude-haiku-4-5-20251001
+      use-claude:
+        description: 'Set to "false" to disable Claude summarization even when an API key is provided'
+        required: false
+        type: string
+        default: "true"
     secrets:
       slack-bot-token:
         required: true
+      anthropic-api-key:
+        required: false
 jobs:
   notify:
     runs-on: ubuntu-latest
@@ -41,8 +53,11 @@ jobs:
       - run: node .github/actions/notify-deploy-slack/dist/index.js
         env:
           INPUT_SLACK-BOT-TOKEN: ${{ secrets.slack-bot-token }}
+          INPUT_ANTHROPIC-API-KEY: ${{ secrets.anthropic-api-key }}
           INPUT_CONFIG-PATH: ${{ inputs.config-path }}
           INPUT_SLACK-CHANNEL: ${{ inputs.slack-channel }}
           INPUT_DEPLOY-PR-TITLE: ${{ inputs.deploy-pr-title }}
           INPUT_PROJECT-NAME: ${{ inputs.project-name }}
+          INPUT_CLAUDE-MODEL: ${{ inputs.claude-model }}
+          INPUT_USE-CLAUDE: ${{ inputs.use-claude }}
           INPUT_GITHUB-TOKEN: ${{ github.token }}

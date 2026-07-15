@@ -4,6 +4,7 @@ import {
   extractConciseTitle,
   extractFeatureFlag,
   extractTicketLink,
+  formatCopySourceSummary,
   humanizeDescription,
   toTitleCase,
 } from "./enrich-changes"
@@ -190,5 +191,26 @@ describe("enrichFromPullRequest", () => {
     expect(enriched.description).toBe(
       "Routine dependency update of the aws-sdk-s3 gem, with no visible changes"
     )
+  })
+})
+
+describe("formatCopySourceSummary", () => {
+  it("counts claude and rules sources", () => {
+    expect(
+      formatCopySourceSummary([
+        {
+          category: "features",
+          title: "A",
+          description: "One",
+          descriptionSource: "claude",
+        },
+        {
+          category: "fixes",
+          title: "B",
+          description: "Two",
+          descriptionSource: "rules",
+        },
+      ])
+    ).toBe("1 claude, 1 rules")
   })
 })
