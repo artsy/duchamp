@@ -1,0 +1,72 @@
+name: Incident.io Standup Reminder
+
+on:
+  workflow_call:
+    secrets:
+      incident-io-api-key:
+        required: true
+      slack-webhook-url:
+        required: true
+    inputs:
+      schedule-id:
+        description: "incident.io schedule ID for the Engineering on-call schedule"
+        required: true
+        type: string
+      node-version:
+        default: "22"
+        required: false
+        type: string
+      boundary-weekday:
+        description: "Day the on-call shift changes, 0 (Sun) - 6 (Sat). Default: 1 (Monday)"
+        default: 1
+        required: false
+        type: number
+      boundary-hour:
+        description: "Hour the on-call shift changes, 0-23, America/New_York time. Default: 11 (11am ET)"
+        default: 11
+        required: false
+        type: number
+
+jobs:
+  standup-reminder:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout tooling repo
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .tooling
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install tooling dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: .tooling
+        env:
+          YARN_IGNORE_PATH: 1
+
+      - name: Run standup reminder
+        id: cli
+        run: .tooling/node_modules/.bin/ts-node .tooling/scripts/on-call/standup-reminder.ts
+        env:
+          INCIDENT_IO_API_KEY: ${{ secrets.incident-io-api-key }}
+          SCHEDULE_ID: ${{ inputs.schedule-id }}
+          STANDUP_BOUNDARY_WEEKDAY: ${{ inputs.boundary-weekday }}
+          STANDUP_BOUNDARY_HOUR: ${{ inputs.boundary-hour }}
+
+      - name: Standup Reminder > Slack
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: ${{ steps.cli.outputs.payload }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.slack-webhook-url }}

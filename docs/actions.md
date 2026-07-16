@@ -13,6 +13,7 @@ This document provides detailed reference information for all GitHub Actions ava
 | `run-npm-audit.yml`                  | Discover vulnerabilities       | For Node projects                   |
 | `run-claude-review.yml`              | AI-powered PR review           | For Claude-based code review        |
 | `link-pr-to-notion.yml`             | Link PRs to Notion tasks       | For repos using Notion task tracking |
+| `incident-standup-reminder.yml`      | Remind on-call to run standup  | For scheduled Slack standup reminders |
 
 ## Action Reference
 
@@ -367,6 +368,45 @@ The `NOTION_TOKEN` and `NOTION_ROOT_PAGE_ID` secrets must be configured before t
 
 ---
 
+### incident-standup-reminder.yml
+
+**Purpose**: Post a Slack reminder to the current on-call participant(s) to facilitate standup
+
+**Use Case**: Scheduled workflows that need to notify whoever is on-call right now, sourced from an incident.io schedule
+
+```yaml
+uses: artsy/duchamp/.github/workflows/incident-standup-reminder.yml@main
+with:
+  schedule-id: ${{ vars.INCIDENT_IO_SCHEDULE_ID }} # incident.io schedule ID (required)
+  node-version: "22" # Node.js version (default: "22")
+  boundary-weekday: 1 # Day the on-call shift changes, 0 (Sun) - 6 (Sat) (default: 1, Monday)
+  boundary-hour: 11 # Hour the on-call shift changes, 0-23, America/New_York time (default: 11, 11am ET)
+secrets:
+  incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }} # Required
+  slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}     # Required
+```
+
+**Features:**
+
+- Queries incident.io's `/v2/schedule_entries` with a tight time window around "now" to find who is actually on call at the moment the workflow runs (incident.io has no dedicated "current on-call" endpoint, so the window is computed explicitly rather than relying on default query behavior)
+- Anchors that query to a deterministic on-call shift-change boundary (`boundary-weekday`/`boundary-hour`, in America/New_York time) rather than the workflow's literal execution time — since GitHub's `schedule` trigger can fire a few minutes late, this guarantees the reminder always reflects who was on-call up to the boundary, not whoever the schedule just handed off to, regardless of exactly when the job happens to run
+- Builds Slack mentions directly from each schedule entry's `slack_user_id` — no separate email-to-Slack-ID lookup step
+- Posts the reminder via `8398a7/action-slack@v3` using the caller's `SLACK_WEBHOOK_URL`
+
+**Inputs:**
+
+- `schedule-id` (required): incident.io schedule ID to query
+- `node-version` (optional): Node.js version to use
+- `boundary-weekday` (optional): Day of week the on-call shift changes, `0` (Sunday) through `6` (Saturday). Default: `1` (Monday). Must match the day this workflow actually runs on — a mismatch (e.g. the cron schedule changes but this isn't updated) causes the run to fail loudly rather than silently anchor to the wrong day
+- `boundary-hour` (optional): Hour of day the on-call shift changes, `0`-`23`, in America/New_York time. Default: `11` (11am ET)
+
+**Secrets:**
+
+- `incident-io-api-key` (required): incident.io API key with access to the schedule
+- `slack-webhook-url` (required): Slack incoming webhook URL to post the reminder to
+
+---
+
 ## Reusable Action
 
 ### setup-and-install
@@ -407,6 +447,7 @@ The `NOTION_TOKEN` and `NOTION_ROOT_PAGE_ID` secrets must be configured before t
 | Security vulnerability scanning | `run-npm-audit.yml`                  | Scans yarn.lock for vulnerabilities  |
 | AI-powered code review          | `run-claude-review.yml`              | Uses Claude to review PRs            |
 | Notion task tracking            | `link-pr-to-notion.yml`             | Links PRs to Notion tasks by short ID |
+| Scheduled on-call Slack reminders | `incident-standup-reminder.yml`   | Sources current on-call from incident.io |
 | Custom workflows                | `setup-and-install` action           | Use as a step in custom workflows    |
 
 ## Security Considerations
