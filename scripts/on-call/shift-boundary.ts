@@ -100,7 +100,13 @@ const zonedTimeToUtc = (
   timeZone: string
 ): Date => {
   // A same-day guess is enough to know which offset applies (e.g. EDT vs
-  // EST) — it doesn't need to be exact.
+  // EST) — it doesn't need to be exact. Caveat: the offset is looked up at
+  // the guess, not at the true target instant, so a target hour whose
+  // wall-clock lands very close to the DST transition itself (2am local, in
+  // the US) could resolve the offset from the wrong side of that transition
+  // on the transition day. Not a concern for the 11am boundary this module
+  // is built for, but worth knowing before reusing this for a boundary near
+  // 1am-3am local time.
   const roughGuess = Date.UTC(year, month - 1, day, hour, minute, second)
   const offset = utcOffsetMinutes(timeZone, new Date(roughGuess))
   // Local time = UTC time + offset, so UTC time = local time - offset.

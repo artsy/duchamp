@@ -44,6 +44,25 @@ describe("buildPayload", () => {
 
     expect(payload.blocks[0].text.text).toContain("Hi <@U_ALICE> :wave:")
   })
+
+  it("posts a 'no one on call' notice when there are no mentions", () => {
+    const payload = JSON.parse(buildPayload([], SCHEDULE_URL))
+
+    expect(payload.blocks).toHaveLength(1)
+    const text = payload.blocks[0].text.text
+    expect(text).not.toContain("Hi  :wave:")
+    expect(text).toContain("No one appears to be on-call")
+    expect(text).toContain(`<${SCHEDULE_URL}|on-call schedule>`)
+    expect(text).toContain(
+      "please make sure someone facilitates today's Engineering Standup at 11:45am ET."
+    )
+    expect(text).toContain(
+      "<https://github.com/artsy/README/blob/main/events/open-standup.md|on GitHub>"
+    )
+    expect(text).toContain(
+      "<https://www.notion.so/artsy/Standup-Notes-28a5dfe4864645788de1ef936f39687c|in Notion>"
+    )
+  })
 })
 
 describe("main", () => {
@@ -98,6 +117,21 @@ describe("main", () => {
     expect(consoleSpy).toHaveBeenCalledTimes(1)
     expect(consoleSpy.mock.calls[0][0]).toContain("<@U_ALICE>")
     expect(consoleSpy.mock.calls[0][0]).toContain(SCHEDULE_URL)
+    consoleSpy.mockRestore()
+  })
+
+  it("still posts a 'no one on call' payload when there are no mentions", async () => {
+    process.env.INCIDENT_IO_API_KEY = "test-key"
+    process.env.SCHEDULE_ID = "schedule-123"
+    mockUsersToMentions.mockReturnValue([])
+    const consoleSpy = jest.spyOn(console, "log").mockImplementation()
+
+    await main()
+
+    expect(consoleSpy).toHaveBeenCalledTimes(1)
+    expect(consoleSpy.mock.calls[0][0]).toContain(
+      "No one appears to be on-call"
+    )
     consoleSpy.mockRestore()
   })
 

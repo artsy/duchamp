@@ -15,22 +15,30 @@ const URLS = {
 export const buildPayload = (
   mentions: string[],
   onCallScheduleUrl: string
-): string =>
-  JSON.stringify({
+): string => {
+  // currentOnCallUsers/usersToMentions can legitimately return nobody (a
+  // schedule gap, or on-call users missing a linked Slack account) — post an
+  // explicit "no one on call" notice instead of a message that silently tags
+  // no one.
+  const intro =
+    mentions.length > 0
+      ? `Hi ${mentions.join(" and ")} :wave:\n\nBased on our <${
+          onCallScheduleUrl
+        }|on-call schedule>, you've been chosen to facilitate today's Engineering Standup at 11:45am ET.`
+      : `:warning: No one appears to be on-call according to our <${onCallScheduleUrl}|on-call schedule> — please make sure someone facilitates today's Engineering Standup at 11:45am ET.`
+
+  return JSON.stringify({
     blocks: [
       {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `Hi ${mentions.join(" and ")} :wave:\n\nBased on our <${
-            onCallScheduleUrl
-          }|on-call schedule>, you've been chosen to facilitate today's Engineering Standup at 11:45am ET. Please refer to the docs <${
-            URLS.standup
-          }|on GitHub> and add new standup notes <${URLS.notes}|in Notion>.`,
+          text: `${intro} Please refer to the docs <${URLS.standup}|on GitHub> and add new standup notes <${URLS.notes}|in Notion>.`,
         },
       },
     ],
   })
+}
 
 const requireEnv = (name: string): string => {
   const value = process.env[name]
