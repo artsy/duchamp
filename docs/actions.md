@@ -377,13 +377,13 @@ The `NOTION_TOKEN` and `NOTION_ROOT_PAGE_ID` secrets must be configured before t
 ```yaml
 uses: artsy/duchamp/.github/workflows/incident-standup-reminder.yml@main
 with:
-  schedule-id: ${{ vars.INCIDENT_IO_SCHEDULE_ID }} # incident.io schedule ID (required)
-  node-version: "22" # Node.js version (default: "22")
-  boundary-weekday: 1 # Day the on-call shift changes, 0 (Sun) - 6 (Sat) (default: 1, Monday)
-  boundary-hour: 11 # Hour the on-call shift changes, 0-23, America/New_York time (default: 11, 11am ET)
+  schedule-id: ${{ vars.INCIDENT_IO_SCHEDULE_ID }}
+  node-version: "22"
+  boundary-weekday: 1
+  boundary-hour: 11
 secrets:
-  incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }} # Required
-  slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}     # Required
+  incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }}
+  slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 ```
 
 **Features:**
