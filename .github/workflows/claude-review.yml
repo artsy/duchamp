@@ -26,7 +26,8 @@ jobs:
       !contains(github.event.pull_request.user.login, '[bot]') &&
       github.event.pull_request.user.login != 'dependabot' &&
       github.event.pull_request.user.login != 'renovate' &&
-      !contains(github.event.pull_request.labels.*.name, 'in-progress')
+      !contains(github.event.pull_request.labels.*.name, 'in-progress') &&
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled' || github.event.label.name == 'in-progress')
     permissions:
       contents: read
       pull-requests: write
