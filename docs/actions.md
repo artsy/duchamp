@@ -215,6 +215,7 @@ secrets:
   - Bot authors (dependabot, renovate, usernames containing `[bot]`)
   - PRs titled exactly "Deploy"
   - PRs with "graphql schema" in the title
+  - PRs labeled `in-progress` (requires `labeled`/`unlabeled` in the caller's trigger `types`, see below)
 
 **Inputs:**
 
@@ -280,7 +281,7 @@ exclude:
 
 Default exclusions:
 
-- **Always excluded** (cannot be disabled): Draft PRs, bots (username contains `[bot]`), `dependabot`, `renovate`
+- **Always excluded** (cannot be disabled): Draft PRs, bots (username contains `[bot]`), `dependabot`, `renovate`, PRs labeled `in-progress`
 - **Title patterns** (disabled with `disable_defaults: true`): `^Deploy$` (exact match), `graphql schema` (contains)
 
 **Complete Prompt Override:**
@@ -310,12 +311,14 @@ prompt: |
 ```yaml
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review]
+    types: [opened, synchronize, ready_for_review, labeled, unlabeled]
     # Optional: skip docs-only PRs to reduce costs
     paths-ignore:
       - "**.md"
       - "docs/**"
 ```
+
+`labeled`/`unlabeled` are required for the `in-progress` label exclusion below to take effect as soon as the label is added or removed, rather than waiting for the next push.
 
 ---
 
