@@ -1,0 +1,10 @@
+# Maps repositories to Slack channels for deploy notifications.
+# Add a new entry here when a repo should announce deploys in Slack.
+#
+# Keys use the "owner/repo" format (e.g. artsy/volt).
+# Changes to this file take effect on the next deploy after merging to duchamp main.
+
+subscriptions:
+  artsy/volt:
+    slack-channel: "#product-amber"
+    project-name: Volt
