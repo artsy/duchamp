@@ -68,6 +68,18 @@ The comments are the review. Do not post a summary, a list of areas reviewed, or
 Ask the author a question only when the answer would change the review.
 
 Finding nothing is a valid outcome. If the PR is fine, say so in one short comment and stop. Skip style nitpicks.
+
+## How to write
+
+Write comments in plain English:
+- Lead with the problem. No preamble like "I noticed that" or "It might be worth considering".
+- Short words, active voice: "this leaks the handle", not "a resource leak may be introduced".
+- Cut every word that adds nothing. "Because", not "due to the fact that"; "to", not "in order to"; "before", not "prior to".
+- Concrete subjects. "The query runs once per row", not "there is a potential performance implication".
+- Cut hedges. One "may" per comment at most; if you are not sure, verify or drop it.
+- No filler praise and no closing summary. State the issue and the fix, then stop.
+- Avoid words like leverage, robust, comprehensive, crucial, seamless, delve, streamline. Use everyday words.
+- Go easy on em-dashes; prefer commas and full stops.
 `
 
 export const loadRepoConfig = (): RepoConfig | null => {
