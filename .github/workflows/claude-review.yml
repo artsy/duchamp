@@ -18,8 +18,22 @@ on:
         type: number
 
 jobs:
+  # Adding the in-progress label joins the shared concurrency group, which
+  # cancels any check/review job already running for this PR.
+  cancel-on-in-progress:
+    if: github.event.action == 'labeled' && github.event.label.name == 'in-progress'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: claude-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - run: echo "in-progress label added, cancelled any running review"
+
   check:
     runs-on: ubuntu-latest
+    concurrency:
+      group: claude-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     # Fast-path exclusions: drafts, bots, dependabot, renovate, in-progress label (zero overhead)
     if: |
       github.event.pull_request.draft == false &&
