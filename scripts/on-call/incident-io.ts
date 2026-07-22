@@ -6,6 +6,13 @@ const INCIDENT_IO_APP_SCHEDULES_URL =
 // risking that the window drifts into the next shift.
 const CURRENT_SHIFT_WINDOW_PADDING_MS = 60_000
 
+// incident.io's entry_window_end appears to be exclusive at the exact
+// instant: an entry whose start_at lands precisely on entry_window_end was
+// observed missing from `final` in a real query against production schedule
+// data. This small forward margin ensures a caller's intended boundary
+// instant is still captured.
+const NEXT_SHIFT_LOOKAHEAD_PADDING_MS = 60_000
+
 export interface IncidentIoUser {
   id: string
   name: string
@@ -83,6 +90,34 @@ export const currentOnCallUsers = async (
   })
 
   return dedupeUsersById(active.map(entry => entry.user))
+}
+
+// Entries whose shift has not yet started as of `now` — i.e. upcoming shifts
+// someone should get a heads-up about, whether regularly scheduled or an
+// override. `windowEnd` is the caller's intended boundary instant (e.g. from
+// `nextShiftBoundaryInstant`); a small forward margin is added internally so
+// an entry starting exactly at that instant is still included.
+export const nextOnCallUsers = async (
+  apiKey: string,
+  scheduleId: string,
+  now: Date,
+  windowEnd: Date
+): Promise<IncidentIoUser[]> => {
+  const paddedWindowEnd = new Date(
+    windowEnd.getTime() + NEXT_SHIFT_LOOKAHEAD_PADDING_MS
+  )
+  const entries = await fetchScheduleEntries(
+    apiKey,
+    scheduleId,
+    now,
+    paddedWindowEnd
+  )
+
+  const upcoming = entries.filter(
+    entry => now.getTime() < Date.parse(entry.start_at)
+  )
+
+  return dedupeUsersById(upcoming.map(entry => entry.user))
 }
 
 export const scheduleUrl = (scheduleId: string): string =>

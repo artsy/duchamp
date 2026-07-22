@@ -1,4 +1,8 @@
-import { shiftBoundaryAnchor } from "./shift-boundary"
+import {
+  nextShiftBoundaryInstant,
+  shiftBoundaryAnchor,
+  weekdayInTimeZone,
+} from "./shift-boundary"
 
 describe("shiftBoundaryAnchor", () => {
   it("anchors 1 second before the boundary during EDT (UTC-4)", () => {
@@ -48,5 +52,81 @@ describe("shiftBoundaryAnchor", () => {
     )
 
     expect(anchor.toISOString()).toBe("2026-07-13T05:29:59.000Z")
+  })
+})
+
+describe("weekdayInTimeZone", () => {
+  it("returns the weekday as observed in the given timezone", () => {
+    // Monday 2026-07-27, 11:00am EDT -> 2026-07-27T15:00:00Z
+    const now = new Date("2026-07-27T15:00:00Z")
+
+    expect(weekdayInTimeZone("America/New_York", now)).toBe(1)
+  })
+
+  it("differs from the UTC calendar day when they straddle midnight ET", () => {
+    // 2026-07-28T02:00:00Z is Tuesday in UTC, but 10:00pm Monday in EDT.
+    const now = new Date("2026-07-28T02:00:00Z")
+
+    expect(now.getUTCDay()).toBe(2) // Tuesday, naive UTC day
+    expect(weekdayInTimeZone("America/New_York", now)).toBe(1) // Monday, ET
+  })
+})
+
+describe("nextShiftBoundaryInstant", () => {
+  it("returns today's boundary when its hour hasn't passed yet", () => {
+    // Monday 2026-07-27, 10:00am EDT -- boundary is 11am ET, later today.
+    const now = new Date("2026-07-27T14:00:00Z")
+
+    const instant = nextShiftBoundaryInstant({ weekday: 1, hour: 11 }, now)
+
+    expect(instant.toISOString()).toBe("2026-07-27T15:00:00.000Z")
+  })
+
+  it("rolls forward a full week when today's boundary hour already passed", () => {
+    // Monday 2026-07-27, 12:00pm EDT -- boundary (11am ET) already passed.
+    const now = new Date("2026-07-27T16:00:00Z")
+
+    const instant = nextShiftBoundaryInstant({ weekday: 1, hour: 11 }, now)
+
+    expect(instant.toISOString()).toBe("2026-08-03T15:00:00.000Z")
+  })
+
+  it("projects forward to a later weekday within the same week", () => {
+    // Thursday 2026-07-30, 11:00am EDT -> next Monday 11am ET boundary.
+    // Matches real schedule_entries data validated against production.
+    const now = new Date("2026-07-30T15:00:00Z")
+
+    const instant = nextShiftBoundaryInstant({ weekday: 1, hour: 11 }, now)
+
+    expect(instant.toISOString()).toBe("2026-08-03T15:00:00.000Z")
+  })
+
+  it("projects forward to Friday midnight ET from a Monday", () => {
+    // Monday 2026-07-27, 11:00am EDT -> Friday 2026-07-31, midnight ET.
+    const now = new Date("2026-07-27T15:00:00Z")
+
+    const instant = nextShiftBoundaryInstant({ weekday: 5, hour: 0 }, now)
+
+    expect(instant.toISOString()).toBe("2026-07-31T04:00:00.000Z")
+  })
+
+  it("resolves the offset for the target date, not now's date, across a DST fall-back", () => {
+    // Thursday 2026-10-29 is EDT (UTC-4); the next Monday, 2026-11-02, is
+    // after the Nov 1 fall-back and is EST (UTC-5).
+    const now = new Date("2026-10-29T15:00:00Z")
+
+    const instant = nextShiftBoundaryInstant({ weekday: 1, hour: 11 }, now)
+
+    expect(instant.toISOString()).toBe("2026-11-02T16:00:00.000Z")
+  })
+
+  it("rolls across a year boundary correctly", () => {
+    // Monday 2026-12-28, 12:30pm EST -- boundary (11am ET) already passed;
+    // next Monday is 2027-01-04.
+    const now = new Date("2026-12-28T17:30:00Z")
+
+    const instant = nextShiftBoundaryInstant({ weekday: 1, hour: 11 }, now)
+
+    expect(instant.toISOString()).toBe("2027-01-04T16:00:00.000Z")
   })
 })

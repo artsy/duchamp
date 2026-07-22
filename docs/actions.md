@@ -14,6 +14,7 @@ This document provides detailed reference information for all GitHub Actions ava
 | `run-claude-review.yml`              | AI-powered PR review           | For Claude-based code review        |
 | `link-pr-to-notion.yml`             | Link PRs to Notion tasks       | For repos using Notion task tracking |
 | `incident-standup-reminder.yml`      | Remind on-call to run standup  | For scheduled Slack standup reminders |
+| `incident-next-on-call.yml`          | Remind engineers of an upcoming on-call shift | For scheduled Slack next-on-call reminders |
 
 ## Action Reference
 
@@ -410,6 +411,52 @@ secrets:
 
 ---
 
+### incident-next-on-call.yml
+
+**Purpose**: Post a Slack reminder to engineers whose on-call shift is starting soon, so they can prepare
+
+**Use Case**: Scheduled workflows (e.g. running Monday and Thursday) that need to give advance notice of upcoming on-call shifts, sourced from an incident.io schedule with multiple rotations
+
+```yaml
+uses: artsy/duchamp/.github/workflows/incident-next-on-call.yml@main
+with:
+  schedule-id: ${{ vars.INCIDENT_IO_SCHEDULE_ID }}
+  node-version: "22"
+  rotation-boundary-weekday: 1
+  rotation-boundary-hour: 11
+  safety-cutoff-weekday: 5
+  safety-cutoff-hour: 0
+secrets:
+  incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }}
+  slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
+
+**Features:**
+
+- Queries incident.io's `/v2/schedule_entries` for a forward-looking window and includes only entries whose shift hasn't started yet (`start_at` after the run instant) — covers both regularly scheduled shifts and overrides, since incident.io merges both into the `final` array
+- Built for a workflow that runs on two different days per week (e.g. Monday and Thursday), each targeting a different forward boundary so nothing slips through unannounced:
+  - On the day matching the actual rotation handoff's weekday (`rotation-boundary-weekday`, e.g. Monday), it looks ahead to a generous `safety-cutoff-weekday`/`safety-cutoff-hour` (default Friday midnight ET) rather than the next rotation boundary directly — this leaves a buffer in case the other scheduled run (e.g. Thursday) ends up firing late
+  - On the other day (e.g. Thursday), it looks ahead tightly to the next `rotation-boundary-weekday`/`rotation-boundary-hour` occurrence, plus a small internal margin, so a shift starting exactly at that boundary instant is still included
+  - Which of the two behaviors applies is determined by comparing the real weekday (in America/New_York time) the workflow is running on against fixed Monday/Thursday constants in the script — not configurable, since it's tied to the workflow's own cron schedule
+- Silently skips posting to Slack (logs to the run's console output instead) when no one has an upcoming shift in the window, rather than posting an empty or awkward "nobody's up next" message
+- Builds Slack mentions directly from each schedule entry's `slack_user_id` — no separate email-to-Slack-ID lookup step
+
+**Inputs:**
+
+- `schedule-id` (required): incident.io schedule ID to query
+- `node-version` (optional): Node.js version to use
+- `rotation-boundary-weekday` (optional): Day of week the primary on-call rotation hands off, `0` (Sunday) through `6` (Saturday). Default: `1` (Monday)
+- `rotation-boundary-hour` (optional): Hour of day the primary rotation hands off, `0`-`23`, in America/New_York time. Default: `11` (11am ET)
+- `safety-cutoff-weekday` (optional): Day of week for the generous lookahead cutoff used on the rotation-boundary day itself. Default: `5` (Friday)
+- `safety-cutoff-hour` (optional): Hour of day for the safety cutoff, `0`-`23`, in America/New_York time. Default: `0` (midnight ET)
+
+**Secrets:**
+
+- `incident-io-api-key` (required): incident.io API key with access to the schedule
+- `slack-webhook-url` (required): Slack incoming webhook URL to post the reminder to
+
+---
+
 ## Reusable Action
 
 ### setup-and-install
@@ -451,6 +498,7 @@ secrets:
 | AI-powered code review          | `run-claude-review.yml`              | Uses Claude to review PRs            |
 | Notion task tracking            | `link-pr-to-notion.yml`             | Links PRs to Notion tasks by short ID |
 | Scheduled on-call Slack reminders | `incident-standup-reminder.yml`   | Sources current on-call from incident.io |
+| Scheduled upcoming on-call reminders | `incident-next-on-call.yml`    | Notifies engineers ahead of their shift starting |
 | Custom workflows                | `setup-and-install` action           | Use as a step in custom workflows    |
 
 ## Security Considerations

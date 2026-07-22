@@ -1,0 +1,85 @@
+name: Incident.io Next On Call
+
+on:
+  workflow_call:
+    secrets:
+      incident-io-api-key:
+        required: true
+      slack-webhook-url:
+        required: true
+    inputs:
+      schedule-id:
+        description: "incident.io schedule ID for the Engineering on-call schedule"
+        required: true
+        type: string
+      node-version:
+        default: "22"
+        required: false
+        type: string
+      rotation-boundary-weekday:
+        description: "Day the rot-na/sa on-call shift changes, 0 (Sun) - 6 (Sat). Default: 1 (Monday)"
+        default: 1
+        required: false
+        type: number
+      rotation-boundary-hour:
+        description: "Hour the rot-na/sa on-call shift changes, 0-23, America/New_York time. Default: 11 (11am ET)"
+        default: 11
+        required: false
+        type: number
+      safety-cutoff-weekday:
+        description: "Generous lookahead cutoff for the Monday run, 0 (Sun) - 6 (Sat). Default: 5 (Friday)"
+        default: 5
+        required: false
+        type: number
+      safety-cutoff-hour:
+        description: "Hour of the safety cutoff, 0-23, America/New_York time. Default: 0 (midnight ET)"
+        default: 0
+        required: false
+        type: number
+
+jobs:
+  next-on-call:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout tooling repo
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .tooling
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install tooling dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: .tooling
+        env:
+          YARN_IGNORE_PATH: 1
+
+      - name: Run next on-call
+        id: cli
+        run: .tooling/node_modules/.bin/ts-node .tooling/scripts/on-call/next-on-call.ts
+        env:
+          INCIDENT_IO_API_KEY: ${{ secrets.incident-io-api-key }}
+          SCHEDULE_ID: ${{ inputs.schedule-id }}
+          NEXT_ON_CALL_ROTATION_BOUNDARY_WEEKDAY: ${{ inputs.rotation-boundary-weekday }}
+          NEXT_ON_CALL_ROTATION_BOUNDARY_HOUR: ${{ inputs.rotation-boundary-hour }}
+          NEXT_ON_CALL_SAFETY_CUTOFF_WEEKDAY: ${{ inputs.safety-cutoff-weekday }}
+          NEXT_ON_CALL_SAFETY_CUTOFF_HOUR: ${{ inputs.safety-cutoff-hour }}
+
+      - name: Next On Call > Slack
+        if: steps.cli.outputs.payload != ''
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: ${{ steps.cli.outputs.payload }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.slack-webhook-url }}
