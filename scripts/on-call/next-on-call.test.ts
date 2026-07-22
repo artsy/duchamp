@@ -37,6 +37,16 @@ describe("buildPayload", () => {
 
     expect(payload.blocks[0].text.text).toContain("<@U_ALICE> looks like")
   })
+
+  it("posts a warning instead of an empty mention when there are no mentions", () => {
+    const payload = JSON.parse(buildPayload([], SCHEDULE_URL))
+
+    expect(payload.blocks).toHaveLength(1)
+    const text = payload.blocks[0].text.text
+    expect(text).toContain(":warning:")
+    expect(text).toContain("can't be reached on Slack")
+    expect(text).toContain(`<${SCHEDULE_URL}|on-call schedule>`)
+  })
 })
 
 describe("main", () => {
@@ -50,7 +60,7 @@ describe("main", () => {
       NEXT_ON_CALL_TARGET_WEEKDAY: "1",
       NEXT_ON_CALL_TARGET_HOUR: "11",
     }
-    mockNextOnCallUsers.mockResolvedValue([])
+    mockNextOnCallUsers.mockResolvedValue([{ id: "user-1" }])
     mockUsersToMentions.mockReturnValue(["<@U_ALICE>"])
     mockScheduleUrl.mockReturnValue(SCHEDULE_URL)
     mockNextShiftBoundaryInstant.mockReturnValue(WINDOW_END)
@@ -144,7 +154,7 @@ describe("main", () => {
     process.env.INCIDENT_IO_API_KEY = "test-key"
     process.env.SCHEDULE_ID = "schedule-123"
     process.env.GITHUB_OUTPUT = "/tmp/fake-output"
-    mockUsersToMentions.mockReturnValue([])
+    mockNextOnCallUsers.mockResolvedValue([])
     const consoleSpy = jest.spyOn(console, "log").mockImplementation()
 
     await main()
@@ -153,6 +163,26 @@ describe("main", () => {
       expect.stringContaining("skipping Slack notification")
     )
     expect(mockFs.appendFileSync).not.toHaveBeenCalled()
+    consoleSpy.mockRestore()
+  })
+
+  it("still posts a warning payload when someone has an upcoming shift but no linked Slack account", async () => {
+    process.env.INCIDENT_IO_API_KEY = "test-key"
+    process.env.SCHEDULE_ID = "schedule-123"
+    process.env.GITHUB_OUTPUT = "/tmp/fake-output"
+    mockNextOnCallUsers.mockResolvedValue([{ id: "user-1" }])
+    mockUsersToMentions.mockReturnValue([])
+    mockFs.appendFileSync.mockImplementation(() => undefined)
+    const consoleSpy = jest.spyOn(console, "log").mockImplementation()
+
+    await main()
+
+    expect(consoleSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("skipping Slack notification")
+    )
+    expect(mockFs.appendFileSync).toHaveBeenCalledTimes(1)
+    const [, contents] = mockFs.appendFileSync.mock.calls[0]
+    expect(contents).toContain(":warning:")
     consoleSpy.mockRestore()
   })
 

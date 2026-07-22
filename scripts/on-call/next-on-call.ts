@@ -12,13 +12,22 @@ export const buildPayload = (
   mentions: string[],
   onCallScheduleUrl: string
 ): string => {
-  const text = `${mentions.join(
-    ", "
-  )} looks like you have an on-call shift coming up! Check out the <${
-    onCallScheduleUrl
-  }|on-call schedule> and the <${
-    URLS.incidentHandling
-  }|Incident Handling doc> to prep. You've got this! :+1:`
+  // mentions can legitimately be empty even when someone does have a shift
+  // starting soon — usersToMentions drops anyone without a linked Slack
+  // account (incident.io supports SAML SSO and Microsoft Teams as
+  // alternatives to Slack, so this isn't just a hypothetical). Warn instead
+  // of staying silent, so a missing Slack link surfaces rather than swallows
+  // the reminder entirely.
+  const text =
+    mentions.length > 0
+      ? `${mentions.join(
+          ", "
+        )} looks like you have an on-call shift coming up! Check out the <${
+          onCallScheduleUrl
+        }|on-call schedule> and the <${
+          URLS.incidentHandling
+        }|Incident Handling doc> to prep. You've got this! :+1:`
+      : `:warning: Heads up — someone's on-call shift is starting soon, but they can't be reached on Slack (no linked account). Check the <${onCallScheduleUrl}|on-call schedule>.`
 
   return JSON.stringify({
     blocks: [
@@ -83,15 +92,15 @@ export const main = async (): Promise<void> => {
   )
 
   const users = await nextOnCallUsers(apiKey, scheduleId, now, windowEnd)
-  const mentions = usersToMentions(users)
 
-  if (mentions.length === 0) {
+  if (users.length === 0) {
     console.log(
       "next-on-call: no upcoming shifts starting in this window — skipping Slack notification."
     )
     return
   }
 
+  const mentions = usersToMentions(users)
   const payload = buildPayload(mentions, scheduleUrl(scheduleId))
 
   const outputPath = process.env.GITHUB_OUTPUT
