@@ -1,8 +1,4 @@
-import {
-  nextShiftBoundaryInstant,
-  shiftBoundaryAnchor,
-  weekdayInTimeZone,
-} from "./shift-boundary"
+import { nextShiftBoundaryInstant, shiftBoundaryAnchor } from "./shift-boundary"
 
 describe("shiftBoundaryAnchor", () => {
   it("anchors 1 second before the boundary during EDT (UTC-4)", () => {
@@ -52,23 +48,6 @@ describe("shiftBoundaryAnchor", () => {
     )
 
     expect(anchor.toISOString()).toBe("2026-07-13T05:29:59.000Z")
-  })
-})
-
-describe("weekdayInTimeZone", () => {
-  it("returns the weekday as observed in the given timezone", () => {
-    // Monday 2026-07-27, 11:00am EDT -> 2026-07-27T15:00:00Z
-    const now = new Date("2026-07-27T15:00:00Z")
-
-    expect(weekdayInTimeZone("America/New_York", now)).toBe(1)
-  })
-
-  it("differs from the UTC calendar day when they straddle midnight ET", () => {
-    // 2026-07-28T02:00:00Z is Tuesday in UTC, but 10:00pm Monday in EDT.
-    const now = new Date("2026-07-28T02:00:00Z")
-
-    expect(now.getUTCDay()).toBe(2) // Tuesday, naive UTC day
-    expect(weekdayInTimeZone("America/New_York", now)).toBe(1) // Monday, ET
   })
 })
 

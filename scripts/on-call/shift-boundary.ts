@@ -146,13 +146,6 @@ export const shiftBoundaryAnchor = (
   return new Date(boundaryInstant.getTime() - BOUNDARY_SAFETY_MARGIN_MS)
 }
 
-// Returns `now`'s weekday (0-6, Date#getDay convention) as observed in
-// `timeZone` — e.g. so a caller can branch on "which day is this in ET"
-// without relying on `now.getDay()`, which reflects the runtime's local
-// timezone (or UTC in most CI environments), not the intended one.
-export const weekdayInTimeZone = (timeZone: string, now: Date): number =>
-  civilDateTimeIn(timeZone, now).weekday
-
 // Reads a civil (year, month, day) plus a day offset and returns the civil
 // date that many days later, resolved through a fixed mid-day UTC instant so
 // month/year rollovers are handled by `Date.UTC`'s normal overflow behavior,

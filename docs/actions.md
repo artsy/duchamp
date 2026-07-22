@@ -415,29 +415,49 @@ secrets:
 
 **Purpose**: Post a Slack reminder to engineers whose on-call shift is starting soon, so they can prepare
 
-**Use Case**: Scheduled workflows (e.g. running Monday and Thursday) that need to give advance notice of upcoming on-call shifts, sourced from an incident.io schedule with multiple rotations
+**Use Case**: Scheduled workflows that need to give advance notice of upcoming on-call shifts, sourced from an incident.io schedule. Intended to be called **once per cron schedule** the caller runs on, each call passing its own literal target — see the two-job example below
 
 ```yaml
-uses: artsy/duchamp/.github/workflows/incident-next-on-call.yml@main
-with:
-  schedule-id: ${{ vars.INCIDENT_IO_SCHEDULE_ID }}
-  node-version: "22"
-  rotation-boundary-weekday: 1
-  rotation-boundary-hour: 11
-  safety-cutoff-weekday: 5
-  safety-cutoff-hour: 0
-secrets:
-  incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }}
-  slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+on:
+  schedule:
+    - cron: "0 14 * * MON"
+    - cron: "0 14 * * THU"
+
+jobs:
+  # Runs right after the primary rotation's handoff (Monday). Targets a
+  # generous cutoff (Friday, midnight ET) rather than the next real
+  # boundary, so coverage still extends past the Thursday run below even
+  # if that run ends up firing late.
+  monday-safety-cutoff:
+    if: github.event.schedule == '0 14 * * MON'
+    uses: artsy/duchamp/.github/workflows/incident-next-on-call.yml@main
+    with:
+      schedule-id: ${{ vars.INCIDENT_IO_SCHEDULE_ID }}
+      target-weekday: 5 # Friday
+      target-hour: 0 # midnight ET
+    secrets:
+      incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }}
+      slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Runs a few days before the primary rotation's handoff (Thursday).
+  # Targets that real boundary (Monday, 11am ET) directly.
+  thursday-rotation-boundary:
+    if: github.event.schedule == '0 14 * * THU'
+    uses: artsy/duchamp/.github/workflows/incident-next-on-call.yml@main
+    with:
+      schedule-id: ${{ vars.INCIDENT_IO_SCHEDULE_ID }}
+      target-weekday: 1 # Monday
+      target-hour: 11 # 11am ET
+    secrets:
+      incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }}
+      slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 ```
 
 **Features:**
 
 - Queries incident.io's `/v2/schedule_entries` for a forward-looking window and includes only entries whose shift hasn't started yet (`start_at` after the run instant) — covers both regularly scheduled shifts and overrides, since incident.io merges both into the `final` array
-- Built for a workflow that runs on two different days per week (e.g. Monday and Thursday), each targeting a different forward boundary so nothing slips through unannounced:
-  - On the day matching the actual rotation handoff's weekday (`rotation-boundary-weekday`, e.g. Monday), it looks ahead to a generous `safety-cutoff-weekday`/`safety-cutoff-hour` (default Friday midnight ET) rather than the next rotation boundary directly — this leaves a buffer in case the other scheduled run (e.g. Thursday) ends up firing late
-  - On the other day (e.g. Thursday), it looks ahead tightly to the next `rotation-boundary-weekday`/`rotation-boundary-hour` occurrence, plus a small internal margin, so a shift starting exactly at that boundary instant is still included
-  - Which of the two behaviors applies is determined by comparing the real weekday (in America/New_York time) the workflow is running on against fixed Monday/Thursday constants in the script — not configurable, since it's tied to the workflow's own cron schedule
+- Looks ahead to a single caller-supplied `target-weekday`/`target-hour`, resolved to a deterministic UTC instant (DST-aware) regardless of the workflow's literal execution time — the workflow itself has no notion of "which day is this" or what the target means; that mapping lives entirely in the calling job's config, as in the two-job example above
+- A small internal margin is added past the target instant, so a shift starting exactly at that boundary is still included
 - Silently skips posting to Slack (logs to the run's console output instead) when no one has an upcoming shift in the window, rather than posting an empty or awkward "nobody's up next" message
 - Builds Slack mentions directly from each schedule entry's `slack_user_id` — no separate email-to-Slack-ID lookup step
 
@@ -445,10 +465,8 @@ secrets:
 
 - `schedule-id` (required): incident.io schedule ID to query
 - `node-version` (optional): Node.js version to use
-- `rotation-boundary-weekday` (optional): Day of week the primary on-call rotation hands off, `0` (Sunday) through `6` (Saturday). Default: `1` (Monday)
-- `rotation-boundary-hour` (optional): Hour of day the primary rotation hands off, `0`-`23`, in America/New_York time. Default: `11` (11am ET)
-- `safety-cutoff-weekday` (optional): Day of week for the generous lookahead cutoff used on the rotation-boundary day itself. Default: `5` (Friday)
-- `safety-cutoff-hour` (optional): Hour of day for the safety cutoff, `0`-`23`, in America/New_York time. Default: `0` (midnight ET)
+- `target-weekday` (required): Day of week to look ahead to, `0` (Sunday) through `6` (Saturday)
+- `target-hour` (required): Hour of the target, `0`-`23`, in America/New_York time
 
 **Secrets:**
 

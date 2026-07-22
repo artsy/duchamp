@@ -16,25 +16,13 @@ on:
         default: "22"
         required: false
         type: string
-      rotation-boundary-weekday:
-        description: "Day the rot-na/sa on-call shift changes, 0 (Sun) - 6 (Sat). Default: 1 (Monday)"
-        default: 1
-        required: false
+      target-weekday:
+        description: "Weekday to look ahead to, 0 (Sun) - 6 (Sat). Callers running on multiple cron schedules should call this workflow once per schedule, each with its own literal target — e.g. the real rotation boundary for a run right before it, or a further-out generous cutoff for a run right after it."
+        required: true
         type: number
-      rotation-boundary-hour:
-        description: "Hour the rot-na/sa on-call shift changes, 0-23, America/New_York time. Default: 11 (11am ET)"
-        default: 11
-        required: false
-        type: number
-      safety-cutoff-weekday:
-        description: "Generous lookahead cutoff for the Monday run, 0 (Sun) - 6 (Sat). Default: 5 (Friday)"
-        default: 5
-        required: false
-        type: number
-      safety-cutoff-hour:
-        description: "Hour of the safety cutoff, 0-23, America/New_York time. Default: 0 (midnight ET)"
-        default: 0
-        required: false
+      target-hour:
+        description: "Hour of the target, 0-23, America/New_York time"
+        required: true
         type: number
 
 jobs:
@@ -70,10 +58,8 @@ jobs:
         env:
           INCIDENT_IO_API_KEY: ${{ secrets.incident-io-api-key }}
           SCHEDULE_ID: ${{ inputs.schedule-id }}
-          NEXT_ON_CALL_ROTATION_BOUNDARY_WEEKDAY: ${{ inputs.rotation-boundary-weekday }}
-          NEXT_ON_CALL_ROTATION_BOUNDARY_HOUR: ${{ inputs.rotation-boundary-hour }}
-          NEXT_ON_CALL_SAFETY_CUTOFF_WEEKDAY: ${{ inputs.safety-cutoff-weekday }}
-          NEXT_ON_CALL_SAFETY_CUTOFF_HOUR: ${{ inputs.safety-cutoff-hour }}
+          NEXT_ON_CALL_TARGET_WEEKDAY: ${{ inputs.target-weekday }}
+          NEXT_ON_CALL_TARGET_HOUR: ${{ inputs.target-hour }}
 
       - name: Next On Call > Slack
         if: steps.cli.outputs.payload != ''

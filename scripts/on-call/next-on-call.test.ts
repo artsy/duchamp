@@ -1,7 +1,7 @@
 import * as fs from "fs"
 import { nextOnCallUsers, scheduleUrl, usersToMentions } from "./incident-io"
 import { buildPayload, main } from "./next-on-call"
-import { nextShiftBoundaryInstant, weekdayInTimeZone } from "./shift-boundary"
+import { nextShiftBoundaryInstant } from "./shift-boundary"
 
 jest.mock("fs")
 jest.mock("./incident-io")
@@ -12,7 +12,6 @@ const mockNextOnCallUsers = nextOnCallUsers as jest.Mock
 const mockUsersToMentions = usersToMentions as jest.Mock
 const mockScheduleUrl = scheduleUrl as jest.Mock
 const mockNextShiftBoundaryInstant = nextShiftBoundaryInstant as jest.Mock
-const mockWeekdayInTimeZone = weekdayInTimeZone as jest.Mock
 
 const WINDOW_END = new Date("2026-08-03T15:00:00Z")
 
@@ -45,12 +44,16 @@ describe("main", () => {
 
   beforeEach(() => {
     jest.clearAllMocks()
-    process.env = { ...originalEnv, GITHUB_OUTPUT: undefined }
+    process.env = {
+      ...originalEnv,
+      GITHUB_OUTPUT: undefined,
+      NEXT_ON_CALL_TARGET_WEEKDAY: "1",
+      NEXT_ON_CALL_TARGET_HOUR: "11",
+    }
     mockNextOnCallUsers.mockResolvedValue([])
     mockUsersToMentions.mockReturnValue(["<@U_ALICE>"])
     mockScheduleUrl.mockReturnValue(SCHEDULE_URL)
     mockNextShiftBoundaryInstant.mockReturnValue(WINDOW_END)
-    mockWeekdayInTimeZone.mockReturnValue(1) // Monday by default
   })
 
   afterEach(() => {
@@ -73,10 +76,32 @@ describe("main", () => {
     await expect(main()).rejects.toThrow("SCHEDULE_ID env var is not set.")
   })
 
-  it("on a Monday run, targets the Friday safety cutoff (default weekday 5, hour 0)", async () => {
+  it("throws when NEXT_ON_CALL_TARGET_WEEKDAY is not set", async () => {
     process.env.INCIDENT_IO_API_KEY = "test-key"
     process.env.SCHEDULE_ID = "schedule-123"
-    mockWeekdayInTimeZone.mockReturnValue(1)
+    delete process.env.NEXT_ON_CALL_TARGET_WEEKDAY
+
+    await expect(main()).rejects.toThrow(
+      "NEXT_ON_CALL_TARGET_WEEKDAY env var is not set."
+    )
+  })
+
+  it("throws when NEXT_ON_CALL_TARGET_HOUR is not set", async () => {
+    process.env.INCIDENT_IO_API_KEY = "test-key"
+    process.env.SCHEDULE_ID = "schedule-123"
+    process.env.NEXT_ON_CALL_TARGET_WEEKDAY = "1"
+    delete process.env.NEXT_ON_CALL_TARGET_HOUR
+
+    await expect(main()).rejects.toThrow(
+      "NEXT_ON_CALL_TARGET_HOUR env var is not set."
+    )
+  })
+
+  it("computes the window end from the caller-supplied target weekday/hour", async () => {
+    process.env.INCIDENT_IO_API_KEY = "test-key"
+    process.env.SCHEDULE_ID = "schedule-123"
+    process.env.NEXT_ON_CALL_TARGET_WEEKDAY = "5"
+    process.env.NEXT_ON_CALL_TARGET_HOUR = "0"
     jest.spyOn(console, "log").mockImplementation()
 
     await main()
@@ -93,68 +118,25 @@ describe("main", () => {
     )
   })
 
-  it("on a Thursday run, targets the rot-na/sa rotation boundary (default weekday 1, hour 11)", async () => {
+  it("throws when NEXT_ON_CALL_TARGET_WEEKDAY is out of range", async () => {
     process.env.INCIDENT_IO_API_KEY = "test-key"
     process.env.SCHEDULE_ID = "schedule-123"
-    mockWeekdayInTimeZone.mockReturnValue(4)
-    jest.spyOn(console, "log").mockImplementation()
-
-    await main()
-
-    expect(mockNextShiftBoundaryInstant).toHaveBeenCalledWith(
-      { weekday: 1, hour: 11 },
-      expect.any(Date)
-    )
-  })
-
-  it("throws when run on a weekday other than Monday or Thursday", async () => {
-    process.env.INCIDENT_IO_API_KEY = "test-key"
-    process.env.SCHEDULE_ID = "schedule-123"
-    mockWeekdayInTimeZone.mockReturnValue(3) // Wednesday
+    process.env.NEXT_ON_CALL_TARGET_WEEKDAY = "7"
+    process.env.NEXT_ON_CALL_TARGET_HOUR = "11"
 
     await expect(main()).rejects.toThrow(
-      "expected to run on weekday 1 (Monday) or 4 (Thursday)"
+      'Invalid NEXT_ON_CALL_TARGET_WEEKDAY: "7". Must be an integer between 0 and 6.'
     )
   })
 
-  it("respects NEXT_ON_CALL_RUN_WEEKDAY_OVERRIDE for testing on a different real day", async () => {
+  it("throws when NEXT_ON_CALL_TARGET_HOUR is out of range", async () => {
     process.env.INCIDENT_IO_API_KEY = "test-key"
     process.env.SCHEDULE_ID = "schedule-123"
-    process.env.NEXT_ON_CALL_RUN_WEEKDAY_OVERRIDE = "4"
-    mockWeekdayInTimeZone.mockReturnValue(3) // real day would otherwise throw
-    jest.spyOn(console, "log").mockImplementation()
-
-    await main()
-
-    expect(mockNextShiftBoundaryInstant).toHaveBeenCalledWith(
-      { weekday: 1, hour: 11 },
-      expect.any(Date)
-    )
-  })
-
-  it("respects rotation/safety cutoff overrides", async () => {
-    process.env.INCIDENT_IO_API_KEY = "test-key"
-    process.env.SCHEDULE_ID = "schedule-123"
-    process.env.NEXT_ON_CALL_ROTATION_BOUNDARY_WEEKDAY = "3"
-    process.env.NEXT_ON_CALL_ROTATION_BOUNDARY_HOUR = "9"
-    mockWeekdayInTimeZone.mockReturnValue(4)
-    jest.spyOn(console, "log").mockImplementation()
-
-    await main()
-
-    expect(mockNextShiftBoundaryInstant).toHaveBeenCalledWith(
-      { weekday: 3, hour: 9 },
-      expect.any(Date)
-    )
-  })
-
-  it("throws when NEXT_ON_CALL_ROTATION_BOUNDARY_WEEKDAY is out of range", async () => {
-    process.env.INCIDENT_IO_API_KEY = "test-key"
-    process.env.SCHEDULE_ID = "schedule-123"
-    process.env.NEXT_ON_CALL_ROTATION_BOUNDARY_WEEKDAY = "7"
+    process.env.NEXT_ON_CALL_TARGET_WEEKDAY = "1"
+    process.env.NEXT_ON_CALL_TARGET_HOUR = "24"
 
     await expect(main()).rejects.toThrow(
-      'Invalid NEXT_ON_CALL_ROTATION_BOUNDARY_WEEKDAY: "7". Must be an integer between 0 and 6.'
+      'Invalid NEXT_ON_CALL_TARGET_HOUR: "24". Must be an integer between 0 and 23.'
     )
   })
 
