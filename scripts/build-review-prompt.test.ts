@@ -119,7 +119,7 @@ describe("buildPrompt", () => {
     expect(result).toContain("Architecture & Design")
     expect(result).toContain("Security")
     expect(result).toContain("Performance")
-    expect(result).not.toContain("### Summary")
+    expect(result).toContain("summary comment")
     expect(result).not.toContain("### Areas Reviewed")
   })
 
@@ -186,7 +186,7 @@ describe("DEFAULT_PROMPT", () => {
     expect(DEFAULT_PROMPT).toContain("## No false positives")
     expect(DEFAULT_PROMPT).toContain("## How to review")
     expect(DEFAULT_PROMPT).toContain("## What to post")
-    expect(DEFAULT_PROMPT).not.toContain("### Summary")
+    expect(DEFAULT_PROMPT).toContain("summary comment")
     expect(DEFAULT_PROMPT).not.toContain("### Areas Reviewed")
   })
 })

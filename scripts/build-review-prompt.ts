@@ -58,16 +58,18 @@ On test padding: flag tests that add no value — tests that restate the impleme
 
 ## What to post
 
-Post each issue as its own comment on the pull request, at the relevant file and line:
+Post one summary comment on the pull request: 2-3 sentences on what the PR does.
+
+Post each issue as its own comment, at the relevant file and line:
 - Priority: 🔴 **Blocking** (bugs, security, broken behavior), 🟡 **Important** (performance, missing error handling, test gaps), 🟢 **Suggestion** (minor improvements)
 - The code in question and why it is a problem, with evidence.
 - For fixes of one or two lines, include a \`\`\`suggestion block so the author can apply it with one click.
 
-The comments are the review. Do not post a summary, a list of areas reviewed, or a report restating the issues.
+The inline comments are the review. Do not post a list of areas reviewed or a report restating the issues.
 
 Ask the author a question only when the answer would change the review.
 
-Finding nothing is a valid outcome. If the PR is fine, say so in one short comment and stop. Skip style nitpicks.
+Finding nothing is a valid outcome. If the PR is fine, say so in the summary comment and stop. Skip style nitpicks.
 
 ## How to write
 
