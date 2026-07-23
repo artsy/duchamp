@@ -112,15 +112,15 @@ describe("buildPrompt", () => {
     const result = buildPrompt()
 
     expect(result).toContain("senior staff engineer")
-    expect(result).toContain("### Summary")
-    expect(result).toContain("### Issues Found")
     expect(result).toContain("🔴 **Blocking**")
     expect(result).toContain("🟡 **Important**")
     expect(result).toContain("🟢 **Suggestion**")
-    expect(result).toContain("### Areas Reviewed")
+    expect(result).toContain("## What to look for")
     expect(result).toContain("Architecture & Design")
     expect(result).toContain("Security")
     expect(result).toContain("Performance")
+    expect(result).toContain("summary comment")
+    expect(result).not.toContain("### Areas Reviewed")
   })
 
   it("uses custom prompt when provided", () => {
@@ -183,9 +183,10 @@ ignore_paths:
 describe("DEFAULT_PROMPT", () => {
   it("contains expected structure", () => {
     expect(DEFAULT_PROMPT).toContain("senior staff engineer")
-    expect(DEFAULT_PROMPT).toContain("### Summary")
-    expect(DEFAULT_PROMPT).toContain("### Issues Found")
-    expect(DEFAULT_PROMPT).toContain("### Areas Reviewed")
-    expect(DEFAULT_PROMPT).toContain("### Questions for Author")
+    expect(DEFAULT_PROMPT).toContain("## No false positives")
+    expect(DEFAULT_PROMPT).toContain("## How to review")
+    expect(DEFAULT_PROMPT).toContain("## What to post")
+    expect(DEFAULT_PROMPT).toContain("summary comment")
+    expect(DEFAULT_PROMPT).not.toContain("### Areas Reviewed")
   })
 })
