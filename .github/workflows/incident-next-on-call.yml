@@ -1,0 +1,71 @@
+name: Incident.io Next On Call
+
+on:
+  workflow_call:
+    secrets:
+      incident-io-api-key:
+        required: true
+      slack-webhook-url:
+        required: true
+    inputs:
+      schedule-id:
+        description: "incident.io schedule ID for the Engineering on-call schedule"
+        required: true
+        type: string
+      node-version:
+        default: "22"
+        required: false
+        type: string
+      target-weekday:
+        description: "Weekday to look ahead to, 0 (Sun) - 6 (Sat). Callers running on multiple cron schedules should call this workflow once per schedule, each with its own literal target — e.g. the real rotation boundary for a run right before it, or a further-out generous cutoff for a run right after it."
+        required: true
+        type: number
+      target-hour:
+        description: "Hour of the target, 0-23, America/New_York time"
+        required: true
+        type: number
+
+jobs:
+  next-on-call:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout tooling repo
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .tooling
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install tooling dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: .tooling
+        env:
+          YARN_IGNORE_PATH: 1
+
+      - name: Run next on-call
+        id: cli
+        run: .tooling/node_modules/.bin/ts-node .tooling/scripts/on-call/next-on-call.ts
+        env:
+          INCIDENT_IO_API_KEY: ${{ secrets.incident-io-api-key }}
+          SCHEDULE_ID: ${{ inputs.schedule-id }}
+          NEXT_ON_CALL_TARGET_WEEKDAY: ${{ inputs.target-weekday }}
+          NEXT_ON_CALL_TARGET_HOUR: ${{ inputs.target-hour }}
+
+      - name: Next On Call > Slack
+        if: steps.cli.outputs.payload != ''
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: ${{ steps.cli.outputs.payload }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.slack-webhook-url }}

@@ -14,6 +14,7 @@ This document provides detailed reference information for all GitHub Actions ava
 | `run-claude-review.yml`              | AI-powered PR review           | For Claude-based code review        |
 | `link-pr-to-notion.yml`             | Link PRs to Notion tasks       | For repos using Notion task tracking |
 | `incident-standup-reminder.yml`      | Remind on-call to run standup  | For scheduled Slack standup reminders |
+| `incident-next-on-call.yml`          | Remind engineers of an upcoming on-call shift | For scheduled Slack next-on-call reminders |
 
 ## Action Reference
 
@@ -410,6 +411,66 @@ secrets:
 
 ---
 
+### incident-next-on-call.yml
+
+**Purpose**: Post a Slack reminder to engineers whose on-call shift is starting soon, so they can prepare
+
+**Use Case**: Scheduled workflows that need to give advance notice of upcoming on-call shifts, sourced from an incident.io schedule. Intended to be called **once per cron schedule** the caller runs on, each call passing its own literal target — see the two-job example below
+
+```yaml
+on:
+  schedule:
+    - cron: "0 14 * * MON"
+    - cron: "0 14 * * THU"
+
+jobs:
+  monday-safety-cutoff:
+    if: github.event.schedule == '0 14 * * MON'
+    uses: artsy/duchamp/.github/workflows/incident-next-on-call.yml@main
+    with:
+      schedule-id: ${{ vars.INCIDENT_IO_SCHEDULE_ID }}
+      target-weekday: 5 # Friday
+      target-hour: 0 # midnight ET
+    secrets:
+      incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }}
+      slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  thursday-rotation-boundary:
+    if: github.event.schedule == '0 14 * * THU'
+    uses: artsy/duchamp/.github/workflows/incident-next-on-call.yml@main
+    with:
+      schedule-id: ${{ vars.INCIDENT_IO_SCHEDULE_ID }}
+      target-weekday: 1 # Monday
+      target-hour: 11 # 11am ET
+    secrets:
+      incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }}
+      slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
+
+The specific values above reflect one real cadence (a generous Friday-midnight cutoff for the handoff-day run, a tight Monday-11am-ET target for the other) — see joule's `next-on-call.yml` for the fully-annotated production version.
+
+**Features:**
+
+- Queries incident.io's `/v2/schedule_entries` for a forward-looking window and includes only entries whose shift hasn't started yet (`start_at` after the run instant) — covers both regularly scheduled shifts and overrides, since incident.io merges both into the `final` array
+- Looks ahead to a single caller-supplied `target-weekday`/`target-hour`, resolved to a deterministic UTC instant (DST-aware) regardless of the workflow's literal execution time — the workflow itself has no notion of "which day is this" or what the target means; that mapping lives entirely in the calling job's config
+- A small internal margin is added past the target instant, so a shift starting exactly at that boundary is still included
+- Silently skips posting to Slack (logs to the run's console output instead) when no one has an upcoming shift in the window, rather than posting an empty or awkward "nobody's up next" message
+- Builds Slack mentions directly from each schedule entry's `slack_user_id` — no separate email-to-Slack-ID lookup step
+
+**Inputs:**
+
+- `schedule-id` (required): incident.io schedule ID to query
+- `node-version` (optional): Node.js version to use
+- `target-weekday` (required): Day of week to look ahead to, `0` (Sunday) through `6` (Saturday)
+- `target-hour` (required): Hour of the target, `0`-`23`, in America/New_York time
+
+**Secrets:**
+
+- `incident-io-api-key` (required): incident.io API key with access to the schedule
+- `slack-webhook-url` (required): Slack incoming webhook URL to post the reminder to
+
+---
+
 ## Reusable Action
 
 ### setup-and-install
@@ -451,6 +512,7 @@ secrets:
 | AI-powered code review          | `run-claude-review.yml`              | Uses Claude to review PRs            |
 | Notion task tracking            | `link-pr-to-notion.yml`             | Links PRs to Notion tasks by short ID |
 | Scheduled on-call Slack reminders | `incident-standup-reminder.yml`   | Sources current on-call from incident.io |
+| Scheduled upcoming on-call reminders | `incident-next-on-call.yml`    | Notifies engineers ahead of their shift starting |
 | Custom workflows                | `setup-and-install` action           | Use as a step in custom workflows    |
 
 ## Security Considerations

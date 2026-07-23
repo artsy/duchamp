@@ -2,6 +2,7 @@ import {
   currentOnCallUsers,
   fetchScheduleEntries,
   type IncidentIoUser,
+  nextOnCallUsers,
   type ScheduleEntry,
   scheduleUrl,
   usersToMentions,
@@ -135,6 +136,135 @@ describe("currentOnCallUsers", () => {
     const result = await currentOnCallUsers("api-key", "schedule-123", now)
 
     expect(result).toEqual([sharedUser])
+  })
+})
+
+describe("nextOnCallUsers", () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    global.fetch = jest.fn()
+  })
+
+  it("excludes shifts that have already started and includes upcoming ones", async () => {
+    const now = new Date("2026-07-30T15:00:00Z")
+    const alreadyStarted = entry({
+      start_at: "2026-07-27T15:00:00Z",
+      end_at: "2026-07-31T16:00:00Z",
+      user: user({ id: "already-started" }),
+    })
+    const upcomingOverride = entry({
+      start_at: "2026-07-31T16:00:00Z",
+      end_at: "2026-08-03T15:00:00Z",
+      user: user({ id: "upcoming-override" }),
+    })
+    const mockFetch = global.fetch as jest.Mock
+    mockFetch.mockResolvedValue(
+      jsonResponse({
+        schedule_entries: {
+          scheduled: [],
+          overrides: [],
+          final: [alreadyStarted, upcomingOverride],
+        },
+      })
+    )
+
+    const result = await nextOnCallUsers(
+      "api-key",
+      "schedule-123",
+      now,
+      new Date("2026-08-03T15:00:00Z")
+    )
+
+    expect(result).toEqual([upcomingOverride.user])
+  })
+
+  it("includes a shift starting exactly at the windowEnd boundary, thanks to the lookahead padding", async () => {
+    const now = new Date("2026-07-30T15:00:00Z")
+    const windowEnd = new Date("2026-08-03T15:00:00Z")
+    const exactlyAtBoundary = entry({
+      start_at: windowEnd.toISOString(),
+      end_at: "2026-08-10T15:00:00Z",
+      user: user({ id: "at-boundary" }),
+    })
+    const mockFetch = global.fetch as jest.Mock
+    mockFetch.mockResolvedValue(
+      jsonResponse({
+        schedule_entries: {
+          scheduled: [],
+          overrides: [],
+          final: [exactlyAtBoundary],
+        },
+      })
+    )
+
+    const result = await nextOnCallUsers(
+      "api-key",
+      "schedule-123",
+      now,
+      windowEnd
+    )
+
+    expect(result).toEqual([exactlyAtBoundary.user])
+    const [, options] = mockFetch.mock.calls[0]
+    const requestUrl = new URL(mockFetch.mock.calls[0][0])
+    expect(requestUrl.searchParams.get("entry_window_end")).toBe(
+      new Date(windowEnd.getTime() + 60_000).toISOString()
+    )
+    expect(options.headers.Authorization).toBe("Bearer api-key")
+  })
+
+  it("dedupes a user appearing in more than one upcoming entry", async () => {
+    const now = new Date("2026-07-30T15:00:00Z")
+    const sharedUser = user({ id: "shared-user" })
+    const mockFetch = global.fetch as jest.Mock
+    mockFetch.mockResolvedValue(
+      jsonResponse({
+        schedule_entries: {
+          scheduled: [],
+          overrides: [],
+          final: [
+            entry({
+              entry_id: "a",
+              start_at: "2026-07-31T16:00:00Z",
+              user: sharedUser,
+            }),
+            entry({
+              entry_id: "b",
+              start_at: "2026-08-01T00:00:00Z",
+              user: sharedUser,
+            }),
+          ],
+        },
+      })
+    )
+
+    const result = await nextOnCallUsers(
+      "api-key",
+      "schedule-123",
+      now,
+      new Date("2026-08-03T15:00:00Z")
+    )
+
+    expect(result).toEqual([sharedUser])
+  })
+
+  it("returns an empty array when nothing is upcoming in the window", async () => {
+    const now = new Date("2026-07-30T15:00:00Z")
+    const mockFetch = global.fetch as jest.Mock
+    mockFetch.mockResolvedValue(
+      jsonResponse({
+        schedule_entries: { scheduled: [], overrides: [], final: [] },
+      })
+    )
+
+    const result = await nextOnCallUsers(
+      "api-key",
+      "schedule-123",
+      now,
+      new Date("2026-08-03T15:00:00Z")
+    )
+
+    expect(result).toEqual([])
   })
 })
 

@@ -1,8 +1,10 @@
-// Anchors "who was on-call as of a shift-change boundary" to a fixed instant
-// derived from that boundary's calendar day, rather than the literal
-// execution time of the caller. GitHub's `schedule` trigger can fire a few
-// minutes late; without this, a late-firing job could cross the boundary and
-// pick up the incoming shift instead of the outgoing one it's meant to report.
+// Computes deterministic instants around on-call shift-change boundaries,
+// independent of the caller's literal execution time (GitHub's `schedule`
+// trigger can fire a few minutes late). `shiftBoundaryAnchor` looks
+// backward — "who was on-call as of this boundary" — so a late-firing job
+// doesn't cross into the incoming shift. `nextShiftBoundaryInstant` looks
+// forward — "when does the next occurrence of this boundary happen" — for
+// callers that need to search ahead rather than pin down "now."
 //
 // Boundaries are defined in local wall-clock time (e.g. "11am ET"), but the
 // API this feeds only understands UTC instants, so this file also converts
@@ -142,4 +144,62 @@ export const shiftBoundaryAnchor = (
   )
 
   return new Date(boundaryInstant.getTime() - BOUNDARY_SAFETY_MARGIN_MS)
+}
+
+// Reads a civil (year, month, day) plus a day offset and returns the civil
+// date that many days later, resolved through a fixed mid-day UTC instant so
+// month/year rollovers are handled by `Date.UTC`'s normal overflow behavior,
+// and the DST offset lookup never lands near a transition's own boundary
+// hour (see `zonedTimeToUtc`'s caveat above).
+const civilDatePlusDays = (
+  timeZone: string,
+  civil: Pick<CivilDateTime, "year" | "month" | "day">,
+  days: number
+): CivilDateTime =>
+  civilDateTimeIn(
+    timeZone,
+    new Date(Date.UTC(civil.year, civil.month - 1, civil.day + days, 12))
+  )
+
+// Finds the next occurrence (today or later, up to 7 days out) of a
+// weekday+hour boundary that is strictly after `now` — unlike
+// `shiftBoundaryAnchor`, this never throws: if `now` isn't already on the
+// target weekday, or today's occurrence of the target hour has already
+// passed, it rolls forward to the next matching day instead. Used to compute
+// how far ahead a forward-looking lookup (e.g. "next on-call") should search,
+// where the caller doesn't necessarily run on the boundary day itself.
+export const nextShiftBoundaryInstant = (
+  boundary: ShiftBoundary,
+  now: Date = new Date()
+): Date => {
+  const timeZone = boundary.timeZone ?? DEFAULT_TIME_ZONE
+  const civil = civilDateTimeIn(timeZone, now)
+
+  const daysUntilWeekday = (boundary.weekday - civil.weekday + 7) % 7
+  const candidate = civilDatePlusDays(timeZone, civil, daysUntilWeekday)
+
+  const instant = zonedTimeToUtc(
+    candidate.year,
+    candidate.month,
+    candidate.day,
+    boundary.hour,
+    0,
+    0,
+    timeZone
+  )
+
+  if (instant.getTime() > now.getTime()) {
+    return instant
+  }
+
+  const nextWeek = civilDatePlusDays(timeZone, candidate, 7)
+  return zonedTimeToUtc(
+    nextWeek.year,
+    nextWeek.month,
+    nextWeek.day,
+    boundary.hour,
+    0,
+    0,
+    timeZone
+  )
 }
