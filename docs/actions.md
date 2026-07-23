@@ -424,10 +424,11 @@ on:
     - cron: "0 14 * * THU"
 
 jobs:
-  # Runs right after the primary rotation's handoff (Monday). Targets a
-  # generous cutoff (Friday, midnight ET) rather than the next real
-  # boundary, so coverage still extends past the Thursday run below even
-  # if that run ends up firing late.
+  # Runs on the primary rotation's handoff day (Monday) — the cron fires
+  # at 10am ET, before the actual 11am ET boundary. Targets a generous
+  # cutoff (Friday, midnight ET) rather than the next real boundary, so
+  # coverage still extends past the Thursday run below even if that run
+  # ends up firing late.
   monday-safety-cutoff:
     if: github.event.schedule == '0 14 * * MON'
     uses: artsy/duchamp/.github/workflows/incident-next-on-call.yml@main
