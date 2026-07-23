@@ -424,11 +424,6 @@ on:
     - cron: "0 14 * * THU"
 
 jobs:
-  # Runs on the primary rotation's handoff day (Monday) — the cron fires
-  # at 10am ET, before the actual 11am ET boundary. Targets a generous
-  # cutoff (Friday, midnight ET) rather than the next real boundary, so
-  # coverage still extends past the Thursday run below even if that run
-  # ends up firing late.
   monday-safety-cutoff:
     if: github.event.schedule == '0 14 * * MON'
     uses: artsy/duchamp/.github/workflows/incident-next-on-call.yml@main
@@ -440,8 +435,6 @@ jobs:
       incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }}
       slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-  # Runs a few days before the primary rotation's handoff (Thursday).
-  # Targets that real boundary (Monday, 11am ET) directly.
   thursday-rotation-boundary:
     if: github.event.schedule == '0 14 * * THU'
     uses: artsy/duchamp/.github/workflows/incident-next-on-call.yml@main
@@ -454,10 +447,12 @@ jobs:
       slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 ```
 
+The specific values above reflect one real cadence (a generous Friday-midnight cutoff for the handoff-day run, a tight Monday-11am-ET target for the other) — see joule's `next-on-call.yml` for the fully-annotated production version.
+
 **Features:**
 
 - Queries incident.io's `/v2/schedule_entries` for a forward-looking window and includes only entries whose shift hasn't started yet (`start_at` after the run instant) — covers both regularly scheduled shifts and overrides, since incident.io merges both into the `final` array
-- Looks ahead to a single caller-supplied `target-weekday`/`target-hour`, resolved to a deterministic UTC instant (DST-aware) regardless of the workflow's literal execution time — the workflow itself has no notion of "which day is this" or what the target means; that mapping lives entirely in the calling job's config, as in the two-job example above
+- Looks ahead to a single caller-supplied `target-weekday`/`target-hour`, resolved to a deterministic UTC instant (DST-aware) regardless of the workflow's literal execution time — the workflow itself has no notion of "which day is this" or what the target means; that mapping lives entirely in the calling job's config
 - A small internal margin is added past the target instant, so a shift starting exactly at that boundary is still included
 - Silently skips posting to Slack (logs to the run's console output instead) when no one has an upcoming shift in the window, rather than posting an empty or awkward "nobody's up next" message
 - Builds Slack mentions directly from each schedule entry's `slack_user_id` — no separate email-to-Slack-ID lookup step
