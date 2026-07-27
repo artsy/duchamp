@@ -200,7 +200,7 @@ on:
 ```yaml
 uses: artsy/duchamp/.github/workflows/claude-review.yml@main
 with:
-  model: "claude-opus-4-20250514" # Claude model (default)
+  model: "claude-opus-5" # Claude model (default)
   timeout-minutes: 30 # Maximum review time (default: 30)
 secrets:
   anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }} # Required
