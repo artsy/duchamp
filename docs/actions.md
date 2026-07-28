@@ -508,13 +508,13 @@ See joule's `facilitate-incident-review.yml` for production version.
 
 **Features:**
 
-- Queries incident.io's `/v2/schedule_entries` at the actual meeting instant — not the day the workflow runs — so an on-call override added after the day-before notification (but before the meeting) is still correctly reflected in who gets picked
-- Routine path (no `override-date`): checks tomorrow specifically, since the caller always runs the day before the meeting — skips unless tomorrow is both `meeting-weekday` and a biweekly on-week. It deliberately doesn't search further ahead; if this week is off, next week's cron run checks again on its own
+- Queries incident.io's `/v2/schedule_entries` at the actual meeting instant, not the day the workflow runs — so an override already on the schedule by run time is honored even if it doesn't take effect until later, between the run and the meeting. The query happens once, at run time; an override entered after that point isn't seen
+- Routine path (no `override-date`): checks tomorrow specifically, since the caller always runs the day before the meeting — computed in `meeting-hour`'s timezone (America/New_York) civil time, not raw UTC, since a cron's UTC firing instant can already be on a different UTC calendar date than its ET civil date. Throws if tomorrow isn't `meeting-weekday` at all (a real misconfiguration — the cron and `meeting-weekday` have drifted out of sync), but silently skips for the legitimate, expected case of an off-week. It deliberately doesn't search further ahead; if this week is off, next week's cron run checks again on its own
 - Manual catch-up path (`override-date` set): targets that date directly, on any weekday, bypassing the on/off-week check entirely — meant to be filled in at `workflow_dispatch` trigger time for a rare off-week catch-up review
 - Incident Reviews run every other week: `base-date` anchors that cadence — a date known to fall on an on-week, with parity alternating every 7 days via exact day-level integer arithmetic (never drifts, no matter how old `base-date` gets)
 - Picks one random participant from whoever is actually on-call at the resolved meeting instant (naturally covers however many rotations the schedule has, not hardcoded to a specific count)
 - Posts an explicit `:warning:` notice instead of a silent/empty mention if nobody on-call can be reached on Slack (no linked account)
-- Silently skips posting to Slack (logs to the run's console output instead) when the routine path finds no qualifying meeting date
+- Silently skips posting to Slack (logs to the run's console output instead) when the routine path lands on a legitimate off-week
 
 **Inputs:**
 

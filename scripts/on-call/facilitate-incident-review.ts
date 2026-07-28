@@ -2,14 +2,16 @@ import * as fs from "fs"
 
 import { isOffWeek } from "./biweekly"
 import { currentOnCallUsers, scheduleUrl, usersToMentions } from "./incident-io"
-import { zonedTimeToUtc } from "./shift-boundary"
+import {
+  civilDatePlusDays,
+  civilDateTimeIn,
+  zonedTimeToUtc,
+} from "./shift-boundary"
 
 const DEFAULT_TIME_ZONE = "America/New_York"
 const DEFAULT_MEETING_WEEKDAY = 4 // Thursday
 const DEFAULT_MEETING_HOUR = 11 // 11:30am ET (DST-aware via zonedTimeToUtc)
 const DEFAULT_MEETING_MINUTE = 30
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 const URLS = {
   incidentReviewSchedule:
@@ -62,10 +64,17 @@ const parseOverrideDate = (
 // the biweekly on/off-week check entirely.
 //
 // Otherwise, this is the routine cron path: it always runs the day before
-// the meeting, so it checks tomorrow specifically, returning null (skip)
-// unless tomorrow is both `meetingWeekday` and an on-week. It deliberately
-// doesn't search further ahead — if this week is off, next week's cron run
-// checks again on its own.
+// the meeting, in `timeZone` civil time. "Tomorrow" is computed via
+// `civilDateTimeIn`/`civilDatePlusDays` rather than raw UTC arithmetic,
+// because a cron's UTC firing instant can already be on a different UTC
+// calendar date than its `timeZone` civil date (e.g. a cron meant for
+// "Wednesday evening ET" fires at 2am UTC Thursday) — naive UTC-day-plus-one
+// would compound that offset instead of correcting for it. Throws if
+// tomorrow isn't `meetingWeekday` at all — the same class of misconfigured
+// cron-vs-boundary mismatch `shiftBoundaryAnchor` guards against — but
+// returns null (skip) for the legitimate, expected case of an off-week. It
+// deliberately doesn't search further ahead; if this week is off, next
+// week's cron run checks again on its own.
 export const resolveMeetingInstant = (
   now: Date,
   meetingWeekday: number,
@@ -88,24 +97,27 @@ export const resolveMeetingInstant = (
     )
   }
 
-  const tomorrow = new Date(now.getTime() + MS_PER_DAY)
-  if (tomorrow.getUTCDay() !== meetingWeekday) {
-    return null
+  const today = civilDateTimeIn(timeZone, now)
+  const tomorrow = civilDatePlusDays(timeZone, today, 1)
+
+  if (tomorrow.weekday !== meetingWeekday) {
+    throw new Error(
+      `resolveMeetingInstant expected tomorrow (in ${timeZone}) to be weekday ${meetingWeekday}, but it's ${tomorrow.weekday}. Check the cron schedule against MEETING_WEEKDAY.`
+    )
   }
 
-  const year = tomorrow.getUTCFullYear()
-  const month = tomorrow.getUTCMonth() + 1
-  const day = tomorrow.getUTCDate()
-  const midnightUtc = new Date(Date.UTC(year, month - 1, day))
+  const midnightUtc = new Date(
+    Date.UTC(tomorrow.year, tomorrow.month - 1, tomorrow.day)
+  )
 
   if (isOffWeek(baseDate, midnightUtc)) {
     return null
   }
 
   return zonedTimeToUtc(
-    year,
-    month,
-    day,
+    tomorrow.year,
+    tomorrow.month,
+    tomorrow.day,
     meetingHour,
     meetingMinute,
     0,

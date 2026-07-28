@@ -65,13 +65,29 @@ describe("resolveMeetingInstant", () => {
     expect(instant).toBeNull()
   })
 
-  it("returns null when tomorrow isn't meetingWeekday at all", () => {
-    // Any day where tomorrow isn't Thursday.
+  it("throws when tomorrow isn't meetingWeekday at all", () => {
+    // Any day where tomorrow isn't Thursday -- a real misconfiguration
+    // (cron/meetingWeekday mismatch), not the legitimate off-week case.
     const now = new Date("2026-07-16T14:00:00Z") // tomorrow is Friday
+
+    expect(() =>
+      resolveMeetingInstant(now, 4, 11, 30, BASE_DATE, undefined)
+    ).toThrow(
+      "resolveMeetingInstant expected tomorrow (in America/New_York) to be weekday 4, but it's 5."
+    )
+  })
+
+  it("computes tomorrow in ET civil time, not raw UTC, for a cron that fires just after UTC midnight", () => {
+    // A cron meant for "Wednesday evening ET" has to fire at 2am UTC
+    // Thursday -- its UTC calendar date is already Thursday, but in ET civil
+    // time (EDT, UTC-4) it's still 10pm Wednesday. Naive UTC+1-day arithmetic
+    // would land on UTC-Friday and never match meetingWeekday=4 (Thursday);
+    // civil-day arithmetic correctly resolves tomorrow as ET-Thursday.
+    const now = new Date("2026-07-16T02:00:00Z")
 
     const instant = resolveMeetingInstant(now, 4, 11, 30, BASE_DATE, undefined)
 
-    expect(instant).toBeNull()
+    expect(instant?.toISOString()).toBe("2026-07-16T15:30:00.000Z")
   })
 
   it("targets the override date directly, bypassing the on/off-week check", () => {

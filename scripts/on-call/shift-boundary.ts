@@ -22,7 +22,7 @@ export interface ShiftBoundary {
   timeZone?: string // IANA name, default "America/New_York"
 }
 
-interface CivilDateTime {
+export interface CivilDateTime {
   year: number
   month: number
   day: number
@@ -42,7 +42,10 @@ const WEEKDAY_INDEX: Record<string, number> = {
   Sat: 6,
 }
 
-const civilDateTimeIn = (timeZone: string, instant: Date): CivilDateTime => {
+export const civilDateTimeIn = (
+  timeZone: string,
+  instant: Date
+): CivilDateTime => {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone,
     weekday: "short",
@@ -151,7 +154,7 @@ export const shiftBoundaryAnchor = (
 // month/year rollovers are handled by `Date.UTC`'s normal overflow behavior,
 // and the DST offset lookup never lands near a transition's own boundary
 // hour (see `zonedTimeToUtc`'s caveat above).
-const civilDatePlusDays = (
+export const civilDatePlusDays = (
   timeZone: string,
   civil: Pick<CivilDateTime, "year" | "month" | "day">,
   days: number
