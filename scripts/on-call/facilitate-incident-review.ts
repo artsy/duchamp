@@ -49,12 +49,13 @@ const OVERRIDE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const parseOverrideDate = (
   raw: string
 ): { year: number; month: number; day: number } => {
-  if (!OVERRIDE_DATE_PATTERN.test(raw)) {
+  const trimmed = raw.trim()
+  if (!OVERRIDE_DATE_PATTERN.test(trimmed)) {
     throw new Error(
       `Invalid MEETING_OVERRIDE_DATE: "${raw}". Must be YYYY-MM-DD.`
     )
   }
-  const [year, month, day] = raw.split("-").map(Number)
+  const [year, month, day] = trimmed.split("-").map(Number)
 
   // Date.UTC silently rolls over out-of-range values (e.g. Feb 31 becomes
   // Mar 3) instead of rejecting them — round-tripping back to a string
@@ -64,7 +65,7 @@ const parseOverrideDate = (
   const roundTripString = `${roundTrip.getUTCFullYear()}-${String(
     roundTrip.getUTCMonth() + 1
   ).padStart(2, "0")}-${String(roundTrip.getUTCDate()).padStart(2, "0")}`
-  if (roundTripString !== raw) {
+  if (roundTripString !== trimmed) {
     throw new Error(
       `Invalid MEETING_OVERRIDE_DATE: "${raw}" is not a real calendar date.`
     )
@@ -129,7 +130,7 @@ export const resolveMeetingInstant = (
 
   if (tomorrow.weekday !== meetingWeekday) {
     throw new Error(
-      `resolveMeetingInstant expected tomorrow (in ${timeZone}) to be weekday ${meetingWeekday}, but it's ${tomorrow.weekday}. Check the cron schedule against MEETING_WEEKDAY.`
+      `resolveMeetingInstant expected tomorrow (in ${timeZone}) to be weekday ${meetingWeekday}, but it's ${tomorrow.weekday}. Check the cron schedule against MEETING_WEEKDAY, or set MEETING_OVERRIDE_DATE to target a specific date directly.`
     )
   }
 

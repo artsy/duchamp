@@ -68,13 +68,16 @@ describe("resolveMeetingInstant", () => {
 
   it("throws when tomorrow isn't meetingWeekday at all", () => {
     // Any day where tomorrow isn't Thursday -- a real misconfiguration
-    // (cron/meetingWeekday mismatch), not the legitimate off-week case.
+    // (cron/meetingWeekday mismatch), not the legitimate off-week case. The
+    // message also points at MEETING_OVERRIDE_DATE, since this can equally
+    // fire during a manual workflow_dispatch test run where "check the cron
+    // schedule" isn't useful advice.
     const now = new Date("2026-07-16T14:00:00Z") // tomorrow is Friday
 
     expect(() =>
       resolveMeetingInstant(now, 4, 11, 30, BASE_DATE, undefined)
     ).toThrow(
-      "resolveMeetingInstant expected tomorrow (in America/New_York) to be weekday 4, but it's 5."
+      "resolveMeetingInstant expected tomorrow (in America/New_York) to be weekday 4, but it's 5. Check the cron schedule against MEETING_WEEKDAY, or set MEETING_OVERRIDE_DATE to target a specific date directly."
     )
   })
 
@@ -150,6 +153,21 @@ describe("resolveMeetingInstant", () => {
     ).toThrow(
       'Invalid MEETING_OVERRIDE_DATE: "07/27/2026". Must be YYYY-MM-DD.'
     )
+  })
+
+  it("tolerates leading/trailing whitespace in a hand-typed override date", () => {
+    const now = new Date("2026-07-24T14:00:00Z")
+
+    const instant = resolveMeetingInstant(
+      now,
+      4,
+      11,
+      30,
+      BASE_DATE,
+      " 2026-07-27 "
+    )
+
+    expect(instant?.toISOString()).toBe("2026-07-27T15:30:00.000Z")
   })
 
   it("throws on an override date that doesn't exist on the calendar", () => {
