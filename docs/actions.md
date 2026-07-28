@@ -481,6 +481,11 @@ The specific values above reflect one real cadence (a generous Friday-midnight c
 ```yaml
 on:
   workflow_dispatch:
+    inputs:
+      meeting-date:
+        description: "Override meeting date (YYYY-MM-DD) — only for a rare off-week catch-up review, leave blank otherwise"
+        required: false
+        type: string
   schedule:
     - cron: "0 14 * * WED"
 
@@ -492,25 +497,24 @@ jobs:
       meeting-weekday: ${{ vars.MEETING_WEEKDAY }}
       meeting-hour: ${{ vars.MEETING_HOUR }}
       meeting-minute: ${{ vars.MEETING_MINUTE }}
-      # A routine cron only needs to see 1 day ahead; a manual catch-up
-      # trigger needs enough slack to reach an off-week exceptions date.
-      lookahead-days: ${{ github.event_name == 'schedule' && 1 || 6 }}
-      dates: ${{ vars.DATES }}
+      base-date: ${{ vars.MEETING_BASE_DATE }}
+      override-date: ${{ github.event.inputs.meeting-date }}
     secrets:
       incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }}
       slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 ```
 
-See joule's `facilitate-incident-review.yml` for the fully-annotated production version.
+See joule's `facilitate-incident-review.yml` for production version.
 
 **Features:**
 
 - Queries incident.io's `/v2/schedule_entries` at the actual meeting instant — not the day the workflow runs — so an on-call override added after the day-before notification (but before the meeting) is still correctly reflected in who gets picked
-- Scans forward from the run day, up to `lookahead-days` days ahead, for the next date that's either a regular biweekly on-week occurrence of `meeting-weekday`, or an explicit date listed in `dates.exceptions` (any weekday) — this is what lets a single reusable workflow serve both the routine 1-day-ahead cron check and a rare manual catch-up trigger several days ahead of an off-cadence meeting
-- Incident Reviews run every other week: `dates` (`{ baseDate, exceptions }`) anchors that cadence — `baseDate` is a date known to fall on an on-week, and parity alternates every 7 days via exact day-level integer arithmetic (never drifts, no matter how old `baseDate` gets); a date listed in `exceptions` always forces an on-week, for a deliberate catch-up review during what would otherwise be an off-week
+- Routine path (no `override-date`): checks tomorrow specifically, since the caller always runs the day before the meeting — skips unless tomorrow is both `meeting-weekday` and a biweekly on-week. It deliberately doesn't search further ahead; if this week is off, next week's cron run checks again on its own
+- Manual catch-up path (`override-date` set): targets that date directly, on any weekday, bypassing the on/off-week check entirely — meant to be filled in at `workflow_dispatch` trigger time for a rare off-week catch-up review
+- Incident Reviews run every other week: `base-date` anchors that cadence — a date known to fall on an on-week, with parity alternating every 7 days via exact day-level integer arithmetic (never drifts, no matter how old `base-date` gets)
 - Picks one random participant from whoever is actually on-call at the resolved meeting instant (naturally covers however many rotations the schedule has, not hardcoded to a specific count)
 - Posts an explicit `:warning:` notice instead of a silent/empty mention if nobody on-call can be reached on Slack (no linked account)
-- Silently skips posting to Slack (logs to the run's console output instead) when no qualifying meeting date falls within the lookahead window
+- Silently skips posting to Slack (logs to the run's console output instead) when the routine path finds no qualifying meeting date
 
 **Inputs:**
 
@@ -519,8 +523,8 @@ See joule's `facilitate-incident-review.yml` for the fully-annotated production 
 - `meeting-weekday` (optional): Day of week the Incident Review meeting itself runs, `0` (Sunday) through `6` (Saturday). Default: `4` (Thursday)
 - `meeting-hour` (optional): Hour the meeting runs, `0`-`23`, in America/New_York time. Default: `11`
 - `meeting-minute` (optional): Minute the meeting runs, `0`-`59`. Default: `30` (11:30am ET)
-- `lookahead-days` (required): Days ahead of the run to search for a qualifying meeting date. A routine day-before cron only needs `1`; an occasional manual catch-up trigger needs enough slack to reach an off-week `exceptions` date on any weekday (e.g. `6`, to cover a Friday trigger for the following Monday)
-- `dates` (required): JSON `{ baseDate: string, exceptions: string[] }` — biweekly cadence anchor and any catch-up override dates, each a `YYYY-MM-DD` meeting date (not the day-before notification date). `baseDate` must fall on the same weekday as `meeting-weekday` — a mismatch (e.g. the meeting day changes but `baseDate` isn't updated to a date on the new weekday) causes the run to fail loudly rather than silently compute the wrong on/off-week parity
+- `base-date` (required): `YYYY-MM-DD` date known to fall on a biweekly on-week — anchors the every-other-week cadence. Must fall on the same weekday as `meeting-weekday` — a mismatch (e.g. the meeting day changes but `base-date` isn't updated to a date on the new weekday) causes the run to fail loudly rather than silently compute the wrong on/off-week parity
+- `override-date` (optional): `YYYY-MM-DD` to target directly, bypassing the on/off-week check — for a rare manual catch-up review on an off-week or non-standard weekday. Leave unset for the routine day-before cron run
 
 **Secrets:**
 

@@ -31,13 +31,14 @@ on:
         default: 30
         required: false
         type: number
-      lookahead-days:
-        description: "Days ahead of the run to search for a qualifying meeting date. A routine day-before cron only needs 1; an occasional manual catch-up trigger needs enough slack to reach an off-week exception date on any weekday (e.g. 6, to cover a Friday trigger for the following Monday)."
+      base-date:
+        description: "YYYY-MM-DD date known to fall on a biweekly on-week — anchors the every-other-week Incident Review cadence. Must fall on the same weekday as meeting-weekday"
         required: true
-        type: number
-      dates:
-        description: 'JSON { baseDate: string, exceptions: string[] } — biweekly cadence anchor and any catch-up override dates (each a YYYY-MM-DD meeting date)'
-        required: true
+        type: string
+      override-date:
+        description: "YYYY-MM-DD to target directly, bypassing the on/off-week check — for a rare manual catch-up review on an off-week or non-standard weekday. Leave unset for the routine day-before cron run"
+        required: false
+        default: ""
         type: string
 
 jobs:
@@ -76,8 +77,8 @@ jobs:
           MEETING_WEEKDAY: ${{ inputs.meeting-weekday }}
           MEETING_HOUR: ${{ inputs.meeting-hour }}
           MEETING_MINUTE: ${{ inputs.meeting-minute }}
-          MEETING_LOOKAHEAD_DAYS: ${{ inputs.lookahead-days }}
-          DATES: ${{ inputs.dates }}
+          MEETING_BASE_DATE: ${{ inputs.base-date }}
+          MEETING_OVERRIDE_DATE: ${{ inputs.override-date }}
 
       - name: Facilitate Review > Slack
         if: steps.cli.outputs.payload != ''
