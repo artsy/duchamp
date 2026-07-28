@@ -54,6 +54,21 @@ const parseOverrideDate = (
     )
   }
   const [year, month, day] = raw.split("-").map(Number)
+
+  // Date.UTC silently rolls over out-of-range values (e.g. Feb 31 becomes
+  // Mar 3) instead of rejecting them — round-tripping back to a string
+  // catches a typo in this hand-typed, workflow_dispatch-entered value that
+  // the regex above can't.
+  const roundTrip = new Date(Date.UTC(year, month - 1, day))
+  const roundTripString = `${roundTrip.getUTCFullYear()}-${String(
+    roundTrip.getUTCMonth() + 1
+  ).padStart(2, "0")}-${String(roundTrip.getUTCDate()).padStart(2, "0")}`
+  if (roundTripString !== raw) {
+    throw new Error(
+      `Invalid MEETING_OVERRIDE_DATE: "${raw}" is not a real calendar date.`
+    )
+  }
+
   return { year, month, day }
 }
 

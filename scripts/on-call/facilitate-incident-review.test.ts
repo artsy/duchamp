@@ -132,6 +132,17 @@ describe("resolveMeetingInstant", () => {
     )
   })
 
+  it("throws on an override date that doesn't exist on the calendar", () => {
+    // Date.UTC would silently roll this over to 2026-03-03.
+    const now = new Date("2026-02-01T14:00:00Z")
+
+    expect(() =>
+      resolveMeetingInstant(now, 4, 11, 30, BASE_DATE, "2026-02-31")
+    ).toThrow(
+      'Invalid MEETING_OVERRIDE_DATE: "2026-02-31" is not a real calendar date.'
+    )
+  })
+
   it("resolves the meeting hour/minute DST-aware", () => {
     // baseDate === tomorrow itself, so weeksSince = 0 (on-week), isolating
     // this test from the real production parity data.
