@@ -1,6 +1,7 @@
 import * as fs from "fs"
 
 import { isOffWeek } from "./biweekly"
+import { readIntEnv, requireEnv } from "./env"
 import { currentOnCallUsers, scheduleUrl, usersToMentions } from "./incident-io"
 import {
   civilDatePlusDays,
@@ -138,31 +139,6 @@ export const resolveMeetingInstant = (
     0,
     timeZone
   )
-}
-
-const requireEnv = (name: string): string => {
-  const value = process.env[name]
-  if (!value) {
-    throw new Error(`${name} env var is not set.`)
-  }
-  return value
-}
-
-const readIntEnv = (
-  name: string,
-  defaultValue: number,
-  range: { min: number; max: number }
-): number => {
-  const raw = process.env[name]
-  const value = raw ? Number.parseInt(raw, 10) : defaultValue
-
-  if (Number.isNaN(value) || value < range.min || value > range.max) {
-    throw new Error(
-      `Invalid ${name}: "${raw}". Must be an integer between ${range.min} and ${range.max}.`
-    )
-  }
-
-  return value
 }
 
 // isOffWeek's parity math assumes `baseDate` and any date it's compared
