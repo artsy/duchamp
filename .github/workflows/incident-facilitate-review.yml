@@ -1,0 +1,89 @@
+name: Incident.io Facilitate Review
+
+on:
+  workflow_call:
+    secrets:
+      incident-io-api-key:
+        required: true
+      slack-webhook-url:
+        required: true
+    inputs:
+      schedule-id:
+        description: "incident.io schedule ID for the Engineering on-call schedule"
+        required: true
+        type: string
+      node-version:
+        default: "22"
+        required: false
+        type: string
+      meeting-weekday:
+        description: "Weekday the Incident Review meeting itself runs, 0 (Sun) - 6 (Sat). Default: 4 (Thursday)"
+        default: 4
+        required: false
+        type: number
+      meeting-hour:
+        description: "Hour the meeting runs, 0-23, America/New_York time. Default: 11 (11:30am ET)"
+        default: 11
+        required: false
+        type: number
+      meeting-minute:
+        description: "Minute the meeting runs, 0-59. Default: 30 (11:30am ET)"
+        default: 30
+        required: false
+        type: number
+      lookahead-days:
+        description: "Days ahead of the run to search for a qualifying meeting date. A routine day-before cron only needs 1; an occasional manual catch-up trigger needs enough slack to reach an off-week exception date on any weekday (e.g. 6, to cover a Friday trigger for the following Monday)."
+        required: true
+        type: number
+      dates:
+        description: 'JSON { baseDate: string, exceptions: string[] } — biweekly cadence anchor and any catch-up override dates (each a YYYY-MM-DD meeting date)'
+        required: true
+        type: string
+
+jobs:
+  facilitate-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout tooling repo
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .tooling
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install tooling dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: .tooling
+        env:
+          YARN_IGNORE_PATH: 1
+
+      - name: Run facilitate incident review
+        id: cli
+        run: .tooling/node_modules/.bin/ts-node .tooling/scripts/on-call/facilitate-incident-review.ts
+        env:
+          INCIDENT_IO_API_KEY: ${{ secrets.incident-io-api-key }}
+          SCHEDULE_ID: ${{ inputs.schedule-id }}
+          MEETING_WEEKDAY: ${{ inputs.meeting-weekday }}
+          MEETING_HOUR: ${{ inputs.meeting-hour }}
+          MEETING_MINUTE: ${{ inputs.meeting-minute }}
+          MEETING_LOOKAHEAD_DAYS: ${{ inputs.lookahead-days }}
+          DATES: ${{ inputs.dates }}
+
+      - name: Facilitate Review > Slack
+        if: steps.cli.outputs.payload != ''
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: ${{ steps.cli.outputs.payload }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.slack-webhook-url }}

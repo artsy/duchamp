@@ -92,7 +92,7 @@ const utcOffsetMinutes = (timeZone: string, instant: Date): number => {
 }
 
 // Converts a wall-clock time in `timeZone` to the UTC instant it represents.
-const zonedTimeToUtc = (
+export const zonedTimeToUtc = (
   year: number,
   month: number,
   day: number,
