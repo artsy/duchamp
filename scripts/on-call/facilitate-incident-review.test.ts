@@ -290,6 +290,16 @@ describe("main", () => {
     )
   })
 
+  it("throws a clear format error for a malformed MEETING_BASE_DATE, not a confusing weekday NaN", async () => {
+    process.env.INCIDENT_IO_API_KEY = "test-key"
+    process.env.SCHEDULE_ID = "schedule-123"
+    process.env.MEETING_BASE_DATE = "2026-02-31" // doesn't exist on the calendar
+
+    await expect(main()).rejects.toThrow(
+      'Invalid MEETING_BASE_DATE: "2026-02-31" is not a real calendar date.'
+    )
+  })
+
   it("logs and skips without writing GITHUB_OUTPUT on an off-week with no override", async () => {
     jest.setSystemTime(new Date("2026-07-22T14:00:00Z")) // off-week Wednesday
     process.env.INCIDENT_IO_API_KEY = "test-key"

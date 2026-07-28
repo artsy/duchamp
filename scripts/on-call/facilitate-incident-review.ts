@@ -52,34 +52,34 @@ export const buildPayload = (
   })
 }
 
-const OVERRIDE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
-const parseOverrideDate = (
+// Validates a hand-typed YYYY-MM-DD env var, shared by MEETING_OVERRIDE_DATE
+// and MEETING_BASE_DATE since both are hand-typed the same way and deserve
+// the same failure mode. Date.UTC silently rolls over out-of-range values
+// (e.g. Feb 31 becomes Mar 3) instead of rejecting them — round-tripping
+// back to a string catches a typo the regex above can't.
+const parseCalendarDate = (
+  envVarName: string,
   raw: string
-): { year: number; month: number; day: number } => {
+): { year: number; month: number; day: number; canonical: string } => {
   const trimmed = raw.trim()
-  if (!OVERRIDE_DATE_PATTERN.test(trimmed)) {
-    throw new Error(
-      `Invalid MEETING_OVERRIDE_DATE: "${raw}". Must be YYYY-MM-DD.`
-    )
+  if (!CALENDAR_DATE_PATTERN.test(trimmed)) {
+    throw new Error(`Invalid ${envVarName}: "${raw}". Must be YYYY-MM-DD.`)
   }
   const [year, month, day] = trimmed.split("-").map(Number)
 
-  // Date.UTC silently rolls over out-of-range values (e.g. Feb 31 becomes
-  // Mar 3) instead of rejecting them — round-tripping back to a string
-  // catches a typo in this hand-typed, workflow_dispatch-entered value that
-  // the regex above can't.
   const roundTrip = new Date(Date.UTC(year, month - 1, day))
   const roundTripString = `${roundTrip.getUTCFullYear()}-${String(
     roundTrip.getUTCMonth() + 1
   ).padStart(2, "0")}-${String(roundTrip.getUTCDate()).padStart(2, "0")}`
   if (roundTripString !== trimmed) {
     throw new Error(
-      `Invalid MEETING_OVERRIDE_DATE: "${raw}" is not a real calendar date.`
+      `Invalid ${envVarName}: "${raw}" is not a real calendar date.`
     )
   }
 
-  return { year, month, day }
+  return { year, month, day, canonical: trimmed }
 }
 
 // Resolves the instant to query on-call at.
@@ -116,7 +116,10 @@ export const resolveMeetingInstant = (
   timeZone: string = DEFAULT_TIME_ZONE
 ): Date | null => {
   if (overrideDate) {
-    const { year, month, day } = parseOverrideDate(overrideDate)
+    const { year, month, day } = parseCalendarDate(
+      "MEETING_OVERRIDE_DATE",
+      overrideDate
+    )
     const overrideInstant = zonedTimeToUtc(
       year,
       month,
@@ -173,6 +176,12 @@ export const resolveMeetingInstant = (
   )
 }
 
+// Validates MEETING_BASE_DATE's format (the same hand-typed YYYY-MM-DD check
+// as MEETING_OVERRIDE_DATE — without it, a malformed value like "2026-02-31"
+// produces a confusing "falls on weekday NaN" error instead of a clear
+// format complaint) and returns the canonical (trimmed) string to use
+// downstream.
+//
 // isOffWeek's parity math assumes `baseDate` and any date it's compared
 // against fall on the same weekday, so they're always an exact multiple of
 // 7 days apart (see the comment on isOffWeek in biweekly.ts). That's only
@@ -181,17 +190,23 @@ export const resolveMeetingInstant = (
 // enforce on their own. Fail loudly here rather than silently computing the
 // wrong on/off-week parity if the meeting day ever changes without updating
 // baseDate to match.
-const requireBaseDateMatchesMeetingWeekday = (
-  baseDate: string,
+const requireValidBaseDate = (
+  rawBaseDate: string,
   meetingWeekday: number
-): void => {
-  const baseDateWeekday = new Date(`${baseDate}T00:00:00Z`).getUTCDay()
+): string => {
+  const { year, month, day, canonical } = parseCalendarDate(
+    "MEETING_BASE_DATE",
+    rawBaseDate
+  )
+  const baseDateWeekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay()
 
   if (baseDateWeekday !== meetingWeekday) {
     throw new Error(
-      `MEETING_BASE_DATE ("${baseDate}") falls on weekday ${baseDateWeekday}, but MEETING_WEEKDAY is ${meetingWeekday}. baseDate must fall on the same weekday as the configured meeting day — if the meeting day changed, update baseDate to a date on the new weekday too.`
+      `MEETING_BASE_DATE ("${canonical}") falls on weekday ${baseDateWeekday}, but MEETING_WEEKDAY is ${meetingWeekday}. baseDate must fall on the same weekday as the configured meeting day — if the meeting day changed, update baseDate to a date on the new weekday too.`
     )
   }
+
+  return canonical
 }
 
 export const main = async (): Promise<void> => {
@@ -210,8 +225,10 @@ export const main = async (): Promise<void> => {
     min: 0,
     max: 59,
   })
-  const baseDate = requireEnv("MEETING_BASE_DATE")
-  requireBaseDateMatchesMeetingWeekday(baseDate, meetingWeekday)
+  const baseDate = requireValidBaseDate(
+    requireEnv("MEETING_BASE_DATE"),
+    meetingWeekday
+  )
   // Only set for a rare manual catch-up run — see resolveMeetingInstant.
   // Trimmed before the truthiness check so a whitespace-only value (e.g. a
   // blank workflow_dispatch input) falls through to the routine path
