@@ -123,6 +123,25 @@ describe("resolveMeetingInstant", () => {
     expect(instant?.toISOString()).toBe("2026-07-27T15:30:00.000Z")
   })
 
+  it("throws when the override date is in the past", () => {
+    const now = new Date("2026-07-24T14:00:00Z")
+
+    expect(() =>
+      resolveMeetingInstant(now, 4, 11, 30, BASE_DATE, "2026-07-20")
+    ).toThrow(
+      'MEETING_OVERRIDE_DATE "2026-07-20" resolves to 2026-07-20T15:30:00.000Z, which is not after now (2026-07-24T14:00:00.000Z). The override must target a future meeting.'
+    )
+  })
+
+  it("throws when the override date resolves to exactly now", () => {
+    // 2026-07-23 at 11:30am ET (EDT) is exactly 2026-07-23T15:30:00Z.
+    const now = new Date("2026-07-23T15:30:00.000Z")
+
+    expect(() =>
+      resolveMeetingInstant(now, 4, 11, 30, BASE_DATE, "2026-07-23")
+    ).toThrow('is not after now')
+  })
+
   it("throws on a malformed override date", () => {
     const now = new Date("2026-07-24T14:00:00Z")
 

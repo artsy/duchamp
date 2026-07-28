@@ -77,7 +77,10 @@ const parseOverrideDate = (
 //
 // If `overrideDate` is supplied (a rare manual catch-up run), targets that
 // date directly — an explicit override always means "run now," bypassing
-// the biweekly on/off-week check entirely.
+// the biweekly on/off-week check entirely. Throws if it resolves to an
+// instant that isn't strictly in the future, since a past override would
+// otherwise silently query on-call for, and post a facilitator notice about,
+// a meeting that's already happened.
 //
 // Otherwise, this is the routine cron path: it always runs the day before
 // the meeting, in `timeZone` civil time. "Tomorrow" is computed via
@@ -102,7 +105,7 @@ export const resolveMeetingInstant = (
 ): Date | null => {
   if (overrideDate) {
     const { year, month, day } = parseOverrideDate(overrideDate)
-    return zonedTimeToUtc(
+    const overrideInstant = zonedTimeToUtc(
       year,
       month,
       day,
@@ -111,6 +114,14 @@ export const resolveMeetingInstant = (
       0,
       timeZone
     )
+
+    if (overrideInstant.getTime() <= now.getTime()) {
+      throw new Error(
+        `MEETING_OVERRIDE_DATE "${overrideDate}" resolves to ${overrideInstant.toISOString()}, which is not after now (${now.toISOString()}). The override must target a future meeting.`
+      )
+    }
+
+    return overrideInstant
   }
 
   const today = civilDateTimeIn(timeZone, now)
