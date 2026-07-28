@@ -15,6 +15,7 @@ This document provides detailed reference information for all GitHub Actions ava
 | `link-pr-to-notion.yml`             | Link PRs to Notion tasks       | For repos using Notion task tracking |
 | `incident-standup-reminder.yml`      | Remind on-call to run standup  | For scheduled Slack standup reminders |
 | `incident-next-on-call.yml`          | Remind engineers of an upcoming on-call shift | For scheduled Slack next-on-call reminders |
+| `incident-facilitate-review.yml`     | Pick a random facilitator for the Incident Review | For scheduled Slack Incident Review facilitator selection |
 
 ## Action Reference
 
@@ -471,6 +472,63 @@ The specific values above reflect one real cadence (a generous Friday-midnight c
 
 ---
 
+### incident-facilitate-review.yml
+
+**Purpose**: Post a Slack notice picking a random on-call participant to facilitate the upcoming Incident Review meeting
+
+**Use Case**: Scheduled workflows that need to select and notify a facilitator ahead of a biweekly Incident Review meeting, sourced from an incident.io schedule. Intended to be called from both a routine day-before cron and an occasional manual `workflow_dispatch` for off-week catch-up reviews — see the example below
+
+```yaml
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 14 * * WED"
+
+jobs:
+  facilitate-review:
+    uses: artsy/duchamp/.github/workflows/incident-facilitate-review.yml@main
+    with:
+      schedule-id: ${{ vars.INCIDENT_IO_SCHEDULE_ID }}
+      meeting-weekday: ${{ vars.MEETING_WEEKDAY }}
+      meeting-hour: ${{ vars.MEETING_HOUR }}
+      meeting-minute: ${{ vars.MEETING_MINUTE }}
+      # A routine cron only needs to see 1 day ahead; a manual catch-up
+      # trigger needs enough slack to reach an off-week exceptions date.
+      lookahead-days: ${{ github.event_name == 'schedule' && 1 || 6 }}
+      dates: ${{ vars.DATES }}
+    secrets:
+      incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }}
+      slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
+
+See joule's `facilitate-incident-review.yml` for the fully-annotated production version.
+
+**Features:**
+
+- Queries incident.io's `/v2/schedule_entries` at the actual meeting instant — not the day the workflow runs — so an on-call override added after the day-before notification (but before the meeting) is still correctly reflected in who gets picked
+- Scans forward from the run day, up to `lookahead-days` days ahead, for the next date that's either a regular biweekly on-week occurrence of `meeting-weekday`, or an explicit date listed in `dates.exceptions` (any weekday) — this is what lets a single reusable workflow serve both the routine 1-day-ahead cron check and a rare manual catch-up trigger several days ahead of an off-cadence meeting
+- Incident Reviews run every other week: `dates` (`{ baseDate, exceptions }`) anchors that cadence — `baseDate` is a date known to fall on an on-week, and parity alternates every 7 days via exact day-level integer arithmetic (never drifts, no matter how old `baseDate` gets); a date listed in `exceptions` always forces an on-week, for a deliberate catch-up review during what would otherwise be an off-week
+- Picks one random participant from whoever is actually on-call at the resolved meeting instant (naturally covers however many rotations the schedule has, not hardcoded to a specific count)
+- Posts an explicit `:warning:` notice instead of a silent/empty mention if nobody on-call can be reached on Slack (no linked account)
+- Silently skips posting to Slack (logs to the run's console output instead) when no qualifying meeting date falls within the lookahead window
+
+**Inputs:**
+
+- `schedule-id` (required): incident.io schedule ID to query
+- `node-version` (optional): Node.js version to use
+- `meeting-weekday` (optional): Day of week the Incident Review meeting itself runs, `0` (Sunday) through `6` (Saturday). Default: `4` (Thursday)
+- `meeting-hour` (optional): Hour the meeting runs, `0`-`23`, in America/New_York time. Default: `11`
+- `meeting-minute` (optional): Minute the meeting runs, `0`-`59`. Default: `30` (11:30am ET)
+- `lookahead-days` (required): Days ahead of the run to search for a qualifying meeting date. A routine day-before cron only needs `1`; an occasional manual catch-up trigger needs enough slack to reach an off-week `exceptions` date on any weekday (e.g. `6`, to cover a Friday trigger for the following Monday)
+- `dates` (required): JSON `{ baseDate: string, exceptions: string[] }` — biweekly cadence anchor and any catch-up override dates, each a `YYYY-MM-DD` meeting date (not the day-before notification date)
+
+**Secrets:**
+
+- `incident-io-api-key` (required): incident.io API key with access to the schedule
+- `slack-webhook-url` (required): Slack incoming webhook URL to post the notice to
+
+---
+
 ## Reusable Action
 
 ### setup-and-install
@@ -513,6 +571,7 @@ The specific values above reflect one real cadence (a generous Friday-midnight c
 | Notion task tracking            | `link-pr-to-notion.yml`             | Links PRs to Notion tasks by short ID |
 | Scheduled on-call Slack reminders | `incident-standup-reminder.yml`   | Sources current on-call from incident.io |
 | Scheduled upcoming on-call reminders | `incident-next-on-call.yml`    | Notifies engineers ahead of their shift starting |
+| Scheduled Incident Review facilitator selection | `incident-facilitate-review.yml` | Picks a random on-call participant to facilitate |
 | Custom workflows                | `setup-and-install` action           | Use as a step in custom workflows    |
 
 ## Security Considerations
