@@ -183,6 +183,18 @@ describe("main", () => {
     await expect(main()).rejects.toThrow("Invalid DATES env var")
   })
 
+  it("throws when DATES.baseDate's weekday doesn't match MEETING_WEEKDAY", async () => {
+    process.env.INCIDENT_IO_API_KEY = "test-key"
+    process.env.SCHEDULE_ID = "schedule-123"
+    // 2023-04-27 is a Thursday (weekday 4); configuring Wednesday (3) here
+    // simulates the meeting day changing without baseDate being updated.
+    process.env.MEETING_WEEKDAY = "3"
+
+    await expect(main()).rejects.toThrow(
+      'DATES.baseDate ("2023-04-27") falls on weekday 4, but MEETING_WEEKDAY is 3'
+    )
+  })
+
   it("logs and skips without writing GITHUB_OUTPUT on an off-week with no exception", async () => {
     jest.setSystemTime(new Date("2026-07-22T14:00:00Z")) // off-week Wednesday
     process.env.INCIDENT_IO_API_KEY = "test-key"

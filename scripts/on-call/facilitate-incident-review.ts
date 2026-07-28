@@ -171,6 +171,29 @@ const parseDates = (raw: string): BiweeklySchedule => {
   return { baseDate, exceptions }
 }
 
+// isOffWeek's parity math assumes `baseDate` and any date it's compared
+// against fall on the same weekday, so they're always an exact multiple of
+// 7 days apart (see the comment on isOffWeek in biweekly.ts). That's only
+// actually true if baseDate falls on MEETING_WEEKDAY — an assumption that
+// meeting-weekday and DATES, as independent workflow inputs, don't enforce
+// on their own. Fail loudly here rather than silently computing the wrong
+// on/off-week parity if the meeting day ever changes without updating
+// baseDate to match.
+const requireBaseDateMatchesMeetingWeekday = (
+  schedule: BiweeklySchedule,
+  meetingWeekday: number
+): void => {
+  const baseDateWeekday = new Date(
+    `${schedule.baseDate}T00:00:00Z`
+  ).getUTCDay()
+
+  if (baseDateWeekday !== meetingWeekday) {
+    throw new Error(
+      `DATES.baseDate ("${schedule.baseDate}") falls on weekday ${baseDateWeekday}, but MEETING_WEEKDAY is ${meetingWeekday}. baseDate must fall on the same weekday as the configured meeting day — if the meeting day changed, update baseDate to a date on the new weekday too.`
+    )
+  }
+}
+
 export const main = async (): Promise<void> => {
   const apiKey = requireEnv("INCIDENT_IO_API_KEY")
   const scheduleId = requireEnv("SCHEDULE_ID")
@@ -197,6 +220,7 @@ export const main = async (): Promise<void> => {
     max: 13,
   })
   const schedule = parseDates(requireEnv("DATES"))
+  requireBaseDateMatchesMeetingWeekday(schedule, meetingWeekday)
 
   const meetingInstant = findMeetingInstant(
     new Date(),

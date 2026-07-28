@@ -520,7 +520,7 @@ See joule's `facilitate-incident-review.yml` for the fully-annotated production 
 - `meeting-hour` (optional): Hour the meeting runs, `0`-`23`, in America/New_York time. Default: `11`
 - `meeting-minute` (optional): Minute the meeting runs, `0`-`59`. Default: `30` (11:30am ET)
 - `lookahead-days` (required): Days ahead of the run to search for a qualifying meeting date. A routine day-before cron only needs `1`; an occasional manual catch-up trigger needs enough slack to reach an off-week `exceptions` date on any weekday (e.g. `6`, to cover a Friday trigger for the following Monday)
-- `dates` (required): JSON `{ baseDate: string, exceptions: string[] }` — biweekly cadence anchor and any catch-up override dates, each a `YYYY-MM-DD` meeting date (not the day-before notification date)
+- `dates` (required): JSON `{ baseDate: string, exceptions: string[] }` — biweekly cadence anchor and any catch-up override dates, each a `YYYY-MM-DD` meeting date (not the day-before notification date). `baseDate` must fall on the same weekday as `meeting-weekday` — a mismatch (e.g. the meeting day changes but `baseDate` isn't updated to a date on the new weekday) causes the run to fail loudly rather than silently compute the wrong on/off-week parity
 
 **Secrets:**
 
