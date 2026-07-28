@@ -198,6 +198,9 @@ export const main = async (): Promise<void> => {
 
   const users = await currentOnCallUsers(apiKey, scheduleId, meetingInstant)
   const mentions = usersToMentions(users)
+  console.log(
+    `facilitate-incident-review: choosing a facilitator from ${mentions.length} on-call participant(s): ${mentions.join(", ") || "none"}`
+  )
   const facilitatorMention =
     mentions.length > 0
       ? mentions[Math.floor(Math.random() * mentions.length)]

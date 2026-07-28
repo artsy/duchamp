@@ -262,16 +262,20 @@ describe("main", () => {
     expect(contents).toContain(":warning:")
   })
 
-  it("logs the payload to stdout when GITHUB_OUTPUT is unset", async () => {
+  it("logs the candidate pool before picking, and the payload to stdout when GITHUB_OUTPUT is unset", async () => {
     jest.setSystemTime(new Date("2026-07-15T14:00:00Z"))
     process.env.INCIDENT_IO_API_KEY = "test-key"
     process.env.SCHEDULE_ID = "schedule-123"
+    mockUsersToMentions.mockReturnValue(["<@U_ALICE>", "<@U_BOB>"])
     const consoleSpy = jest.spyOn(console, "log").mockImplementation()
 
     await main()
 
-    expect(consoleSpy).toHaveBeenCalledTimes(1)
-    expect(consoleSpy.mock.calls[0][0]).toContain("<@U_ALICE>")
+    expect(consoleSpy).toHaveBeenCalledTimes(2)
+    expect(consoleSpy.mock.calls[0][0]).toBe(
+      "facilitate-incident-review: choosing a facilitator from 2 on-call participant(s): <@U_ALICE>, <@U_BOB>"
+    )
+    expect(consoleSpy.mock.calls[1][0]).toMatch(/<@U_ALICE>|<@U_BOB>/)
     consoleSpy.mockRestore()
   })
 })
