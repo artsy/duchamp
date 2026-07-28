@@ -513,7 +513,7 @@ joule's real workflow sources these values from repo vars instead of literals, s
 - Manual catch-up path (`override-date` set): targets that date directly, on any weekday, bypassing the on/off-week check entirely — meant to be filled in at `workflow_dispatch` trigger time for a rare off-week catch-up review
 - Incident Reviews run every other week: `base-date` anchors that cadence — a date known to fall on an on-week, with parity alternating every 7 days via exact day-level integer arithmetic (never drifts, no matter how old `base-date` gets)
 - Picks one random participant from whoever is actually on-call at the resolved meeting instant (naturally covers however many rotations the schedule has, not hardcoded to a specific count)
-- Posts an explicit `:warning:` notice instead of a silent/empty mention if nobody on-call can be reached on Slack (no linked account)
+- Posts an explicit `:warning:` notice instead of a silent/empty mention when nobody on-call is reachable on Slack — whether that's a schedule gap or on-call participants with no linked Slack account
 - Silently skips posting to Slack (logs to the run's console output instead) when the routine path lands on a legitimate off-week
 
 **Inputs:**
