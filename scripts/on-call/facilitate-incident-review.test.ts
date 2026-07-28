@@ -34,13 +34,16 @@ describe("buildPayload", () => {
     expect(text).toContain("Incident Review Schedule")
   })
 
-  it("posts a warning instead of an empty mention when nobody is mentionable", () => {
+  it("posts a cause-agnostic warning instead of an empty mention when nobody is mentionable", () => {
+    // Could mean a schedule gap OR everyone lacking a linked Slack account --
+    // the message shouldn't claim which one it is.
     const payload = JSON.parse(buildPayload(undefined, SCHEDULE_URL))
 
     expect(payload.blocks).toHaveLength(1)
     const text = payload.blocks[0].text.text
     expect(text).toContain(":warning:")
-    expect(text).toContain("can be reached on Slack")
+    expect(text).toContain("No one appears to be reachable on Slack")
+    expect(text).not.toContain("no linked account")
     expect(text).toContain(`<${SCHEDULE_URL}|on-call schedule>`)
   })
 })
@@ -143,6 +146,33 @@ describe("resolveMeetingInstant", () => {
     expect(() =>
       resolveMeetingInstant(now, 4, 11, 30, BASE_DATE, "2026-07-23")
     ).toThrow("is not after now")
+  })
+
+  it("throws when the override date is more than 60 days out (e.g. a year typo)", () => {
+    // A wrong year (2027 instead of 2026) passes the past-date check but
+    // would leave the real, near-term meeting without a facilitator.
+    const now = new Date("2026-07-24T14:00:00Z")
+
+    expect(() =>
+      resolveMeetingInstant(now, 4, 11, 30, BASE_DATE, "2027-07-23")
+    ).toThrow(
+      'MEETING_OVERRIDE_DATE "2027-07-23" resolves to 2027-07-23T15:30:00.000Z, which is more than 60 days from now (2026-07-24T14:00:00.000Z). Double-check the year — this is meant for a near-term catch-up, not a far-future date.'
+    )
+  })
+
+  it("allows an override date right at the 60-day boundary", () => {
+    const now = new Date("2026-07-24T14:00:00Z")
+    // Thursday, exactly 56 days out (8 weeks), within the 60-day ceiling.
+    const instant = resolveMeetingInstant(
+      now,
+      4,
+      11,
+      30,
+      BASE_DATE,
+      "2026-09-17"
+    )
+
+    expect(instant?.toISOString()).toBe("2026-09-17T15:30:00.000Z")
   })
 
   it("throws on a malformed override date", () => {
@@ -307,6 +337,23 @@ describe("main", () => {
       "test-key",
       "schedule-123",
       new Date("2026-07-23T15:30:00.000Z")
+    )
+  })
+
+  it("treats a whitespace-only MEETING_OVERRIDE_DATE as unset, falling through to the routine path", async () => {
+    jest.setSystemTime(new Date("2026-07-15T14:00:00Z")) // on-week Wednesday
+    process.env.INCIDENT_IO_API_KEY = "test-key"
+    process.env.SCHEDULE_ID = "schedule-123"
+    process.env.GITHUB_OUTPUT = "/tmp/fake-output"
+    process.env.MEETING_OVERRIDE_DATE = "   " // e.g. a blank workflow_dispatch input
+    mockFs.appendFileSync.mockImplementation(() => undefined)
+
+    await main()
+
+    expect(mockCurrentOnCallUsers).toHaveBeenCalledWith(
+      "test-key",
+      "schedule-123",
+      new Date("2026-07-16T15:30:00.000Z")
     )
   })
 

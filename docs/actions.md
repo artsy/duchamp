@@ -524,7 +524,7 @@ joule's real workflow sources these values from repo vars instead of literals, s
 - `meeting-hour` (optional): Hour the meeting runs, `0`-`23`, in America/New_York time. Default: `11`
 - `meeting-minute` (optional): Minute the meeting runs, `0`-`59`. Default: `30` (11:30am ET)
 - `base-date` (required): `YYYY-MM-DD` date known to fall on a biweekly on-week — anchors the every-other-week cadence. Must fall on the same weekday as `meeting-weekday` — a mismatch (e.g. the meeting day changes but `base-date` isn't updated to a date on the new weekday) causes the run to fail loudly rather than silently compute the wrong on/off-week parity
-- `override-date` (optional): `YYYY-MM-DD` to target directly, bypassing the on/off-week check — for a rare manual catch-up review on an off-week or non-standard weekday. Leave unset for the routine day-before cron run. Must resolve to a future instant — a past or current date is rejected, rather than silently posting a facilitator notice for a meeting that's already happened
+- `override-date` (optional): `YYYY-MM-DD` to target directly, bypassing the on/off-week check — for a rare manual catch-up review on an off-week or non-standard weekday. Leave unset (or blank/whitespace) for the routine day-before cron run. Must resolve to a future instant no more than 60 days out — a past, current, or far-future date (e.g. a year typo) is rejected, rather than silently posting a facilitator notice for the wrong meeting
 
 **Secrets:**
 

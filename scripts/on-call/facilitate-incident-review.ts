@@ -14,6 +14,14 @@ const DEFAULT_MEETING_WEEKDAY = 4 // Thursday
 const DEFAULT_MEETING_HOUR = 11 // 11:30am ET (DST-aware via zonedTimeToUtc)
 const DEFAULT_MEETING_MINUTE = 30
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+// Catch-ups are a near-term, days-to-weeks-out scenario — never months away —
+// so this also catches a hand-typed year typo (e.g. 2027 instead of 2026)
+// that the past-date check alone can't, since a typo in the future direction
+// still passes that check but would silently leave the real, near-term
+// meeting without a facilitator.
+const MAX_OVERRIDE_DAYS_AHEAD = 60
+
 const URLS = {
   incidentReviewSchedule:
     "https://www.notion.so/artsy/Incident-Reviews-725052225efc49e78532b13e166ba3c7",
@@ -29,7 +37,7 @@ export const buildPayload = (
   // silent.
   const text = mention
     ? `${mention} :wave:, based on the <${onCallScheduleUrl}|on-call schedule> you've been selected to _prepare for and facilitate_ the upcoming Incident Review meeting! :tada:\nCheck out the <${URLS.incidentReviewSchedule}|Incident Review Schedule> for more information and the next steps.`
-    : `:warning: A facilitator should be picked for the upcoming Incident Review meeting, but nobody on the <${onCallScheduleUrl}|on-call schedule> can be reached on Slack (no linked account).`
+    : `:warning: No one appears to be reachable on Slack according to our <${onCallScheduleUrl}|on-call schedule> — please make sure someone facilitates the upcoming Incident Review meeting.`
 
   return JSON.stringify({
     blocks: [
@@ -81,7 +89,10 @@ const parseOverrideDate = (
 // the biweekly on/off-week check entirely. Throws if it resolves to an
 // instant that isn't strictly in the future, since a past override would
 // otherwise silently query on-call for, and post a facilitator notice about,
-// a meeting that's already happened.
+// a meeting that's already happened. Also throws if it's more than
+// `MAX_OVERRIDE_DAYS_AHEAD` out, since a hand-typed year typo in the future
+// direction (e.g. 2027 instead of 2026) would otherwise pass the past-date
+// check but still leave the real, near-term meeting without a facilitator.
 //
 // Otherwise, this is the routine cron path: it always runs the day before
 // the meeting, in `timeZone` civil time. "Tomorrow" is computed via
@@ -119,6 +130,15 @@ export const resolveMeetingInstant = (
     if (overrideInstant.getTime() <= now.getTime()) {
       throw new Error(
         `MEETING_OVERRIDE_DATE "${overrideDate}" resolves to ${overrideInstant.toISOString()}, which is not after now (${now.toISOString()}). The override must target a future meeting.`
+      )
+    }
+
+    const maxOverrideInstant = new Date(
+      now.getTime() + MAX_OVERRIDE_DAYS_AHEAD * MS_PER_DAY
+    )
+    if (overrideInstant.getTime() > maxOverrideInstant.getTime()) {
+      throw new Error(
+        `MEETING_OVERRIDE_DATE "${overrideDate}" resolves to ${overrideInstant.toISOString()}, which is more than ${MAX_OVERRIDE_DAYS_AHEAD} days from now (${now.toISOString()}). Double-check the year — this is meant for a near-term catch-up, not a far-future date.`
       )
     }
 
@@ -193,7 +213,10 @@ export const main = async (): Promise<void> => {
   const baseDate = requireEnv("MEETING_BASE_DATE")
   requireBaseDateMatchesMeetingWeekday(baseDate, meetingWeekday)
   // Only set for a rare manual catch-up run — see resolveMeetingInstant.
-  const overrideDate = process.env.MEETING_OVERRIDE_DATE || undefined
+  // Trimmed before the truthiness check so a whitespace-only value (e.g. a
+  // blank workflow_dispatch input) falls through to the routine path
+  // instead of being treated as "an override is set."
+  const overrideDate = process.env.MEETING_OVERRIDE_DATE?.trim() || undefined
 
   const meetingInstant = resolveMeetingInstant(
     new Date(),
