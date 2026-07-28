@@ -139,7 +139,7 @@ describe("resolveMeetingInstant", () => {
 
     expect(() =>
       resolveMeetingInstant(now, 4, 11, 30, BASE_DATE, "2026-07-23")
-    ).toThrow('is not after now')
+    ).toThrow("is not after now")
   })
 
   it("throws on a malformed override date", () => {
@@ -251,9 +251,7 @@ describe("main", () => {
 
     await main()
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("skipping")
-    )
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("skipping"))
     expect(mockFs.appendFileSync).not.toHaveBeenCalled()
     expect(mockCurrentOnCallUsers).not.toHaveBeenCalled()
     consoleSpy.mockRestore()
