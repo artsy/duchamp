@@ -17,8 +17,9 @@ const mockScheduleUrl = scheduleUrl as jest.Mock
 const SCHEDULE_URL =
   "https://app.incident.io/artsy/on-call/schedules/schedule-123"
 
-// A real joule repo var; 2026-07-16 confirmed by the user as a real
-// Incident Review day, 2026-07-23/2026-07-22 confirmed off-week.
+// A real joule repo var (2023-04-27); 2026-07-16 is a real Incident Review
+// day (168 weeks out — even, so on-week); 2026-07-23/2026-07-22 are 169
+// weeks out (odd, so off-week).
 const BASE_DATE = "2023-04-27"
 
 describe("buildPayload", () => {

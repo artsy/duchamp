@@ -494,17 +494,17 @@ jobs:
     uses: artsy/duchamp/.github/workflows/incident-facilitate-review.yml@main
     with:
       schedule-id: ${{ vars.INCIDENT_IO_SCHEDULE_ID }}
-      meeting-weekday: ${{ vars.MEETING_WEEKDAY }}
-      meeting-hour: ${{ vars.MEETING_HOUR }}
-      meeting-minute: ${{ vars.MEETING_MINUTE }}
-      base-date: ${{ vars.MEETING_BASE_DATE }}
+      meeting-weekday: 4 # Thursday
+      meeting-hour: 11
+      meeting-minute: 30
+      base-date: "2023-04-27"
       override-date: ${{ github.event.inputs.meeting-date }}
     secrets:
       incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }}
       slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 ```
 
-See joule's `facilitate-incident-review.yml` for production version.
+joule's real workflow sources these values from repo vars instead of literals, so they can be changed without a duchamp PR — see joule's `facilitate-incident-review.yml` for that version.
 
 **Features:**
 

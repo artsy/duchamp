@@ -1,7 +1,8 @@
 import { isOffWeek } from "./biweekly"
 
-// A real joule repo var; 2026-07-16 was confirmed by the user as a real
-// Incident Review day, notified the prior day (2026-07-15).
+// A real joule repo var (2023-04-27); 2026-07-16 is a real Incident Review
+// day (168 weeks out from base date — even, so on-week), notified the prior
+// day (2026-07-15).
 const BASE_DATE = "2023-04-27"
 
 describe("isOffWeek", () => {

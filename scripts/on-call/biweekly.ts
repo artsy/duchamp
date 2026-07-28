@@ -15,8 +15,8 @@ const toUtcDateOnly = (date: Date): number =>
 // configured meeting weekday, so `target` and `base` are always an exact
 // multiple of 7 days apart. `baseDate` is itself defined as an on-week
 // occurrence, so `weeksSince === 0` (and any even multiple of it) must
-// resolve to on-week — verified against a real confirmed review day
-// (2026-07-16, `weeksSince` 168, even).
+// resolve to on-week — matches joule's real `MEETING_BASE_DATE` (2023-04-27)
+// and its real Incident Review on 2026-07-16 (168 weeks out, even).
 export const isOffWeek = (baseDate: string, at: Date): boolean => {
   const base = toUtcDateOnly(new Date(`${baseDate}T00:00:00Z`))
   const target = toUtcDateOnly(at)
