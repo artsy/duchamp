@@ -508,25 +508,24 @@ joule's real workflow sources these values from repo vars instead of literals, s
 
 **Features:**
 
-- Queries incident.io's `/v2/schedule_entries` at the actual meeting instant, not the day the workflow runs — so an override already on the schedule by run time is honored even if it doesn't take effect until later, between the run and the meeting. The query happens once, at run time; an override entered after that point isn't seen
-- Routine path (no `override-date`): checks tomorrow specifically, since the caller always runs the day before the meeting — computed in `meeting-hour`'s timezone (America/New_York) civil time, not raw UTC, since a cron's UTC firing instant can already be on a different UTC calendar date than its ET civil date. Throws if tomorrow isn't `meeting-weekday` at all (a real misconfiguration — the cron and `meeting-weekday` have drifted out of sync), but silently skips for the legitimate, expected case of an off-week. It deliberately doesn't search further ahead; if this week is off, next week's cron run checks again on its own
-- Manual catch-up path (`override-date` set): targets that date directly, on any weekday, bypassing the on/off-week check entirely — meant to be filled in at `workflow_dispatch` trigger time for a rare off-week catch-up review
-- Incident Reviews run every other week: `base-date` anchors that cadence — a date known to fall on an on-week, with parity alternating every 7 days via exact day-level integer arithmetic (never drifts, no matter how old `base-date` gets)
-- Picks one random participant from whoever is actually on-call at the resolved meeting instant (naturally covers however many rotations the schedule has, not hardcoded to a specific count)
-- Posts an explicit `:warning:` notice instead of a silent/empty mention when nobody on-call is reachable on Slack — whether that's a schedule gap or on-call participants with no linked Slack account
-- Silently skips posting to Slack (logs to the run's console output instead) when the routine path lands on a legitimate off-week
+- Queries incident.io at the actual meeting instant, not the day the workflow runs, so a schedule change made between run and meeting is still honored
+- Routine path (no `override-date`): runs the day before the meeting, computed in ET civil time (not raw UTC, since a cron's UTC firing instant can land on a different calendar date). Skips silently on an off-week; throws if tomorrow isn't `meeting-weekday` (cron/config drift)
+- Manual catch-up path (`override-date` set): targets that date directly on any weekday, bypassing the on/off-week check — meant for a rare off-week catch-up review
+- `base-date` anchors the every-other-week cadence via exact day-level arithmetic, so it never drifts no matter how old it gets
+- Picks one random participant from whoever is actually on-call at the resolved meeting instant
+- Posts an explicit `:warning:` notice instead of a silent/empty mention when nobody on-call is reachable on Slack
 
 **Inputs:**
 
 - `schedule-id` (required): incident.io schedule ID to query
 - `node-version` (optional): Node.js version to use
-- `meeting-weekday` (optional, `type: string`): Day of week the Incident Review meeting itself runs, `0` (Sunday) through `6` (Saturday). Default: `4` (Thursday)
+- `meeting-weekday` (optional, `type: string`): Day of week the meeting runs, `0` (Sunday) through `6` (Saturday). Default: `4` (Thursday)
 - `meeting-hour` (optional, `type: string`): Hour the meeting runs, `0`-`23`, in America/New_York time. Default: `11`
-- `meeting-minute` (optional, `type: string`): Minute the meeting runs, `0`-`59`. Default: `30` (11:30am ET)
-- `base-date` (required): `YYYY-MM-DD` date known to fall on a biweekly on-week — anchors the every-other-week cadence. Must fall on the same weekday as `meeting-weekday` — a mismatch (e.g. the meeting day changes but `base-date` isn't updated to a date on the new weekday) causes the run to fail loudly rather than silently compute the wrong on/off-week parity
-- `override-date` (optional): `YYYY-MM-DD` to target directly, bypassing the on/off-week check — for a rare manual catch-up review on an off-week or non-standard weekday. Leave unset (or blank/whitespace) for the routine day-before cron run. Must resolve to a future instant no more than 60 days out — a past, current, or far-future date (e.g. a year typo) is rejected, rather than silently posting a facilitator notice for the wrong meeting
+- `meeting-minute` (optional, `type: string`): Minute the meeting runs, `0`-`59`. Default: `30`
+- `base-date` (required): `YYYY-MM-DD` date known to fall on an on-week, on the same weekday as `meeting-weekday`
+- `override-date` (optional): `YYYY-MM-DD` to target directly for a manual catch-up review, bypassing the on/off-week check. Must resolve to a future date no more than 60 days out (catches a year typo)
 
-`meeting-weekday`/`meeting-hour`/`meeting-minute` are deliberately `type: string`, not `type: number`: a caller passing an unset `vars.*` through one of them (e.g. `${{ vars.MEETING_HOUR }}`) needs the empty case to stay an empty string. A `type: number` input coerces that same empty value to a literal `0` instead of the default declared here — a real GitHub Actions behavior ([actions/runner#2907](https://github.com/actions/runner/issues/2907)), not a hypothetical.
+`meeting-weekday`/`meeting-hour`/`meeting-minute` are `type: string`, not `type: number`, because GitHub Actions coerces an unset `type: number` input to `0` rather than falling back to the declared default ([actions/runner#2907](https://github.com/actions/runner/issues/2907)).
 
 **Secrets:**
 
