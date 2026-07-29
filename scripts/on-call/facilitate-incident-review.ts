@@ -15,11 +15,8 @@ const DEFAULT_MEETING_WEEKDAY = 4 // Thursday
 const DEFAULT_MEETING_HOUR = 11 // 11:30am ET (DST-aware via zonedTimeToUtc)
 const DEFAULT_MEETING_MINUTE = 30
 
-// Catch-ups are a near-term, days-to-weeks-out scenario — never months away —
-// so this also catches a hand-typed year typo (e.g. 2027 instead of 2026)
-// that the past-date check alone can't, since a typo in the future direction
-// still passes that check but would silently leave the real, near-term
-// meeting without a facilitator.
+// Catches a future-direction year typo (e.g. 2027 for 2026) that the
+// past-date check alone can't.
 const MAX_OVERRIDE_DAYS_AHEAD = 60
 
 const URLS = {
@@ -31,10 +28,8 @@ export const buildPayload = (
   mention: string | undefined,
   onCallScheduleUrl: string
 ): string => {
-  // currentOnCallUsers/usersToMentions can legitimately return nobody
-  // mentionable (a schedule gap, or every on-call participant missing a
-  // linked Slack account) — post an explicit notice instead of staying
-  // silent.
+  // A schedule gap or missing Slack links can mean nobody's mentionable —
+  // post an explicit notice instead of staying silent.
   const text = mention
     ? `${mention} :wave:, based on the <${onCallScheduleUrl}|on-call schedule> you've been selected to _prepare for and facilitate_ the upcoming Incident Review meeting! :tada:\nCheck out the <${URLS.incidentReviewSchedule}|Incident Review Schedule> for more information and the next steps.`
     : `:warning: No one appears to be reachable on Slack according to our <${onCallScheduleUrl}|on-call schedule> — please make sure someone facilitates the upcoming Incident Review meeting.`
@@ -54,11 +49,9 @@ export const buildPayload = (
 
 const CALENDAR_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
-// Validates a hand-typed YYYY-MM-DD env var, shared by MEETING_OVERRIDE_DATE
-// and MEETING_BASE_DATE since both are hand-typed the same way and deserve
-// the same failure mode. Date.UTC silently rolls over out-of-range values
-// (e.g. Feb 31 becomes Mar 3) instead of rejecting them — round-tripping
-// back to a string catches a typo the regex above can't.
+// Shared by MEETING_OVERRIDE_DATE and MEETING_BASE_DATE. Round-trips through
+// Date.UTC to catch calendar-invalid dates (e.g. Feb 31) the regex alone
+// would miss.
 const parseCalendarDate = (
   envVarName: string,
   raw: string
@@ -82,30 +75,15 @@ const parseCalendarDate = (
   return { year, month, day, canonical: trimmed }
 }
 
-// Resolves the instant to query on-call at.
-//
-// If `overrideDate` is supplied (a rare manual catch-up run), targets that
-// date directly — an explicit override always means "run now," bypassing
-// the biweekly on/off-week check entirely. Throws if it resolves to an
-// instant that isn't strictly in the future, since a past override would
-// otherwise silently query on-call for, and post a facilitator notice about,
-// a meeting that's already happened. Also throws if it's more than
-// `MAX_OVERRIDE_DAYS_AHEAD` out, since a hand-typed year typo in the future
-// direction (e.g. 2027 instead of 2026) would otherwise pass the past-date
-// check but still leave the real, near-term meeting without a facilitator.
-//
-// Otherwise, this is the routine cron path: it always runs the day before
-// the meeting, in `timeZone` civil time. "Tomorrow" is computed via
-// `civilDateTimeIn`/`civilDatePlusDays` rather than raw UTC arithmetic,
-// because a cron's UTC firing instant can already be on a different UTC
-// calendar date than its `timeZone` civil date (e.g. a cron meant for
-// "Wednesday evening ET" fires at 2am UTC Thursday) — naive UTC-day-plus-one
-// would compound that offset instead of correcting for it. Throws if
-// tomorrow isn't `meetingWeekday` at all — the same class of misconfigured
-// cron-vs-boundary mismatch `shiftBoundaryAnchor` guards against — but
-// returns null (skip) for the legitimate, expected case of an off-week. It
-// deliberately doesn't search further ahead; if this week is off, next
-// week's cron run checks again on its own.
+// Resolves the instant to query on-call at. An override (rare manual
+// catch-up) always wins, bypassing the biweekly on/off-week check; it must
+// resolve to a future instant within MAX_OVERRIDE_DAYS_AHEAD. Otherwise this
+// is the routine cron path: it runs the day before the meeting, computing
+// "tomorrow" via `civilDateTimeIn`/`civilDatePlusDays` rather than raw UTC
+// arithmetic, since a cron's UTC firing instant can land on a different
+// calendar day than its `timeZone` civil date. Returns null (skip) on an
+// off-week; doesn't search further ahead since next week's cron run checks
+// again on its own.
 export const resolveMeetingInstant = (
   now: Date,
   meetingWeekday: number,
@@ -176,20 +154,10 @@ export const resolveMeetingInstant = (
   )
 }
 
-// Validates MEETING_BASE_DATE's format (the same hand-typed YYYY-MM-DD check
-// as MEETING_OVERRIDE_DATE — without it, a malformed value like "2026-02-31"
-// produces a confusing "falls on weekday NaN" error instead of a clear
-// format complaint) and returns the canonical (trimmed) string to use
-// downstream.
-//
-// isOffWeek's parity math assumes `baseDate` and any date it's compared
-// against fall on the same weekday, so they're always an exact multiple of
-// 7 days apart (see the comment on isOffWeek in biweekly.ts). That's only
-// actually true if baseDate falls on MEETING_WEEKDAY — an assumption that
-// meeting-weekday and base-date, as independent workflow inputs, don't
-// enforce on their own. Fail loudly here rather than silently computing the
-// wrong on/off-week parity if the meeting day ever changes without updating
-// baseDate to match.
+// isOffWeek's parity math (biweekly.ts) assumes baseDate falls on
+// meetingWeekday — an invariant these two independent inputs don't enforce
+// on their own, so fail loudly here instead of silently computing the wrong
+// parity.
 const requireValidBaseDate = (
   rawBaseDate: string,
   meetingWeekday: number
@@ -226,17 +194,10 @@ export const main = async (): Promise<void> => {
     max: 59,
   })
   const rawBaseDate = requireEnv("MEETING_BASE_DATE")
-  // Only set for a rare manual catch-up run — see resolveMeetingInstant.
-  // Trimmed before the truthiness check so a whitespace-only value (e.g. a
-  // blank workflow_dispatch input) falls through to the routine path
-  // instead of being treated as "an override is set."
+  // Trimmed so a blank workflow_dispatch input doesn't count as "set."
   const overrideDate = process.env.MEETING_OVERRIDE_DATE?.trim() || undefined
-  // MEETING_BASE_DATE is still required to be present either way, but its
-  // format/weekday validity only matters on the routine path — the override
-  // path never touches baseDate at all (resolveMeetingInstant skips the
-  // biweekly parity check entirely once overrideDate is set), so a
-  // base-date/weekday drift shouldn't block an otherwise-valid manual
-  // catch-up run.
+  // The override path never touches baseDate, so a base-date/weekday drift
+  // shouldn't block an otherwise-valid manual catch-up run.
   const baseDate = overrideDate
     ? rawBaseDate
     : requireValidBaseDate(rawBaseDate, meetingWeekday)
