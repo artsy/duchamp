@@ -15,6 +15,7 @@ This document provides detailed reference information for all GitHub Actions ava
 | `link-pr-to-notion.yml`             | Link PRs to Notion tasks       | For repos using Notion task tracking |
 | `incident-standup-reminder.yml`      | Remind on-call to run standup  | For scheduled Slack standup reminders |
 | `incident-next-on-call.yml`          | Remind engineers of an upcoming on-call shift | For scheduled Slack next-on-call reminders |
+| `incident-facilitate-review.yml`     | Pick a random facilitator for the Incident Review | For scheduled Slack Incident Review facilitator selection |
 
 ## Action Reference
 
@@ -471,6 +472,68 @@ The specific values above reflect one real cadence (a generous Friday-midnight c
 
 ---
 
+### incident-facilitate-review.yml
+
+**Purpose**: Post a Slack notice picking a random on-call participant to facilitate the upcoming Incident Review meeting
+
+**Use Case**: Scheduled workflows that need to select and notify a facilitator ahead of a biweekly Incident Review meeting, sourced from an incident.io schedule. Intended to be called from both a routine day-before cron and an occasional manual `workflow_dispatch` for off-week catch-up reviews — see the example below
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      meeting-date:
+        description: "Override meeting date (YYYY-MM-DD) — only for a rare off-week catch-up review, leave blank otherwise"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 14 * * WED"
+
+jobs:
+  facilitate-review:
+    uses: artsy/duchamp/.github/workflows/incident-facilitate-review.yml@main
+    with:
+      schedule-id: ${{ vars.INCIDENT_IO_SCHEDULE_ID }}
+      meeting-weekday: "4" # Thursday
+      meeting-hour: "11"
+      meeting-minute: "30"
+      base-date: "2023-04-27"
+      override-date: ${{ github.event.inputs.meeting-date }}
+    secrets:
+      incident-io-api-key: ${{ secrets.INCIDENT_IO_API_KEY }}
+      slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
+
+joule's real workflow sources these values from repo vars instead of literals, so they can be changed without a duchamp PR — see joule's `facilitate-incident-review.yml` for that version.
+
+**Features:**
+
+- Queries incident.io at the actual meeting instant, not the day the workflow runs, so a schedule change made between run and meeting is still honored
+- Routine path (no `override-date`): runs the day before the meeting, computed in ET civil time (not raw UTC, since a cron's UTC firing instant can land on a different calendar date). Skips silently on an off-week; throws if tomorrow isn't `meeting-weekday` (cron/config drift)
+- Manual catch-up path (`override-date` set): targets that date directly on any weekday, bypassing the on/off-week check — meant for a rare off-week catch-up review
+- `base-date` anchors the every-other-week cadence via exact day-level arithmetic, so it never drifts no matter how old it gets
+- Picks one random participant from whoever is actually on-call at the resolved meeting instant
+- Posts an explicit `:warning:` notice instead of a silent/empty mention when nobody on-call is reachable on Slack
+
+**Inputs:**
+
+- `schedule-id` (required): incident.io schedule ID to query
+- `node-version` (optional): Node.js version to use
+- `meeting-weekday` (optional, `type: string`): Day of week the meeting runs, `0` (Sunday) through `6` (Saturday). Default: `4` (Thursday)
+- `meeting-hour` (optional, `type: string`): Hour the meeting runs, `0`-`23`, in America/New_York time. Default: `11`
+- `meeting-minute` (optional, `type: string`): Minute the meeting runs, `0`-`59`. Default: `30`
+- `base-date` (required): `YYYY-MM-DD` date known to fall on an on-week, on the same weekday as `meeting-weekday`
+- `override-date` (optional): `YYYY-MM-DD` to target directly for a manual catch-up review, bypassing the on/off-week check. Must resolve to a future date no more than 60 days out (catches a year typo)
+
+`meeting-weekday`/`meeting-hour`/`meeting-minute` are `type: string`, not `type: number`, because GitHub Actions coerces an unset `type: number` input to `0` rather than falling back to the declared default ([actions/runner#2907](https://github.com/actions/runner/issues/2907)).
+
+**Secrets:**
+
+- `incident-io-api-key` (required): incident.io API key with access to the schedule
+- `slack-webhook-url` (required): Slack incoming webhook URL to post the notice to
+
+---
+
 ## Reusable Action
 
 ### setup-and-install
@@ -513,6 +576,7 @@ The specific values above reflect one real cadence (a generous Friday-midnight c
 | Notion task tracking            | `link-pr-to-notion.yml`             | Links PRs to Notion tasks by short ID |
 | Scheduled on-call Slack reminders | `incident-standup-reminder.yml`   | Sources current on-call from incident.io |
 | Scheduled upcoming on-call reminders | `incident-next-on-call.yml`    | Notifies engineers ahead of their shift starting |
+| Scheduled Incident Review facilitator selection | `incident-facilitate-review.yml` | Picks a random on-call participant to facilitate |
 | Custom workflows                | `setup-and-install` action           | Use as a step in custom workflows    |
 
 ## Security Considerations

@@ -1,5 +1,6 @@
 import * as fs from "fs"
 
+import { requireEnv, requireIntEnv } from "./env"
 import { nextOnCallUsers, scheduleUrl, usersToMentions } from "./incident-io"
 import { nextShiftBoundaryInstant } from "./shift-boundary"
 
@@ -40,30 +41,6 @@ export const buildPayload = (
       },
     ],
   })
-}
-
-const requireEnv = (name: string): string => {
-  const value = process.env[name]
-  if (!value) {
-    throw new Error(`${name} env var is not set.`)
-  }
-  return value
-}
-
-const requireIntEnv = (
-  name: string,
-  range: { min: number; max: number }
-): number => {
-  const raw = requireEnv(name)
-  const value = Number.parseInt(raw, 10)
-
-  if (Number.isNaN(value) || value < range.min || value > range.max) {
-    throw new Error(
-      `Invalid ${name}: "${raw}". Must be an integer between ${range.min} and ${range.max}.`
-    )
-  }
-
-  return value
 }
 
 export const main = async (): Promise<void> => {
