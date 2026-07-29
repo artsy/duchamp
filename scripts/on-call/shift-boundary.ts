@@ -16,6 +16,8 @@ const DEFAULT_TIME_ZONE = "America/New_York"
 // match resolves to the outgoing shift rather than the incoming one.
 const BOUNDARY_SAFETY_MARGIN_MS = 1_000
 
+export const MS_PER_DAY = 24 * 60 * 60 * 1000
+
 export interface ShiftBoundary {
   weekday: number // 0 (Sun) - 6 (Sat), Date#getDay convention
   hour: number // 0-23, local time in `timeZone`

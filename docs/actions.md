@@ -494,9 +494,9 @@ jobs:
     uses: artsy/duchamp/.github/workflows/incident-facilitate-review.yml@main
     with:
       schedule-id: ${{ vars.INCIDENT_IO_SCHEDULE_ID }}
-      meeting-weekday: 4 # Thursday
-      meeting-hour: 11
-      meeting-minute: 30
+      meeting-weekday: "4" # Thursday
+      meeting-hour: "11"
+      meeting-minute: "30"
       base-date: "2023-04-27"
       override-date: ${{ github.event.inputs.meeting-date }}
     secrets:
@@ -520,11 +520,13 @@ joule's real workflow sources these values from repo vars instead of literals, s
 
 - `schedule-id` (required): incident.io schedule ID to query
 - `node-version` (optional): Node.js version to use
-- `meeting-weekday` (optional): Day of week the Incident Review meeting itself runs, `0` (Sunday) through `6` (Saturday). Default: `4` (Thursday)
-- `meeting-hour` (optional): Hour the meeting runs, `0`-`23`, in America/New_York time. Default: `11`
-- `meeting-minute` (optional): Minute the meeting runs, `0`-`59`. Default: `30` (11:30am ET)
+- `meeting-weekday` (optional, `type: string`): Day of week the Incident Review meeting itself runs, `0` (Sunday) through `6` (Saturday). Default: `4` (Thursday)
+- `meeting-hour` (optional, `type: string`): Hour the meeting runs, `0`-`23`, in America/New_York time. Default: `11`
+- `meeting-minute` (optional, `type: string`): Minute the meeting runs, `0`-`59`. Default: `30` (11:30am ET)
 - `base-date` (required): `YYYY-MM-DD` date known to fall on a biweekly on-week — anchors the every-other-week cadence. Must fall on the same weekday as `meeting-weekday` — a mismatch (e.g. the meeting day changes but `base-date` isn't updated to a date on the new weekday) causes the run to fail loudly rather than silently compute the wrong on/off-week parity
 - `override-date` (optional): `YYYY-MM-DD` to target directly, bypassing the on/off-week check — for a rare manual catch-up review on an off-week or non-standard weekday. Leave unset (or blank/whitespace) for the routine day-before cron run. Must resolve to a future instant no more than 60 days out — a past, current, or far-future date (e.g. a year typo) is rejected, rather than silently posting a facilitator notice for the wrong meeting
+
+`meeting-weekday`/`meeting-hour`/`meeting-minute` are deliberately `type: string`, not `type: number`: a caller passing an unset `vars.*` through one of them (e.g. `${{ vars.MEETING_HOUR }}`) needs the empty case to stay an empty string. A `type: number` input coerces that same empty value to a literal `0` instead of the default declared here — a real GitHub Actions behavior ([actions/runner#2907](https://github.com/actions/runner/issues/2907)), not a hypothetical.
 
 **Secrets:**
 

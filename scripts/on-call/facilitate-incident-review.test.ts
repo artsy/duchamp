@@ -5,6 +5,7 @@ import {
   resolveMeetingInstant,
 } from "./facilitate-incident-review"
 import { currentOnCallUsers, scheduleUrl, usersToMentions } from "./incident-io"
+import { MS_PER_DAY } from "./shift-boundary"
 
 jest.mock("fs")
 jest.mock("./incident-io")
@@ -160,9 +161,9 @@ describe("resolveMeetingInstant", () => {
     )
   })
 
-  it("allows an override date right at the 60-day boundary", () => {
+  it("allows an override date comfortably within the 60-day ceiling", () => {
     const now = new Date("2026-07-24T14:00:00Z")
-    // Thursday, exactly 56 days out (8 weeks), within the 60-day ceiling.
+    // 55 days out -- well short of the 60-day ceiling.
     const instant = resolveMeetingInstant(
       now,
       4,
@@ -173,6 +174,33 @@ describe("resolveMeetingInstant", () => {
     )
 
     expect(instant?.toISOString()).toBe("2026-09-17T15:30:00.000Z")
+  })
+
+  it("allows an override date resolving to exactly the 60-day ceiling", () => {
+    // now is set to 11:30am ET (EDT, UTC-4) so that adding exactly 60 days
+    // lands on the override's own 11:30am ET instant -- both dates are
+    // before the November DST fall-back, so the offset stays constant and
+    // the two instants line up to the millisecond.
+    const now = new Date("2026-07-24T15:30:00.000Z")
+
+    const instant = resolveMeetingInstant(
+      now,
+      4,
+      11,
+      30,
+      BASE_DATE,
+      "2026-09-22"
+    )
+
+    expect(instant?.getTime()).toBe(now.getTime() + 60 * MS_PER_DAY)
+  })
+
+  it("throws for an override date one day past the 60-day ceiling", () => {
+    const now = new Date("2026-07-24T15:30:00.000Z")
+
+    expect(() =>
+      resolveMeetingInstant(now, 4, 11, 30, BASE_DATE, "2026-09-23")
+    ).toThrow("is more than 60 days from now")
   })
 
   it("throws on a malformed override date", () => {
@@ -297,6 +325,38 @@ describe("main", () => {
 
     await expect(main()).rejects.toThrow(
       'Invalid MEETING_BASE_DATE: "2026-02-31" is not a real calendar date.'
+    )
+  })
+
+  it("does not validate MEETING_BASE_DATE's weekday when a manual override is set", async () => {
+    // baseDate/meetingWeekday are mismatched (same as the throwing test
+    // above), but that check has no bearing on the override path, which
+    // never uses baseDate at all.
+    jest.setSystemTime(new Date("2026-07-20T14:00:00Z"))
+    process.env.INCIDENT_IO_API_KEY = "test-key"
+    process.env.SCHEDULE_ID = "schedule-123"
+    process.env.GITHUB_OUTPUT = "/tmp/fake-output"
+    process.env.MEETING_WEEKDAY = "3"
+    process.env.MEETING_OVERRIDE_DATE = "2026-07-23"
+    mockFs.appendFileSync.mockImplementation(() => undefined)
+
+    await main()
+
+    expect(mockCurrentOnCallUsers).toHaveBeenCalledWith(
+      "test-key",
+      "schedule-123",
+      new Date("2026-07-23T15:30:00.000Z")
+    )
+  })
+
+  it("still requires MEETING_BASE_DATE to be present even with a manual override set", async () => {
+    process.env.INCIDENT_IO_API_KEY = "test-key"
+    process.env.SCHEDULE_ID = "schedule-123"
+    process.env.MEETING_OVERRIDE_DATE = "2026-07-23"
+    delete process.env.MEETING_BASE_DATE
+
+    await expect(main()).rejects.toThrow(
+      "MEETING_BASE_DATE env var is not set."
     )
   })
 

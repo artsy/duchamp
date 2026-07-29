@@ -6,6 +6,7 @@ import { currentOnCallUsers, scheduleUrl, usersToMentions } from "./incident-io"
 import {
   civilDatePlusDays,
   civilDateTimeIn,
+  MS_PER_DAY,
   zonedTimeToUtc,
 } from "./shift-boundary"
 
@@ -14,7 +15,6 @@ const DEFAULT_MEETING_WEEKDAY = 4 // Thursday
 const DEFAULT_MEETING_HOUR = 11 // 11:30am ET (DST-aware via zonedTimeToUtc)
 const DEFAULT_MEETING_MINUTE = 30
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000
 // Catch-ups are a near-term, days-to-weeks-out scenario — never months away —
 // so this also catches a hand-typed year typo (e.g. 2027 instead of 2026)
 // that the past-date check alone can't, since a typo in the future direction
@@ -225,15 +225,21 @@ export const main = async (): Promise<void> => {
     min: 0,
     max: 59,
   })
-  const baseDate = requireValidBaseDate(
-    requireEnv("MEETING_BASE_DATE"),
-    meetingWeekday
-  )
+  const rawBaseDate = requireEnv("MEETING_BASE_DATE")
   // Only set for a rare manual catch-up run — see resolveMeetingInstant.
   // Trimmed before the truthiness check so a whitespace-only value (e.g. a
   // blank workflow_dispatch input) falls through to the routine path
   // instead of being treated as "an override is set."
   const overrideDate = process.env.MEETING_OVERRIDE_DATE?.trim() || undefined
+  // MEETING_BASE_DATE is still required to be present either way, but its
+  // format/weekday validity only matters on the routine path — the override
+  // path never touches baseDate at all (resolveMeetingInstant skips the
+  // biweekly parity check entirely once overrideDate is set), so a
+  // base-date/weekday drift shouldn't block an otherwise-valid manual
+  // catch-up run.
+  const baseDate = overrideDate
+    ? rawBaseDate
+    : requireValidBaseDate(rawBaseDate, meetingWeekday)
 
   const meetingInstant = resolveMeetingInstant(
     new Date(),

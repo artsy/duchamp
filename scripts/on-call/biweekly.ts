@@ -3,7 +3,7 @@
 // day-level integer arithmetic, so it never drifts no matter how old
 // `baseDate` gets (unlike wall-clock/float-based approaches).
 
-const MS_PER_DAY = 24 * 60 * 60 * 1000
+import { MS_PER_DAY } from "./shift-boundary"
 
 const toUtcDateOnly = (date: Date): number =>
   Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())

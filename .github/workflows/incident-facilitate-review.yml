@@ -16,21 +16,29 @@ on:
         default: "22"
         required: false
         type: string
+      # type: string, not number -- a caller passing an unset vars.* through
+      # here (e.g. ${{ vars.MEETING_HOUR }}) needs the empty-value case to
+      # stay an empty string. A type: number input coerces that same empty
+      # value to a literal 0 instead of this declared default (a real
+      # GitHub Actions behavior, not a hypothetical), and readIntEnv's
+      # falsy check can't tell "0" the string apart from a real 0 once it
+      # reaches the script's env — the fix has to happen at this type
+      # declaration, not in the script.
       meeting-weekday:
         description: "Weekday the Incident Review meeting itself runs, 0 (Sun) - 6 (Sat). Default: 4 (Thursday)"
-        default: 4
+        default: "4"
         required: false
-        type: number
+        type: string
       meeting-hour:
         description: "Hour the meeting runs, 0-23, America/New_York time. Default: 11 (11:30am ET)"
-        default: 11
+        default: "11"
         required: false
-        type: number
+        type: string
       meeting-minute:
         description: "Minute the meeting runs, 0-59. Default: 30 (11:30am ET)"
-        default: 30
+        default: "30"
         required: false
-        type: number
+        type: string
       base-date:
         description: "YYYY-MM-DD date known to fall on a biweekly on-week — anchors the every-other-week Incident Review cadence. Must fall on the same weekday as meeting-weekday"
         required: true
