@@ -203,13 +203,15 @@ uses: artsy/duchamp/.github/workflows/claude-review.yml@main
 with:
   model: "claude-opus-5" # Claude model (default)
   timeout-minutes: 45 # Maximum review time (default: 45)
+  compare-two-pass-review: false # Opt-in side-by-side comparison review (default: false)
 secrets:
   anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }} # Required
 ```
 
 **Features:**
 
-- Two-pass review: a "find" pass lists every candidate issue without filtering, then a second "filter" pass verifies each claim against the diff/codebase and posts only what holds up and matters. This keeps recall high while cutting the noise/false-positive rate a single pass tends to produce. The find pass has no GitHub-posting tools available, so it cannot comment on the PR regardless of prompt behavior - only the filter pass can post. (It runs best-effort: a slow or failed find pass falls back to a single-pass review rather than blocking the PR from getting reviewed at all.) Doubles the model calls - and roughly the cost and wall-clock time - per review compared to a single pass.
+- By default, a single-pass review: Claude explores the diff/codebase and posts one review comment.
+- Optional two-pass comparison (`compare-two-pass-review: true`): alongside the standard review above, also runs a "find" pass that lists every candidate issue without filtering, then a "filter" pass that verifies each claim against the diff/codebase and posts only what holds up and matters. Both reviews land as separate, clearly-labeled comments (🅰️ single-pass baseline, 🅱️ two-pass candidate) on the same PR so they can be compared directly. The find pass has no GitHub-posting tools available, so it cannot comment on the PR regardless of prompt behavior - only the filter pass (and the always-on legacy pass) can post. It runs best-effort: a slow or failed find pass just means you don't get the second comment that run, not that the review fails. Roughly triples the model calls, cost, and wall-clock time per review while enabled - meant for evaluating the two-pass approach, not as a permanent setting.
 - Full codebase context with `fetch-depth: 0`
 - Customizable review focus via `.claude-review.yml` config file
 - Configurable PR exclusions (see below)
@@ -225,6 +227,7 @@ secrets:
 
 - `model` (optional): Claude model to use for the review
 - `timeout-minutes` (optional): Maximum time for the review job
+- `compare-two-pass-review` (optional): also post a second, separately-labeled two-pass review for side-by-side comparison against the standard review. Default `false`.
 
 **Secrets:**
 

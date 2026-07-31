@@ -252,9 +252,19 @@ const writeOutput = (prompt: string): void => {
 
 const main = (): void => {
   const isFinderMode = process.argv.includes("--mode=finder")
+  const isLegacyMode = process.argv.includes("--mode=legacy")
 
   if (isFinderMode) {
     writeOutput(buildFinderPrompt())
+    return
+  }
+
+  // Legacy mode never looks at a pass-1 findings file, even if one exists
+  // (e.g. because the comparison run is also active in the same job) - it's
+  // the unmodified single-pass baseline, deliberately immune to whatever
+  // else is happening in the job.
+  if (isLegacyMode) {
+    writeOutput(buildPrompt())
     return
   }
 
