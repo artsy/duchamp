@@ -13,7 +13,7 @@ on:
         type: string
       timeout-minutes:
         description: "Maximum time for the review job"
-        default: 30
+        default: 45
         required: false
         type: number
 
@@ -193,7 +193,33 @@ jobs:
         env:
           YARN_IGNORE_PATH: 1
 
-      - name: Build review prompt
+      - name: Build finder prompt (pass 1)
+        id: finder-prompt
+        run: npx ts-node .tooling/scripts/build-review-prompt.ts --mode=finder
+
+      # Pass 1 is deliberately read-only: its --allowedTools list has no
+      # `gh pr comment` and no inline-comment tool, so it has no way to post
+      # to the PR regardless of what it decides to do. Its only job is
+      # coverage - list candidate issues, don't filter them. Pass 2 (below)
+      # verifies and decides what actually gets reported.
+      - name: Run Claude Code Review (pass 1 - find)
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.anthropic-api-key }}
+          claude_args: '--model ${{ inputs.model }} --allowedTools "Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Write"'
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            BASE BRANCH: ${{ github.event.pull_request.base.ref }}
+
+            The PR branch has been checked out. You have full access to the codebase.
+            Use Read, Glob, and Grep to explore files. Use `git diff origin/${{ github.event.pull_request.base.ref }}...HEAD` to see changes.
+
+            If a CLAUDE.md file exists in the repo root, read it first for project-specific guidelines.
+
+            ${{ steps.finder-prompt.outputs.review_prompt }}
+
+      - name: Build review prompt (pass 2)
         id: prompt
         run: npx ts-node .tooling/scripts/build-review-prompt.ts
 
@@ -204,7 +230,7 @@ jobs:
             const { cleanupPreviousAIReviews } = require('./.tooling/scripts/cleanup-ai-reviews.js');
             await cleanupPreviousAIReviews({ github, context, core });
 
-      - name: Run Claude Code Review
+      - name: Run Claude Code Review (pass 2 - filter and post)
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.anthropic-api-key }}

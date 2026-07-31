@@ -202,13 +202,14 @@ on:
 uses: artsy/duchamp/.github/workflows/claude-review.yml@main
 with:
   model: "claude-opus-5" # Claude model (default)
-  timeout-minutes: 30 # Maximum review time (default: 30)
+  timeout-minutes: 45 # Maximum review time (default: 45)
 secrets:
   anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }} # Required
 ```
 
 **Features:**
 
+- Two-pass review: a read-only "find" pass lists every candidate issue without filtering, then a second "filter" pass verifies each claim against the diff/codebase and posts only what holds up and matters. This keeps recall high while cutting the noise/false-positive rate a single pass tends to produce. The find pass has no GitHub-posting tools available, so it structurally cannot comment on the PR regardless of prompt behavior - only the filter pass can post.
 - Full codebase context with `fetch-depth: 0`
 - Customizable review focus via `.claude-review.yml` config file
 - Configurable PR exclusions (see below)
