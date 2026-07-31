@@ -50,8 +50,9 @@ One line per finding: \`[confidence: low/med/high] [severity: nit/minor/major] c
 No summary paragraph, no preamble, no "areas reviewed" section, no closing remarks. If you find nothing at all, output exactly \`NONE\`.
 
 ## What NOT to do
-- Do not post anything to GitHub. This pass has no tools that can do so - it is read-only by design.
+- Do not post anything to GitHub. This pass has no tools that can do so - by design, it cannot comment on the PR no matter what you decide.
 - Do not write a polished review. This list is raw material for an internal filtering step, not something a human will read directly.
+- Do not modify any files. You are given a Write tool only to record your findings at the path below - do not use it, or any other means, to change files in the checkout.
 
 Write your complete findings list to ${pass1FindingsPath()} using the Write tool (overwrite it if it already exists).
 `
@@ -189,19 +190,20 @@ const appendConfigSections = (
  * the filter pass is expected to verify and cut most of it.
  */
 const withPass1Findings = (prompt: string, pass1Findings?: string): string => {
-  if (!pass1Findings || !pass1Findings.trim()) {
+  const trimmed = pass1Findings?.trim()
+  if (!trimmed || trimmed === "NONE") {
     return prompt
   }
 
   return `## Pass 1 Candidate Findings (unverified)
 
-A first, read-only pass produced the raw findings below. Treat this as a list of leads to verify, not a report to relay as-is:
+A first pass (no GitHub-posting tools available - it cannot comment on this PR) produced the raw findings below. Treat this as a list of leads to verify, not a report to relay as-is:
 - Verify each claim against the diff and codebase before deciding whether it holds up.
 - Drop anything that isn't real, doesn't matter, or is pure speculation.
 - Most items here should NOT appear in your final review.
 - If pass 1 found a genuine, verified bug, it must survive - do not water a real issue down to a nit because there are many other items around it.
 
-${pass1Findings.trim()}
+${trimmed}
 
 ---
 
@@ -257,7 +259,13 @@ const main = (): void => {
   }
 
   const findingsPath = pass1FindingsPath()
-  const pass1Findings = fs.existsSync(findingsPath)
+  const hasFindings = fs.existsSync(findingsPath)
+  if (!hasFindings) {
+    console.warn(
+      `Warning: no pass-1 findings at ${findingsPath} - falling back to a single-pass review`
+    )
+  }
+  const pass1Findings = hasFindings
     ? fs.readFileSync(findingsPath, "utf8")
     : undefined
 

@@ -209,7 +209,7 @@ secrets:
 
 **Features:**
 
-- Two-pass review: a read-only "find" pass lists every candidate issue without filtering, then a second "filter" pass verifies each claim against the diff/codebase and posts only what holds up and matters. This keeps recall high while cutting the noise/false-positive rate a single pass tends to produce. The find pass has no GitHub-posting tools available, so it structurally cannot comment on the PR regardless of prompt behavior - only the filter pass can post.
+- Two-pass review: a "find" pass lists every candidate issue without filtering, then a second "filter" pass verifies each claim against the diff/codebase and posts only what holds up and matters. This keeps recall high while cutting the noise/false-positive rate a single pass tends to produce. The find pass has no GitHub-posting tools available, so it cannot comment on the PR regardless of prompt behavior - only the filter pass can post. (It runs best-effort: a slow or failed find pass falls back to a single-pass review rather than blocking the PR from getting reviewed at all.) Doubles the model calls - and roughly the cost and wall-clock time - per review compared to a single pass.
 - Full codebase context with `fetch-depth: 0`
 - Customizable review focus via `.claude-review.yml` config file
 - Configurable PR exclusions (see below)

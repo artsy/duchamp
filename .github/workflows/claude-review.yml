@@ -197,16 +197,27 @@ jobs:
         id: finder-prompt
         run: npx ts-node .tooling/scripts/build-review-prompt.ts --mode=finder
 
-      # Pass 1 is deliberately read-only: its --allowedTools list has no
-      # `gh pr comment` and no inline-comment tool, so it has no way to post
-      # to the PR regardless of what it decides to do. Its only job is
-      # coverage - list candidate issues, don't filter them. Pass 2 (below)
-      # verifies and decides what actually gets reported.
+      # Pass 1 cannot post to the PR: its --allowedTools list has no
+      # `gh pr comment` and no inline-comment tool, so it has no way to reach
+      # GitHub regardless of what it decides to do. (It is NOT read-only in
+      # general - Write is granted so it can record findings below - but it
+      # has no path to the PR itself.) Its only job is coverage - list
+      # candidate issues, don't filter them. Pass 2 (below) verifies and
+      # decides what actually gets reported.
+      #
+      # --add-dir grants access outside the checkout (${{ github.workspace }}),
+      # which the findings file needs since it lives in the runner's temp dir.
+      # Best-effort: continue-on-error plus a step cap mean a slow or failed
+      # finder degrades to today's single-pass review (build-review-prompt.ts
+      # already tolerates a missing findings file) instead of taking pass 2
+      # down with it.
       - name: Run Claude Code Review (pass 1 - find)
+        continue-on-error: true
+        timeout-minutes: 20
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.anthropic-api-key }}
-          claude_args: '--model ${{ inputs.model }} --allowedTools "Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Write"'
+          claude_args: '--model ${{ inputs.model }} --add-dir "${{ runner.temp }}" --allowedTools "Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Write"'
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}

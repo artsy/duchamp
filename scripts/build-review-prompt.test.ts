@@ -200,6 +200,12 @@ describe("buildPrompt with pass1Findings", () => {
     expect(buildPrompt("   \n  ")).not.toContain("Pass 1 Candidate Findings")
   })
 
+  it("omits the pass-1 section when pass 1 reported NONE", () => {
+    expect(buildPrompt("NONE")).not.toContain("Pass 1 Candidate Findings")
+    // FINDER_PROMPT tells the model to output this verbatim - tolerate surrounding whitespace
+    expect(buildPrompt("  NONE  \n")).not.toContain("Pass 1 Candidate Findings")
+  })
+
   it("prepends pass-1 findings ahead of the default prompt", () => {
     const result = buildPrompt(
       "[confidence: high] [severity: minor] foo.ts:12 does not handle null"
@@ -287,9 +293,10 @@ prompt: |
 })
 
 describe("FINDER_PROMPT", () => {
-  it("instructs read-only, no-posting behavior", () => {
+  it("instructs no-posting behavior, without overclaiming read-only", () => {
     expect(FINDER_PROMPT).toContain("Do not post anything to GitHub")
-    expect(FINDER_PROMPT).toContain("read-only by design")
+    expect(FINDER_PROMPT).toContain("cannot comment on the PR")
+    expect(FINDER_PROMPT).toContain("Do not modify any files")
   })
 
   it("tells the model where to write its findings", () => {
@@ -302,7 +309,11 @@ describe("pass1FindingsPath", () => {
   const originalRunnerTemp = process.env.RUNNER_TEMP
 
   afterEach(() => {
-    process.env.RUNNER_TEMP = originalRunnerTemp
+    if (originalRunnerTemp === undefined) {
+      delete process.env.RUNNER_TEMP
+    } else {
+      process.env.RUNNER_TEMP = originalRunnerTemp
+    }
   })
 
   it("uses RUNNER_TEMP when set", () => {
