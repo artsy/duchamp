@@ -1,0 +1,38 @@
+# Copy into a target repo as `.github/workflows/run-daily-datadog-triage.yml`.
+#
+# Scans this repo's production errors in Datadog and opens at most one
+# pre-triaged issue. Read-only — never edits code or opens a PR.
+#
+# Required secrets. The DD_TRIAGE_* names are deliberately scoped to this job —
+# don't point them at a general-purpose Datadog key, which would hand a
+# read-only job credentials it doesn't need.
+#   ANTHROPIC_API_KEY    - Claude Code API key
+#   DD_TRIAGE_API_KEY    - Datadog API key
+#   DD_TRIAGE_APP_KEY    - Datadog app key, scoped apm_read + error_tracking_read
+#                          (without error_tracking_read the run aborts in preflight)
+#   TRIAGE_ISSUES_TOKEN  - issues:write on this repo only (GitHub's fine-grained token)
+#
+# One-time setup:
+#   - create the `triage`, `triage/fixed`, and `triage/rejected` labels
+#   - have the `datadog-triage` skill in `.claude/skills/datadog-triage/`. It is
+#     synced in from artsy/agent-tooling (private, so CI can't fetch it) — edit
+#     it there, never here. The run aborts if it's missing.
+name: Daily Datadog Triage
+
+on:
+  # Uncomment once a couple of manual runs look right.
+  # schedule:
+  #   - cron: "0 13 * * 1-5" # 13:00 UTC, weekdays
+  workflow_dispatch: {}
+
+jobs:
+  triage:
+    uses: artsy/duchamp/.github/workflows/daily-datadog-triage.yml@main
+    # Override the Datadog service list in this repo's CLAUDE.md, not here.
+    # with:
+    #   model: claude-opus-5
+    secrets:
+      anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+      dd-api-key: ${{ secrets.DD_TRIAGE_API_KEY }}
+      dd-app-key: ${{ secrets.DD_TRIAGE_APP_KEY }}
+      triage-issues-token: ${{ secrets.TRIAGE_ISSUES_TOKEN }}

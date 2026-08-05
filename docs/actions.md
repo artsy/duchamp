@@ -16,6 +16,7 @@ This document provides detailed reference information for all GitHub Actions ava
 | `incident-standup-reminder.yml`      | Remind on-call to run standup  | For scheduled Slack standup reminders |
 | `incident-next-on-call.yml`          | Remind engineers of an upcoming on-call shift | For scheduled Slack next-on-call reminders |
 | `incident-facilitate-review.yml`     | Pick a random facilitator for the Incident Review | For scheduled Slack Incident Review facilitator selection |
+| `daily-datadog-triage.yml`           | Open one pre-triaged issue from Datadog errors | For private repos triaging production errors |
 
 ## Action Reference
 
@@ -538,6 +539,53 @@ joule's real workflow sources these values from repo vars instead of literals, s
 
 ---
 
+### daily-datadog-triage.yml
+
+**Purpose**: Scan a repo's production errors in Datadog and open at most **one** pre-triaged GitHub issue per run
+
+**Use Case**: Private repos that want a daily shortlist of production errors. Read-only — never edits code or opens a PR; fixes stay human-initiated
+
+Copy `templates/run-daily-datadog-triage.yml` into the calling repo — it carries the schedule, secret names, and setup notes.
+
+```yaml
+jobs:
+  triage:
+    uses: artsy/duchamp/.github/workflows/daily-datadog-triage.yml@main
+    secrets:
+      anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+      dd-api-key: ${{ secrets.DD_TRIAGE_API_KEY }}
+      dd-app-key: ${{ secrets.DD_TRIAGE_APP_KEY }}
+      triage-issues-token: ${{ secrets.TRIAGE_ISSUES_TOKEN }}
+```
+
+**Features:**
+
+- Aborts on public repos — write-ups quote stack traces and production data
+- Deny-by-default tools: `pup`, read-only `git`, `gh issue`/`gh label`, plus a hook blocking credential reads. Issue writes use `triage-issues-token`; `GITHUB_TOKEN` gets only `contents: read`
+- `pup` release and the `datadog-labs/agent-skills` SHA are pinned, so a scheduled run can't pick up new tooling or new model instructions
+- Triage rules live in the skill, not this workflow
+
+**One-time setup in the calling repo:**
+
+1. Sync the `datadog-triage` skill to `.claude/skills/datadog-triage/` (fixed path — the run aborts if it's missing). Source of truth: [artsy/agent-tooling](https://github.com/artsy/agent-tooling) `plugins/artsy-artnet/skills/datadog-triage`; edit it there, never downstream.
+2. Create the `triage`, `triage/fixed`, and `triage/rejected` labels.
+3. Add the secrets below, and list the repo's Datadog services in its `CLAUDE.md`.
+
+**Inputs:**
+
+- `dd-site` (optional): Datadog site. Default: `datadoghq.com`
+- `model` (optional): Default `claude-sonnet-5`; bump to `claude-opus-5` if write-ups come out thin
+- `timeout-minutes` (optional): Whole-job timeout. Default: `30`
+
+**Secrets:**
+
+- `anthropic-api-key` (required): Anthropic API key for Claude Code
+- `dd-api-key` (required): Datadog API key
+- `dd-app-key` (required): Datadog app key, scoped `apm_read` + `error_tracking_read` — the run aborts in preflight without the latter
+- `triage-issues-token` (required): `issues:write` on the calling repo only — no `contents:write`, no PR scope
+
+---
+
 ## Reusable Action
 
 ### setup-and-install
@@ -581,6 +629,7 @@ joule's real workflow sources these values from repo vars instead of literals, s
 | Scheduled on-call Slack reminders | `incident-standup-reminder.yml`   | Sources current on-call from incident.io |
 | Scheduled upcoming on-call reminders | `incident-next-on-call.yml`    | Notifies engineers ahead of their shift starting |
 | Scheduled Incident Review facilitator selection | `incident-facilitate-review.yml` | Picks a random on-call participant to facilitate |
+| Daily production error triage    | `daily-datadog-triage.yml`           | Private repos only; opens one issue per run |
 | Custom workflows                | `setup-and-install` action           | Use as a step in custom workflows    |
 
 ## Security Considerations
