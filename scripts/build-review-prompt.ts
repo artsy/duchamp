@@ -144,13 +144,7 @@ export const loadRepoConfig = (): RepoConfig | null => {
   }
 }
 
-/**
- * Parse a personal style file's contents into a mode + body.
- *
- * The file may start with YAML frontmatter (delimited by `---` lines) specifying
- * `mode`. Everything after the frontmatter (or the whole file, if there is none)
- * is the style content. Pure function - no file IO - so it's easy to unit test.
- */
+// Parse a personal style file's contents into a mode + body.
 export const parsePersonalStyle = (
   login: string,
   raw: string
@@ -187,12 +181,8 @@ export const parsePersonalStyle = (
   return { login, mode, content: content.trim() }
 }
 
-/**
- * Load the PR author's personal review style, if they have one.
- *
- * Resolved relative to this script's location (not process.cwd(), which is the
- * checked-out PR repo) since style files live centrally in this repo.
- */
+// Load the PR author's personal review style, if they have one.
+
 export const loadPersonalStyle = (
   author: string | undefined
 ): PersonalStyle | null => {
@@ -219,17 +209,11 @@ export const loadPersonalStyle = (
   }
 }
 
-/**
- * Assemble the final prompt from repo config and personal style. Pure function -
- * both inputs are already loaded - so merge behavior is directly testable.
- */
+// Assemble the final prompt from repo config and personal style.
 export const assemblePrompt = (
   repoConfig: RepoConfig | null,
   personalStyle: PersonalStyle | null
 ): string => {
-  // A personal full override takes the place of the default prompt entirely,
-  // but repo-level customization (context/focus areas/ignore paths) still applies -
-  // see buildPrompt() for the repo `prompt:` override, which beats everything.
   if (personalStyle?.mode === "override") {
     return personalStyle.content
   }
