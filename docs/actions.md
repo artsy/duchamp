@@ -304,6 +304,42 @@ prompt: |
   Ignore style and formatting issues entirely.
 ```
 
+**Personal Review Styles:**
+
+Individuals can customize the *tone* of reviews on their own PRs, across every
+repo that uses this workflow, without touching any repo's `.claude-review.yml`.
+
+Add `review-styles/<your-github-login>.md` (lowercase) to the `duchamp` repo. It's
+picked up automatically for PRs you author, based on `github.event.pull_request.user.login`.
+
+```markdown
+---
+mode: augment
+---
+Be blunt and terse. Skip the summary on small PRs.
+I care most about data-pipeline correctness and idempotency; flag anything
+that could double-write or silently drop rows. UK English.
+```
+
+`mode` (optional, defaults to `augment`) controls how the file merges with the
+default prompt:
+
+- `augment` (default): keeps the full default prompt (guardrails, review format)
+  and appends your content as a "Reviewer Style Preferences" section that takes
+  precedence on tone.
+- `replace_style`: keeps the default guardrails and review format, but swaps out
+  the "How to write" tone guidance for your content.
+- `override`: your content becomes the entire prompt - no guardrails or format
+  are kept unless you write them yourself.
+
+Precedence: a repo's `.claude-review.yml` `prompt:` field always wins over a
+personal style (repo-wide override beats individual preference). Otherwise, a
+repo's `focus_areas`/`context`/`ignore_paths` still apply under `augment` and
+`replace_style` (scope stays with the repo, tone with the individual) but not
+under `override`.
+
+See [`review-styles/README.md`](../review-styles/README.md) for details.
+
 **Security Notes:**
 
 - Requires approval for external contributors to prevent prompt injection
