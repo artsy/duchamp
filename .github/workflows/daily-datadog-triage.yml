@@ -1,0 +1,188 @@
+name: Daily Datadog Triage
+
+# Scans this repo's production errors in Datadog and opens at most ONE
+# pre-triaged GitHub issue. Read-only: the only write is `gh issue`. Fixes are
+# human-initiated in a separate session. Full rules live in the skill:
+# artsy/agent-tooling plugins/artsy-artnet/skills/datadog-triage.
+
+on:
+  workflow_call:
+    secrets:
+      anthropic-api-key:
+        description: "Anthropic API key for Claude Code"
+        required: true
+      dd-api-key:
+        description: "Datadog API key (DD_API_KEY)"
+        required: true
+      dd-app-key:
+        description: "Datadog Application key (DD_APP_KEY) — must be scoped apm_read + error_tracking_read"
+        required: true
+      triage-issues-token:
+        description: "Token with issues:write on this repo ONLY. No contents:write, no PR scope."
+        required: true
+    inputs:
+      dd-site:
+        description: "Datadog site (DD_SITE)."
+        default: "datadoghq.com"
+        required: false
+        type: string
+      model:
+        description: "Claude model. Sonnet by default; bump to claude-opus-5 if a repo's write-ups come out thin."
+        default: "claude-sonnet-5"
+        required: false
+        type: string
+      timeout-minutes:
+        description: "Maximum time for the whole job, setup included. Keep headroom — a timeout mid-run costs full token spend and files nothing."
+        default: 30
+        required: false
+        type: number
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    concurrency:
+      group: datadog-triage-${{ github.repository }}
+      # Queue rather than cancel: a cancel can land after the model has read
+      # Datadog but before `gh issue create`, paying full token cost for nothing.
+      cancel-in-progress: false
+    # Issue writes come from triage-issues-token, not GITHUB_TOKEN, so this
+    # job cannot escalate to contents or PR writes.
+    permissions:
+      contents: read
+    steps:
+      - name: Refuse to run against a public repo
+        # Queried via the API rather than github.event.repository.private: the
+        # event payload is minimal on `schedule`, where an absent field would
+        # render empty and fail this gate on every cron run.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Assigned on its own line so a failing `gh` (rate limit, outage) aborts
+          # here. Inside an `if` condition, set -e ignores the substitution's exit
+          # status and the empty result would be reported as "public repo".
+          IS_PRIVATE="$(gh repo view "$GITHUB_REPOSITORY" --json isPrivate --jq .isPrivate)"
+          if [ "$IS_PRIVATE" != "true" ]; then
+            echo "TRIAGE FAILED: datadog-triage is for private repos only." >&2
+            exit 1
+          fi
+
+      - name: Checkout target repo
+        # Shallow on purpose — the skill confirms root cause against current
+        # source. 50 keeps `git log`/`git blame` usable without cloning a
+        # five-figure commit history on every run.
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 50
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pup (Datadog CLI)
+        # Release tarball, not brew: Homebrew-on-Linux often builds from source,
+        # which is minutes per run for a binary Datadog already publishes.
+        # Note the org split: tap is datadog-labs, releases DataDog.
+        #
+        # Pinned by digest, not just version: a git tag and its release assets are
+        # mutable, so the version alone doesn't guarantee the same bytes — and this
+        # binary runs as root's install in a process holding the Datadog keys and
+        # the issues token. Recompute PUP_SHA256 whenever PUP_VERSION changes
+        # (the release publishes no checksums.txt to verify against).
+        env:
+          PUP_VERSION: "1.10.4"
+          PUP_SHA256: "9d99ca0229fb0c767c6f74e07a0efa3e12091e9cfc297757e190247d26b537c5"
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/pup.tar.gz" \
+            "https://github.com/DataDog/pup/releases/download/v${PUP_VERSION}/pup_${PUP_VERSION}_Linux_x86_64.tar.gz"
+          echo "$PUP_SHA256  $RUNNER_TEMP/pup.tar.gz" | sha256sum -c -
+          sudo tar -xzf "$RUNNER_TEMP/pup.tar.gz" -C /usr/local/bin pup
+          pup --version
+
+      - name: Pre-install Datadog agent skills (dd-pup, dd-logs, dd-apm)
+        # Pinned SHA, not `npx skills add`, which resolves both the CLI and the
+        # upstream repo at tip. Skills are instructions the model follows, so an
+        # upstream edit would change what this job does with no commit here.
+        env:
+          DD_SKILLS_SHA: "6a5635ac5fea33a22ca6a57d3bc903944f87fa70"
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout \
+            https://github.com/datadog-labs/agent-skills .dd-skills
+          git -C .dd-skills checkout --quiet "$DD_SKILLS_SHA"
+          mkdir -p "$HOME/.claude/skills"
+          cp -r .dd-skills/dd-pup .dd-skills/dd-logs .dd-skills/dd-apm \
+            "$HOME/.claude/skills/"
+          rm -rf .dd-skills
+
+      - name: Materialize read-only settings
+        # The skill is synced into the calling repo, so it arrives with the
+        # checkout — no credential needed to read a private agent-tooling from
+        # CI. The path is fixed, not an input: Claude Code only discovers skills
+        # under .claude/skills, so anywhere else loads nothing. Abort if it's
+        # absent rather than let Claude improvise without the skill's rules.
+        #
+        # A PreToolUse hook whose command doesn't exist is not an error, so an
+        # unsubstituted __SKILL_DIR__ fails OPEN — hence the grep guard.
+        run: |
+          set -euo pipefail
+          SKILL_DIR="$GITHUB_WORKSPACE/.claude/skills/datadog-triage"
+          if [ ! -f "$SKILL_DIR/SKILL.md" ]; then
+            echo "TRIAGE FAILED: no datadog-triage skill at .claude/skills/datadog-triage." >&2
+            echo "It is synced from artsy/agent-tooling (plugins/artsy-artnet/skills/datadog-triage)" >&2
+            echo "— see the daily-datadog-triage.yml section in duchamp's docs/actions.md." >&2
+            exit 1
+          fi
+          SETTINGS="$RUNNER_TEMP/triage-settings.json"
+          sed "s|__SKILL_DIR__|$SKILL_DIR|g" \
+            "$SKILL_DIR/reference/settings.example.json" > "$SETTINGS"
+          if grep -q '__SKILL_DIR__' "$SETTINGS"; then
+            echo "TRIAGE FAILED: __SKILL_DIR__ unsubstituted." >&2
+            exit 1
+          fi
+          chmod +x "$SKILL_DIR/reference/hooks/block-secret-reads.sh"
+          echo "TRIAGE_SETTINGS=$SETTINGS" >> "$GITHUB_ENV"
+
+          # claude_args takes precedence over --settings for permissions, so the
+          # tool policy has to be restated as flags. Derive it from the same file
+          # rather than duplicating the lists across two repos, where they'd drift
+          # unnoticed. An empty list would silently mean "no restrictions".
+          ALLOWED="$(jq -er '.permissions.allow | join(",")' "$SETTINGS")"
+          DENIED="$(jq -er '.permissions.deny | join(",")' "$SETTINGS")"
+          if [ -z "$ALLOWED" ] || [ -z "$DENIED" ]; then
+            echo "TRIAGE FAILED: empty allow/deny list in settings.example.json." >&2
+            exit 1
+          fi
+          echo "TRIAGE_ALLOWED_TOOLS=$ALLOWED" >> "$GITHUB_ENV"
+          echo "TRIAGE_DISALLOWED_TOOLS=$DENIED" >> "$GITHUB_ENV"
+
+      - name: Run Datadog triage (read-only)
+        uses: anthropics/claude-code-action@v1
+        env:
+          DD_API_KEY: ${{ secrets.dd-api-key }}
+          DD_APP_KEY: ${{ secrets.dd-app-key }}
+          DD_SITE: ${{ inputs.dd-site }}
+          GH_TOKEN: ${{ secrets.triage-issues-token }}
+        with:
+          anthropic_api_key: ${{ secrets.anthropic-api-key }}
+          # The action grants no Bash by default and documents claude_args as
+          # taking precedence over settings, so the tool policy has to be stated
+          # here or pup never runs. Both flags are derived from the skill's
+          # settings.example.json in the step above — that file is the one source
+          # of truth. --settings still carries the PreToolUse hook.
+          claude_args: >-
+            --model ${{ inputs.model }}
+            --settings ${{ env.TRIAGE_SETTINGS }}
+            --allowedTools "${{ env.TRIAGE_ALLOWED_TOOLS }}"
+            --disallowedTools "${{ env.TRIAGE_DISALLOWED_TOOLS }}"
+          prompt: |
+            Use the `datadog-triage` skill. Follow it exactly.
+
+            REPO: ${{ github.repository }}
+
+            `pup` is authenticated via DD_API_KEY / DD_APP_KEY / DD_SITE in the
+            environment, and dd-pup / dd-logs / dd-apm are pre-installed. `gh` is
+            authenticated with issues:write and nothing else.
