@@ -13,14 +13,9 @@ on:
         type: string
       timeout-minutes:
         description: "Maximum time for the review job"
-        default: 45
+        default: 30
         required: false
         type: number
-      compare-two-pass-review:
-        description: "Also run a second, separately-labeled two-pass (find + filter) review alongside the standard single-pass review, for side-by-side comparison. Roughly 3x the model calls per review. Off by default."
-        default: false
-        required: false
-        type: boolean
 
 jobs:
   # Adding the in-progress label joins the shared concurrency group, which
@@ -198,13 +193,9 @@ jobs:
         env:
           YARN_IGNORE_PATH: 1
 
-      # Always runs, unaffected by compare-two-pass-review: this is the
-      # standard single-pass review everyone gets today. --mode=legacy never
-      # looks at any pass-1 findings file, so its output can't be tainted by
-      # the comparison run below even when both run in the same job.
-      - name: Build review prompt (legacy)
-        id: legacy-prompt
-        run: npx ts-node .tooling/scripts/build-review-prompt.ts --mode=legacy
+      - name: Build review prompt
+        id: prompt
+        run: npx ts-node .tooling/scripts/build-review-prompt.ts
 
       - name: Cleanup previous AI review comments
         uses: actions/github-script@v7
@@ -213,7 +204,7 @@ jobs:
             const { cleanupPreviousAIReviews } = require('./.tooling/scripts/cleanup-ai-reviews.js');
             await cleanupPreviousAIReviews({ github, context, core });
 
-      - name: Run Claude Code Review (legacy - single-pass)
+      - name: Run Claude Code Review
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.anthropic-api-key }}
@@ -227,83 +218,6 @@ jobs:
             Use Read, Glob, and Grep to explore files. Use `git diff origin/${{ github.event.pull_request.base.ref }}...HEAD` to see changes.
 
             If a CLAUDE.md file exists in the repo root, read it first for project-specific guidelines.
-
-            ${{ inputs.compare-two-pass-review && 'This review is posted alongside a second, experimental two-pass review for side-by-side comparison. Start your PR comment with the header "### 🅰️ Single-pass review (baseline)" on its own line, then a blank line, before the rest of your review.' || '' }}
-
-            ${{ steps.legacy-prompt.outputs.review_prompt }}
-
-            ## How to Post Your Review
-            Use `gh pr comment ${{ github.event.pull_request.number }}` for your main review.
-            Use `mcp__github_inline_comment__create_inline_comment` for inline code comments.
-            Only post GitHub comments - do not submit review text as messages.
-
-      # Everything below only runs when a repo/caller opts in via
-      # compare-two-pass-review. It adds a second, separately-labeled review
-      # comment (find pass + filter pass) alongside the legacy one above, so
-      # the two can be compared on the same PR. cleanup-ai-reviews.js above
-      # already wipes every claude[bot] comment before either posts, so both
-      # repost cleanly on every push with no extra bookkeeping needed here.
-      - name: Build finder prompt (pass 1)
-        id: finder-prompt
-        if: inputs.compare-two-pass-review
-        run: npx ts-node .tooling/scripts/build-review-prompt.ts --mode=finder
-
-      # Pass 1 cannot post to the PR: its --allowedTools list has no
-      # `gh pr comment` and no inline-comment tool, so it has no way to reach
-      # GitHub regardless of what it decides to do. (It is NOT read-only in
-      # general - Write is granted so it can record findings below - but it
-      # has no path to the PR itself.) Its only job is coverage - list
-      # candidate issues, don't filter them. Pass 2 (below) verifies and
-      # decides what actually gets reported.
-      #
-      # --add-dir grants access outside the checkout (${{ github.workspace }}),
-      # which the findings file needs since it lives in the runner's temp dir.
-      # Best-effort: continue-on-error plus a step cap mean a slow or failed
-      # finder degrades to just the legacy review above (build-review-prompt.ts
-      # already tolerates a missing findings file) instead of taking pass 2
-      # down with it.
-      - name: Run Claude Code Review (pass 1 - find)
-        if: inputs.compare-two-pass-review
-        continue-on-error: true
-        timeout-minutes: 20
-        uses: anthropics/claude-code-action@v1
-        with:
-          anthropic_api_key: ${{ secrets.anthropic-api-key }}
-          claude_args: '--model ${{ inputs.model }} --add-dir "${{ runner.temp }}" --allowedTools "Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Write"'
-          prompt: |
-            REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
-            BASE BRANCH: ${{ github.event.pull_request.base.ref }}
-
-            The PR branch has been checked out. You have full access to the codebase.
-            Use Read, Glob, and Grep to explore files. Use `git diff origin/${{ github.event.pull_request.base.ref }}...HEAD` to see changes.
-
-            If a CLAUDE.md file exists in the repo root, read it first for project-specific guidelines.
-
-            ${{ steps.finder-prompt.outputs.review_prompt }}
-
-      - name: Build review prompt (pass 2 - filter)
-        id: prompt
-        if: inputs.compare-two-pass-review
-        run: npx ts-node .tooling/scripts/build-review-prompt.ts
-
-      - name: Run Claude Code Review (pass 2 - filter and post)
-        if: inputs.compare-two-pass-review
-        uses: anthropics/claude-code-action@v1
-        with:
-          anthropic_api_key: ${{ secrets.anthropic-api-key }}
-          claude_args: '--model ${{ inputs.model }} --allowedTools "Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),mcp__github_inline_comment__create_inline_comment"'
-          prompt: |
-            REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
-            BASE BRANCH: ${{ github.event.pull_request.base.ref }}
-
-            The PR branch has been checked out. You have full access to the codebase.
-            Use Read, Glob, and Grep to explore files. Use `git diff origin/${{ github.event.pull_request.base.ref }}...HEAD` to see changes.
-
-            If a CLAUDE.md file exists in the repo root, read it first for project-specific guidelines.
-
-            Start your PR comment with the header "### 🅱️ Two-pass review (candidate)" on its own line, then a blank line, before the rest of your review. This is posted alongside a legacy single-pass review, above, for side-by-side comparison.
 
             ${{ steps.prompt.outputs.review_prompt }}
 

@@ -12,4 +12,4 @@ jobs:
     # Optional: customize the model or timeout
     # with:
     #   model: "claude-opus-4-20250514"
-    #   timeout-minutes: 45
+    #   timeout-minutes: 30
