@@ -304,12 +304,6 @@ prompt: |
   Ignore style and formatting issues entirely.
 ```
 
-**Personal Review Styles:**
-
-Individuals can customize the *tone* of reviews on their own PRs, across every
-repo that uses this workflow, without touching any repo's `.claude-review.yml`.
-See `review-styles/README.md` for setup and details.
-
 **Security Notes:**
 
 - Requires approval for external contributors to prevent prompt injection

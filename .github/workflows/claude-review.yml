@@ -196,8 +196,6 @@ jobs:
       - name: Build review prompt
         id: prompt
         run: npx ts-node .tooling/scripts/build-review-prompt.ts
-        env:
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
 
       - name: Cleanup previous AI review comments
         uses: actions/github-script@v7
