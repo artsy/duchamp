@@ -50,6 +50,9 @@ jobs:
     # job cannot escalate to contents or PR writes.
     permissions:
       contents: read
+      # claude-code-action fetches an OIDC token on startup even when given an
+      # API key; without this the run dies before the prompt.
+      id-token: write
     steps:
       - name: Refuse to run against a public repo
         # Queried via the API rather than github.event.repository.private: the
