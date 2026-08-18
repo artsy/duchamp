@@ -31,10 +31,11 @@ Areas Reviewed shape. The experiment review is deeper and blunter:
 - **Structural.** Functions doing several things, junk-drawer files, copy-paste,
   dead code, patterns applied inconsistently within one PR.
 - **Accessibility as completeness**, wherever the change is user-facing.
-- **Sharper comments.** One finding per comment, one line: `<severity>: <problem>.
-  <fix>.` Severity is one of `blocking:`, `required:`, `nit:`, `q:`, so it is obvious
-  what has to be fixed before merge and what can be ignored. Security findings and
-  architectural disagreements get a full paragraph instead.
+- **Sharper comments.** One finding per comment, one line: `<emoji> **<severity>:**
+  <problem>. <fix>.` Every comment opens with 🔴 **blocking:**, 🟠 **required:**,
+  🔵 **nit:**, or ⚪ **q:**, so it is obvious at a glance what has to be fixed before
+  merge and what can be ignored. Security findings and architectural disagreements
+  get a full paragraph instead.
 - **Different report shape.** Summary → Change Map → Critical Issues → Required
   Changes → Suggestions → Questions → Verdict, with an explicit
   Request Changes / Needs Discussion / Approve verdict.
