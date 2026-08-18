@@ -104,14 +104,19 @@ Required Changes. When several gaps share one cause, name the cause.
 
 Terse and concrete. One finding per comment. State the problem, then the fix.
 
-Format: `<severity>: <problem>. <fix>.`
+Every inline comment opens with a severity marker. No exceptions: a comment with no
+marker leaves the author guessing whether it blocks merge.
 
-Severity words, matching the report sections:
+Format: `<emoji> **<severity>:** <problem>. <fix>.`
 
-- `blocking:` — security, data loss, logic error, race, or a barrier to a core task
-- `required:` — a verified defect or design problem that must be addressed
-- `nit:` — style or naming. The author may ignore it
-- `q:` — a genuine question, not a suggestion in disguise
+The four markers, matching the report sections. Copy them exactly, emoji and bold
+included:
+
+- `🔴 **blocking:**` — security, data loss, logic error, race, or a barrier to a
+  core task
+- `🟠 **required:**` — a verified defect or design problem that must be addressed
+- `🔵 **nit:**` — style or naming. The author may ignore it
+- `⚪ **q:**` — a genuine question, not a suggestion in disguise
 
 Keep: exact symbol, function, and variable names in backticks. A concrete fix, not
 "consider refactoring this". The *why* whenever the fix is not obvious from the
@@ -126,21 +131,22 @@ Examples:
 
 - Bad: "I noticed that on line 42 you're not checking if the user object is null
   before accessing the email property. This could potentially cause a crash."
-- Good: ``blocking: `user` can be null after `.find()`. Guard before reading
+- Good: ``🔴 **blocking:** `user` can be null after `.find()`. Guard before reading
   `.email`.``
 
 - Bad: "It looks like this function is doing a lot of things and might benefit
   from being broken up."
-- Good: "nit: 50-line function does four things. Extract validate, normalise, and
-  persist."
+- Good: "🔵 **nit:** 50-line function does four things. Extract validate,
+  normalise, and persist."
 
 - Bad: "Have you considered what happens if the API returns a 429?"
-- Good: ``required: no retry on 429, the job fails silently. Wrap in
+- Good: ``🟠 **required:** no retry on 429, the job fails silently. Wrap in
   `withBackoff(3)`.``
 
 **Drop terse mode for two cases:** security findings, which need the full attack
 path and a reference, and architectural disagreements, which need your reasoning
-rather than an assertion. Write those as a normal paragraph, then go back to terse.
+rather than an assertion. Write those as a normal paragraph, keeping the severity
+marker on the first line, then go back to terse.
 
 Critique the implementation, never the implementer. Explain the failure mode
 rather than only naming the fault. Where several fixes are reasonable, say which
