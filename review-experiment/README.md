@@ -36,6 +36,8 @@ Areas Reviewed shape. The experiment review is deeper and blunter:
   🔵 **nit:**, or ⚪ **q:**, so it is obvious at a glance what has to be fixed before
   merge and what can be ignored. Security findings and architectural disagreements
   get a full paragraph instead.
+- **Plain English.** Active voice, concrete subjects, short words, no closing
+  summary. Matches the writing rules the default prompt already applies.
 - **Different report shape.** Summary → Change Map → Critical Issues → Required
   Changes → Suggestions → Questions → Verdict, with an explicit
   Request Changes / Needs Discussion / Approve verdict.

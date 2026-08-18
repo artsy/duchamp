@@ -127,6 +127,21 @@ Cut: "I noticed that", "It seems like", "You might want to consider". Hedges lik
 does, since the author can read their own diff. Praise attached to individual
 comments; say it once in the summary.
 
+Write plain English throughout, in the summary as much as the inline comments:
+
+- Active voice, and name the agent. "This leaks the handle", not "a resource leak
+  may be introduced".
+- Concrete subjects. "The query runs once per row", not "there is a potential
+  performance implication".
+- Short words. "Because", not "due to the fact that". "To", not "in order to".
+  "Before", not "prior to". "Use", not "utilise".
+- Avoid leverage, robust, comprehensive, crucial, seamless, delve, streamline,
+  holistic, nuanced. Everyday words carry the same meaning and read faster.
+- Go easy on em-dashes. Commas and full stops do the same work.
+- Vary sentence length. A wall of 20-word sentences is tiring to read.
+- No trailing recap. The report opens with a Summary section; do not end with a
+  second paragraph restating what you just said. Stop when you are done.
+
 Examples:
 
 - Bad: "I noticed that on line 42 you're not checking if the user object is null
