@@ -194,6 +194,13 @@ a normal and good outcome; say so and stop.
 
 ## Before You Finalise
 
+Run the `plain-english` skill over your review summary and every inline comment
+before posting. It is a self-audit pass: it catches passive voice, abstract
+subjects, padding, and the vocabulary that makes writing read as machine-generated.
+Apply what it flags, then post.
+
+Then ask yourself:
+
 - What is the most likely production incident this code causes?
 - What did the author assume that nothing validates?
 - What happens when this meets real users, real data, real scale?

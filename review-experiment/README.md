@@ -45,6 +45,26 @@ reviewer with no verification requirement produces confident wrong comments, whi
 worse than a shallow review. Concerns that cannot be confirmed from the available code
 go under Suggestions or as a `q:`, never as Blocking.
 
+## Skills
+
+Skills live in `.claude/skills/` at the root of this repo, so they are live for anyone
+working in duchamp locally. The review workflow copies them to `~/.claude/skills/` on
+the runner, where Claude Code discovers them.
+
+The runner destination is the home directory, not the reviewed repo's `.claude/`,
+because repos ship skills of their own. Copying into the checkout would overwrite a
+repo's own skill on a name clash and leave untracked files in the tree under review.
+
+`plain-english` is the first one, vendored from a local skill under MIT. Only its
+frontmatter `description` was changed, to trigger on writing a review rather than on
+a user request. The experiment prompt runs it as a final pass. Skills install for
+every review, but the default prompt does not reference any, so default reviews are
+unchanged.
+
+To add another, drop it in `.claude/skills/<name>/SKILL.md` and reference it from a
+prompt. A skill nothing references is dead weight: it costs context on every review
+and never runs.
+
 ## Precedence
 
 1. A repo's `.claude-review.yml` `prompt:` field wins over everything. A repo that
