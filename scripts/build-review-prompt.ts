@@ -10,6 +10,11 @@ import * as path from "path"
  * - focus_areas: Array of specific things to watch for (added to default prompt)
  * - ignore_paths: Glob patterns for files to skip
  * - context: Additional context about the codebase
+ *
+ * PRs in the review experiment swap DEFAULT_PROMPT for review-experiment/prompt.md.
+ * A PR is in the experiment when its author is listed in
+ * review-experiment/participants.yml, or when it carries the EXPERIMENT_LABEL.
+ * See review-experiment/README.md.
  */
 
 interface ExcludeConfig {
@@ -99,6 +104,120 @@ Be constructive and explain your reasoning. Focus on substantive issues, not sty
 Remember: An empty "Issues Found" section is a valid and often correct outcome. The goal is accurate review, not comprehensive critique.
 `
 
+/** Label that opts a single PR into the experiment without enrolling its author. */
+export const EXPERIMENT_LABEL = "ai-review-experiment"
+
+/**
+ * Experiment files live in this repo's checkout, never in the PR under review, so a
+ * PR author cannot swap in their own review prompt through their own changes.
+ */
+const experimentPath = (file: string): string =>
+  path.join(__dirname, "..", "review-experiment", file)
+
+export const loadParticipants = (): string[] => {
+  const participantsPath = experimentPath("participants.yml")
+
+  if (!fs.existsSync(participantsPath)) {
+    return []
+  }
+
+  try {
+    const parsed = yaml.load(fs.readFileSync(participantsPath, "utf8")) as {
+      participants?: unknown
+    } | null
+    const participants = parsed?.participants
+
+    if (!Array.isArray(participants)) {
+      return []
+    }
+
+    return participants
+      .filter((login): login is string => typeof login === "string")
+      .map(login => login.toLowerCase())
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`Warning: Failed to parse participants.yml: ${message}`)
+    return []
+  }
+}
+
+/**
+ * Labels arrive from the workflow as a JSON array. Fall back to a comma-separated
+ * list so a hand-set PR_LABELS still works when testing locally.
+ */
+export const parseLabels = (raw: string | undefined): string[] => {
+  if (!raw) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map(label => (typeof label === "string" ? label : (label?.name ?? "")))
+        .filter((label: string) => label.length > 0)
+    }
+  } catch {
+    // Not JSON, treat it as a comma-separated list
+  }
+
+  return raw
+    .split(",")
+    .map(label => label.trim())
+    .filter(label => label.length > 0)
+}
+
+export const isExperimentPR = (
+  author: string | undefined,
+  labels: string[]
+): boolean => {
+  if (labels.some(label => label.toLowerCase() === EXPERIMENT_LABEL)) {
+    return true
+  }
+
+  if (!author) {
+    return false
+  }
+
+  return loadParticipants().includes(author.toLowerCase())
+}
+
+export const loadExperimentPrompt = (): string | null => {
+  const promptPath = experimentPath("prompt.md")
+
+  try {
+    return fs.readFileSync(promptPath, "utf8")
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(
+      `Warning: Failed to read review-experiment/prompt.md, falling back to the default prompt: ${message}`
+    )
+    return null
+  }
+}
+
+/**
+ * Pick the base prompt for this PR. Repo-level customisations are layered on top of
+ * whichever one comes back.
+ */
+export const resolveBasePrompt = (
+  author: string | undefined,
+  labels: string[]
+): string => {
+  if (!isExperimentPR(author, labels)) {
+    return DEFAULT_PROMPT
+  }
+
+  const experimentPrompt = loadExperimentPrompt()
+
+  if (!experimentPrompt) {
+    return DEFAULT_PROMPT
+  }
+
+  console.log("Using experimental review prompt")
+  return experimentPrompt
+}
+
 export const loadRepoConfig = (): RepoConfig | null => {
   const configPath = path.join(process.cwd(), ".claude-review.yml")
 
@@ -119,13 +238,19 @@ export const loadRepoConfig = (): RepoConfig | null => {
 export const buildPrompt = (): string => {
   const repoConfig = loadRepoConfig()
 
-  // If repo provides a complete custom prompt, use it directly
+  // If repo provides a complete custom prompt, use it directly. This wins over the
+  // experiment too - a repo that sets it has opted out.
   if (repoConfig?.prompt) {
     return repoConfig.prompt
   }
 
-  // Otherwise, build from default + customizations
-  const sections = [DEFAULT_PROMPT]
+  // Otherwise, build from the base prompt + customizations
+  const sections = [
+    resolveBasePrompt(
+      process.env.PR_AUTHOR,
+      parseLabels(process.env.PR_LABELS)
+    ),
+  ]
 
   if (repoConfig) {
     // Add repo-specific context

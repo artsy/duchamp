@@ -1,0 +1,14 @@
+# GitHub logins enrolled in the experimental review mode.
+#
+# PRs authored by anyone on this list are reviewed with review-experiment/prompt.md
+# instead of the default prompt, in every repo that uses the shared AI review
+# workflow. Everyone else is unaffected.
+#
+# To join or leave, add or remove your login and open a PR. Case does not matter.
+# Anyone can also try it on a single PR by adding the `ai-review-experiment` label,
+# without being on this list.
+#
+# See README.md in this directory.
+
+participants:
+  - MounirDhahri
