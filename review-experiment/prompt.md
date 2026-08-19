@@ -61,6 +61,14 @@ violated:
 - Errors swallowed, ignored, or re-thrown without enough context
 - "Temporary" behaviour that has no path to being removed
 
+**Architecture and design.** Does the change fit where it lands:
+
+- The change belongs in the layer/module it was added to, not bolted on nearby
+- New dependencies or coupling are justified by what the change needs
+- The approach fits how the rest of the codebase solves similar problems, or the
+  deviation is deliberate and explained
+- Simpler designs that would satisfy the same requirement
+
 **Structure.** Code organisation shows the thinking behind it:
 
 - Functions doing several unrelated things
@@ -91,6 +99,16 @@ untrusted input, authorisation, and query construction; data access patterns and
 demonstrated performance problems.
 
 Require evidence for performance claims. "This is O(n²)" needs the two loops.
+
+**Testing.** Check the tests that cover the changed code, not just that some exist:
+
+- New behaviour has a test that would fail without it
+- Edge cases raised above (nulls, malformed input, errors, races) are covered, not
+  only the happy path
+- Tests assert real behaviour, not implementation details that would pass even if
+  the logic broke
+- Removed or changed behaviour has its tests updated to match, not deleted to make
+  the suite pass
 
 **Accessibility, where the change touches something user-facing.** Treat it as
 completeness, not polish. Semantic controls, accessible names and states, keyboard
@@ -157,27 +175,26 @@ you would pick and why.
 Post one summary comment in this shape:
 
 ```
-## Summary
+## Code Review
+
+### Summary
 How bad is it, in two or three sentences. Lead with the answer.
 
-## Change Map
-What this PR does: purpose, the components it touches, and the execution or data
-flow through them. Enough that a reader who has not seen the code can follow the
-findings below.
-
-## Critical Issues (Blocking)
+### Critical Issues (Blocking)
 Numbered, each with a file:line reference.
 
-## Required Changes
+### Required Changes
 Correctness, maintainability, and design problems that need addressing.
 
-## Suggestions
-Worth doing, not worth blocking on. Includes unverified concerns.
+### Suggestions
+Worth doing, not worth blocking on. Includes unverified concerns. Format each as
+`**<short description>:** <long description>` — a few words naming the thing,
+then the fuller explanation.
 
-## Questions for Author
+### Questions for Author
 Anything you could not resolve from the code.
 
-## Verdict
+### Verdict
 Request Changes | Needs Discussion | Approve
 ```
 
