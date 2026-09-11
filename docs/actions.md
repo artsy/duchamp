@@ -11,6 +11,7 @@ This document provides detailed reference information for all GitHub Actions ava
 | `run-add-version-label.yml`          | Auto-add version labels to PRs | For repositories using auto-release |
 | `run-conventional-commits-check.yml` | Validate conventional commits  | For conventional commit compliance  |
 | `run-npm-audit.yml`                  | Discover vulnerabilities       | For Node projects                   |
+| `run-detect-secrets.yml`             | Scan changed files for secrets | For repos with a `.secrets.baseline` |
 | `run-claude-review.yml`              | AI-powered PR review           | For Claude-based code review        |
 | `link-pr-to-notion.yml`             | Link PRs to Notion tasks       | For repos using Notion task tracking |
 | `incident-standup-reminder.yml`      | Remind on-call to run standup  | For scheduled Slack standup reminders |
@@ -190,6 +191,36 @@ on:
     paths:
       - "yarn.lock"
 ```
+
+---
+
+### run-detect-secrets.yml
+
+**Purpose**: Scan files changed in a PR for committed secrets, using `detect-secrets` against a baseline
+
+**Use Case**: Repositories that want the same secret-scanning check volt runs on CircleCI, on GitHub Actions
+
+Copy `templates/run-detect-secrets.yml` into the calling repo.
+
+```yaml
+uses: artsy/duchamp/.github/workflows/detect-secrets.yml@main
+with:
+  baseline-path: ".secrets.baseline" # Path to the baseline file (default: ".secrets.baseline")
+```
+
+**Features:**
+
+- Runs in the `artsy/detect-secrets:ci` container, matching the tool version used on CircleCI
+- Scans only files changed against the PR base (or the repo's default branch outside of a PR)
+- If `detect-secrets-hook` rewrites the baseline, an update containing only the regenerated timestamp line is allowed through automatically; any other baseline change fails the check until committed
+
+**Requirements:**
+
+- Repository must have a `.secrets.baseline` file committed (generate with `detect-secrets scan > .secrets.baseline`)
+
+**Inputs:**
+
+- `baseline-path` (optional): Path to the `.secrets.baseline` file
 
 ---
 
@@ -629,6 +660,7 @@ jobs:
 | Automated releases              | `run-add-version-label.yml`          | Requires .autorc file                |
 | Conventional commits            | `run-conventional-commits-check.yml` | Enforces commit standards            |
 | Security vulnerability scanning | `run-npm-audit.yml`                  | Scans yarn.lock for vulnerabilities  |
+| Secret scanning                 | `run-detect-secrets.yml`             | Requires a committed .secrets.baseline |
 | AI-powered code review          | `run-claude-review.yml`              | Uses Claude to review PRs            |
 | Notion task tracking            | `link-pr-to-notion.yml`             | Links PRs to Notion tasks by short ID |
 | Scheduled on-call Slack reminders | `incident-standup-reminder.yml`   | Sources current on-call from incident.io |
