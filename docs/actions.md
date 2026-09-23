@@ -309,7 +309,7 @@ prompt: |
 
 An opt-in variant that reviews more deeply and comments more bluntly, with explicit
 `blocking:` / `required:` / `nit:` / `q:` severities and a Request Changes / Needs
-Discussion / Approve verdict. It runs on `claude-opus-5-5` at `medium` effort. Opt in by adding your GitHub login to
+Discussion / Approve verdict. It runs on `claude-opus-5-5` at `high` effort. Opt in by adding your GitHub login to
 `review-experiment/participants.yml`, or by adding the `ai-review-experiment` label to
 a single PR. See `review-experiment/README.md` for what changes and how it interacts
 with `.claude-review.yml`.

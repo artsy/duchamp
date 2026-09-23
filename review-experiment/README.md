@@ -18,7 +18,7 @@ Leaving is the same in reverse: remove your login, or drop the label.
 
 ## What changes
 
-Experiment reviews run on `claude-opus-5-5` at `medium` effort, whatever `model` the
+Experiment reviews run on `claude-opus-5-5` at `high` effort, whatever `model` the
 calling repo passes. The model and effort live in `scripts/build-review-prompt.ts`
 (`EXPERIMENT_MODEL`, `EXPERIMENT_EFFORT`). A repo that opts out through its own
 `prompt:` stays on its `model` input.

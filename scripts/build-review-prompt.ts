@@ -115,7 +115,7 @@ export const EXPERIMENT_LABEL = "ai-review-experiment"
 
 export const EXPERIMENT_MODEL = "claude-opus-5-5"
 
-export const EXPERIMENT_EFFORT = "medium"
+export const EXPERIMENT_EFFORT = "high"
 
 /**
  * Experiment files live in this repo's checkout, never in the PR under review, so a
