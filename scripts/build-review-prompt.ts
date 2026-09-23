@@ -314,7 +314,7 @@ const main = (): void => {
     const delimiter = `EOF_${Date.now()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\n`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\nexperiment=${experiment}\n`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {
