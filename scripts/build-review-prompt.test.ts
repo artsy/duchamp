@@ -2,12 +2,15 @@ import * as fs from "fs"
 import {
   buildPrompt,
   DEFAULT_PROMPT,
+  EXPERIMENT_EFFORT,
   EXPERIMENT_LABEL,
+  EXPERIMENT_MODEL,
   isExperimentPR,
   loadParticipants,
   loadRepoConfig,
   parseLabels,
   resolveBasePrompt,
+  resolveModelArgs,
 } from "./build-review-prompt"
 
 jest.mock("fs")
@@ -134,7 +137,7 @@ describe("buildPrompt", () => {
   it("returns default prompt when no config exists", () => {
     mockFs.existsSync.mockReturnValue(false)
 
-    const result = buildPrompt()
+    const { prompt: result } = buildPrompt()
 
     expect(result).toContain("senior staff engineer")
     expect(result).toContain("### Summary")
@@ -156,7 +159,7 @@ prompt: |
   Only look for security issues.
 `)
 
-    const result = buildPrompt()
+    const { prompt: result } = buildPrompt()
 
     expect(result).toContain("You are a custom security reviewer.")
     expect(result).toContain("Only look for security issues.")
@@ -170,7 +173,7 @@ context: |
   This is a Rails API.
 `)
 
-    const result = buildPrompt()
+    const { prompt: result } = buildPrompt()
 
     expect(result).toContain("## Repository Context")
     expect(result).toContain("This is a Rails API.")
@@ -184,7 +187,7 @@ focus_areas:
   - "Check authentication"
 `)
 
-    const result = buildPrompt()
+    const { prompt: result } = buildPrompt()
 
     expect(result).toContain("## Additional Focus Areas")
     expect(result).toContain("- Watch for N+1 queries")
@@ -198,7 +201,7 @@ ignore_paths:
   - "**/*.generated.ts"
 `)
 
-    const result = buildPrompt()
+    const { prompt: result } = buildPrompt()
 
     expect(result).toContain("## Files to Skip")
     expect(result).toContain("- **/*.generated.ts")
@@ -211,7 +214,7 @@ ignore_paths:
       "prompt.md": EXPERIMENT_PROMPT,
     })
 
-    const result = buildPrompt()
+    const { prompt: result } = buildPrompt()
 
     expect(result).toContain(EXPERIMENT_PROMPT)
     expect(result).not.toContain("senior staff engineer")
@@ -225,7 +228,7 @@ ignore_paths:
       "prompt.md": EXPERIMENT_PROMPT,
     })
 
-    const result = buildPrompt()
+    const { prompt: result } = buildPrompt()
 
     expect(result).toContain(EXPERIMENT_PROMPT)
   })
@@ -237,7 +240,7 @@ ignore_paths:
       "prompt.md": EXPERIMENT_PROMPT,
     })
 
-    const result = buildPrompt()
+    const { prompt: result } = buildPrompt()
 
     expect(result).toBe(DEFAULT_PROMPT)
   })
@@ -251,7 +254,7 @@ ignore_paths:
       "prompt.md": EXPERIMENT_PROMPT,
     })
 
-    const result = buildPrompt()
+    const { prompt: result } = buildPrompt()
 
     expect(result).toContain("You are a custom security reviewer.")
     expect(result).not.toContain(EXPERIMENT_PROMPT)
@@ -266,11 +269,86 @@ ignore_paths:
       "prompt.md": EXPERIMENT_PROMPT,
     })
 
-    const result = buildPrompt()
+    const { prompt: result } = buildPrompt()
 
     expect(result).toContain(EXPERIMENT_PROMPT)
     expect(result).toContain("- Watch for N+1 queries")
     expect(result).toContain("- **/*.generated.ts")
+  })
+})
+
+describe("buildPrompt experiment flag", () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    delete process.env.PR_AUTHOR
+    delete process.env.PR_LABELS
+  })
+
+  it("is true for an enrolled author", () => {
+    process.env.PR_AUTHOR = "MounirDhahri"
+    mockExperimentFiles({
+      "participants.yml": "participants:\n  - MounirDhahri\n",
+      "prompt.md": EXPERIMENT_PROMPT,
+    })
+
+    expect(buildPrompt().experiment).toBe(true)
+  })
+
+  it("is true for a labelled PR", () => {
+    process.env.PR_LABELS = JSON.stringify([EXPERIMENT_LABEL])
+    mockExperimentFiles({
+      "participants.yml": "participants: []\n",
+      "prompt.md": EXPERIMENT_PROMPT,
+    })
+
+    expect(buildPrompt().experiment).toBe(true)
+  })
+
+  it("is false for an author outside the experiment", () => {
+    process.env.PR_AUTHOR = "someone-else"
+    mockExperimentFiles({
+      "participants.yml": "participants:\n  - MounirDhahri\n",
+      "prompt.md": EXPERIMENT_PROMPT,
+    })
+
+    expect(buildPrompt().experiment).toBe(false)
+  })
+
+  it("is false when a repo prompt override opts out", () => {
+    process.env.PR_AUTHOR = "MounirDhahri"
+    mockExperimentFiles({
+      ".claude-review.yml":
+        "prompt: |\n  You are a custom security reviewer.\n",
+      "participants.yml": "participants:\n  - MounirDhahri\n",
+      "prompt.md": EXPERIMENT_PROMPT,
+    })
+
+    expect(buildPrompt().experiment).toBe(false)
+  })
+
+  it("is false when prompt.md is unreadable", () => {
+    const consoleSpy = jest.spyOn(console, "error").mockImplementation()
+    process.env.PR_AUTHOR = "MounirDhahri"
+    mockExperimentFiles({
+      "participants.yml": "participants:\n  - MounirDhahri\n",
+    })
+
+    expect(buildPrompt().experiment).toBe(false)
+    consoleSpy.mockRestore()
+  })
+})
+
+describe("resolveModelArgs", () => {
+  it("uses the experiment model and effort in the experiment", () => {
+    expect(resolveModelArgs(true, "claude-opus-4-8")).toBe(
+      `--model ${EXPERIMENT_MODEL} --effort ${EXPERIMENT_EFFORT}`
+    )
+  })
+
+  it("uses the workflow model with no effort flag otherwise", () => {
+    expect(resolveModelArgs(false, "claude-opus-4-8")).toBe(
+      "--model claude-opus-4-8"
+    )
   })
 })
 
@@ -364,7 +442,10 @@ describe("resolveBasePrompt", () => {
       "participants.yml": "participants:\n  - MounirDhahri\n",
     })
 
-    expect(resolveBasePrompt("MounirDhahri", [])).toBe(DEFAULT_PROMPT)
+    expect(resolveBasePrompt("MounirDhahri", [])).toEqual({
+      prompt: DEFAULT_PROMPT,
+      experiment: false,
+    })
     expect(consoleSpy).toHaveBeenCalledWith(
       expect.stringContaining("Failed to read review-experiment/prompt.md")
     )

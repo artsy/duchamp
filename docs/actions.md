@@ -223,7 +223,8 @@ secrets:
 
 **Inputs:**
 
-- `model` (optional): Claude model to use for the review
+- `model` (optional): Claude model to use for the review. PRs in the experimental
+  review mode ignore it and run on `claude-opus-5-5`
 - `timeout-minutes` (optional): Maximum time for the review job
 
 **Secrets:**
@@ -308,7 +309,7 @@ prompt: |
 
 An opt-in variant that reviews more deeply and comments more bluntly, with explicit
 `blocking:` / `required:` / `nit:` / `q:` severities and a Request Changes / Needs
-Discussion / Approve verdict. Opt in by adding your GitHub login to
+Discussion / Approve verdict. It runs on `claude-opus-5-5` at `high` effort. Opt in by adding your GitHub login to
 `review-experiment/participants.yml`, or by adding the `ai-review-experiment` label to
 a single PR. See `review-experiment/README.md` for what changes and how it interacts
 with `.claude-review.yml`.
