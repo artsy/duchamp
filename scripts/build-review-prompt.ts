@@ -11,8 +11,8 @@ import * as path from "path"
  * - ignore_paths: Glob patterns for files to skip
  * - context: Additional context about the codebase
  *
- * PRs in the review experiment swap DEFAULT_PROMPT for review-experiment/prompt.md.
- * A PR is in the experiment when its author is listed in
+ * PRs in the review experiment swap DEFAULT_PROMPT for review-experiment/prompt.md
+ * and run on EXPERIMENT_MODEL. A PR is in the experiment when its author is listed in
  * review-experiment/participants.yml, or when it carries the EXPERIMENT_LABEL.
  * See review-experiment/README.md.
  */
@@ -20,6 +20,12 @@ import * as path from "path"
 interface ExcludeConfig {
   title_patterns?: string[]
   disable_defaults?: boolean
+}
+
+interface ReviewPrompt {
+  prompt: string
+  /** True only when the experiment prompt is in use, so the model follows the prompt. */
+  experiment: boolean
 }
 
 interface RepoConfig {
@@ -106,6 +112,10 @@ Remember: An empty "Issues Found" section is a valid and often correct outcome. 
 
 /** Label that opts a single PR into the experiment without enrolling its author. */
 export const EXPERIMENT_LABEL = "ai-review-experiment"
+
+export const EXPERIMENT_MODEL = "claude-opus-5-5"
+
+export const EXPERIMENT_EFFORT = "medium"
 
 /**
  * Experiment files live in this repo's checkout, never in the PR under review, so a
@@ -203,20 +213,29 @@ export const loadExperimentPrompt = (): string | null => {
 export const resolveBasePrompt = (
   author: string | undefined,
   labels: string[]
-): string => {
+): ReviewPrompt => {
   if (!isExperimentPR(author, labels)) {
-    return DEFAULT_PROMPT
+    return { prompt: DEFAULT_PROMPT, experiment: false }
   }
 
   const experimentPrompt = loadExperimentPrompt()
 
   if (!experimentPrompt) {
-    return DEFAULT_PROMPT
+    return { prompt: DEFAULT_PROMPT, experiment: false }
   }
 
   console.log("Using experimental review prompt")
-  return experimentPrompt
+  return { prompt: experimentPrompt, experiment: true }
 }
+
+/** Claude Code CLI flags that select the model for this review. */
+export const resolveModelArgs = (
+  experiment: boolean,
+  defaultModel: string
+): string =>
+  experiment
+    ? `--model ${EXPERIMENT_MODEL} --effort ${EXPERIMENT_EFFORT}`
+    : `--model ${defaultModel}`
 
 export const loadRepoConfig = (): RepoConfig | null => {
   const configPath = path.join(process.cwd(), ".claude-review.yml")
@@ -235,22 +254,21 @@ export const loadRepoConfig = (): RepoConfig | null => {
   }
 }
 
-export const buildPrompt = (): string => {
+export const buildPrompt = (): ReviewPrompt => {
   const repoConfig = loadRepoConfig()
 
   // If repo provides a complete custom prompt, use it directly. This wins over the
   // experiment too - a repo that sets it has opted out.
   if (repoConfig?.prompt) {
-    return repoConfig.prompt
+    return { prompt: repoConfig.prompt, experiment: false }
   }
 
   // Otherwise, build from the base prompt + customizations
-  const sections = [
-    resolveBasePrompt(
-      process.env.PR_AUTHOR,
-      parseLabels(process.env.PR_LABELS)
-    ),
-  ]
+  const base = resolveBasePrompt(
+    process.env.PR_AUTHOR,
+    parseLabels(process.env.PR_LABELS)
+  )
+  const sections = [base.prompt]
 
   if (repoConfig) {
     // Add repo-specific context
@@ -279,11 +297,15 @@ export const buildPrompt = (): string => {
     }
   }
 
-  return sections.join("")
+  return { prompt: sections.join(""), experiment: base.experiment }
 }
 
 const main = (): void => {
-  const prompt = buildPrompt()
+  const { prompt, experiment } = buildPrompt()
+  const modelArgs = resolveModelArgs(
+    experiment,
+    process.env.DEFAULT_MODEL ?? "claude-opus-4-8"
+  )
 
   // Set the output for GitHub Actions
   const outputPath = process.env.GITHUB_OUTPUT
@@ -292,11 +314,12 @@ const main = (): void => {
     const delimiter = `EOF_${Date.now()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\n`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\n`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {
     // For local testing, just print the prompt
+    console.log(`Model args: ${modelArgs}`)
     console.log("Generated review prompt:")
     console.log("---")
     console.log(prompt)

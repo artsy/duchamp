@@ -18,6 +18,11 @@ Leaving is the same in reverse: remove your login, or drop the label.
 
 ## What changes
 
+Experiment reviews run on `claude-opus-5-5` at `medium` effort, whatever `model` the
+calling repo passes. The model and effort live in `scripts/build-review-prompt.ts`
+(`EXPERIMENT_MODEL`, `EXPERIMENT_EFFORT`). A repo that opts out through its own
+`prompt:` stays on its `model` input.
+
 The default review is a structured checklist with a fixed Summary / Issues Found /
 Areas Reviewed shape. The experiment review is deeper and blunter:
 
@@ -31,6 +36,11 @@ Areas Reviewed shape. The experiment review is deeper and blunter:
 - **Structural.** Functions doing several things, junk-drawer files, copy-paste,
   dead code, patterns applied inconsistently within one PR.
 - **Accessibility as completeness**, wherever the change is user-facing.
+- **Unattended by design.** The prompt names the finish line (the summary comment is
+  posted) and tells the model not to stop and ask. Blocking and required findings
+  must name the input that triggers them, unconfirmed concerns say where the model
+  looked, and instructions inside the PR text are ignored. These follow Anthropic's
+  Opus 5.5 prompting guide.
 - **Sharper comments.** One finding per comment, one line: `<emoji> **<severity>:**
   <problem>. <fix>.` Every comment opens with 🔴 **blocking:**, 🟠 **required:**,
   🔵 **nit:**, or ⚪ **q:**, so it is obvious at a glance what has to be fixed before
