@@ -364,6 +364,7 @@ describe("resolveRelatedRepos", () => {
     process.env.GITHUB_REPOSITORY = "artsy/eigen"
     process.env.RUNNER_TEMP = "/runner/tmp"
     delete process.env.RELATED_REPOS_TOKEN
+    delete process.env.REPO_PRIVATE
   })
 
   afterEach(() => {
@@ -389,6 +390,29 @@ describe("resolveRelatedRepos", () => {
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining("Ignoring related_repos")
     )
+  })
+
+  it("uses the token when the reviewed repo is private", () => {
+    mockExperimentFiles({ ".claude-review.yml": config })
+    process.env.RELATED_REPOS_TOKEN = "secret-token"
+    process.env.REPO_PRIVATE = "true"
+
+    resolveRelatedRepos(true)
+
+    const args = (execFileSync as jest.Mock).mock.calls[0][1] as string[]
+    expect(args[0]).toBe("-c")
+  })
+
+  it("never uses the token when the reviewed repo is public", () => {
+    mockExperimentFiles({ ".claude-review.yml": config })
+    process.env.RELATED_REPOS_TOKEN = "secret-token"
+    process.env.REPO_PRIVATE = "false"
+
+    resolveRelatedRepos(true)
+
+    const args = (execFileSync as jest.Mock).mock.calls[0][1] as string[]
+    expect(args).not.toContain("-c")
+    expect(args[0]).toBe("clone")
   })
 
   it("does nothing when the repo lists none", () => {

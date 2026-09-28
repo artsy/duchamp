@@ -326,12 +326,14 @@ export const resolveRelatedRepos = (experiment: boolean): RelatedRepo[] => {
     return []
   }
 
+  // Review comments on a public repo are public, so its reviews only read public
+  // related repos. Without the token, private ones fail to clone and are skipped.
+  const token =
+    process.env.REPO_PRIVATE === "true"
+      ? process.env.RELATED_REPOS_TOKEN || undefined
+      : undefined
   const destRoot = path.join(process.env.RUNNER_TEMP || os.tmpdir(), "related")
-  return cloneRelatedRepos(
-    repos,
-    destRoot,
-    process.env.RELATED_REPOS_TOKEN || undefined
-  )
+  return cloneRelatedRepos(repos, destRoot, token)
 }
 
 const main = (): void => {

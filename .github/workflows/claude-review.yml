@@ -196,11 +196,12 @@ jobs:
         env:
           YARN_IGNORE_PATH: 1
 
-      # Reads private related repos. A caller that doesn't pass the key yet still
-      # gets a review, just without the private repos.
+      # Reads private related repos, only when the reviewed repo is private too, so
+      # a public PR comment can't quote private code. A caller that doesn't pass the
+      # key yet still gets a review, just without the private repos.
       - name: Mint related repos token
         id: related-token
-        if: vars.REVIEW_APP_ID != ''
+        if: vars.REVIEW_APP_ID != '' && github.event.repository.private
         continue-on-error: true
         uses: actions/create-github-app-token@v3
         with:
@@ -217,6 +218,7 @@ jobs:
           PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
           DEFAULT_MODEL: ${{ inputs.model }}
           RELATED_REPOS_TOKEN: ${{ steps.related-token.outputs.token }}
+          REPO_PRIVATE: ${{ github.event.repository.private }}
 
       # claude-code-action@v1 installs Claude Code 2.1.278, and the API rejects
       # claude-opus-5-5 from anything older than 2.1.280.

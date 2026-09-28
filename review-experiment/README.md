@@ -87,6 +87,10 @@ repo with a log line. The token goes to git as a one-off header, so it is never
 written to disk where the agent could read it. To add a private repo, install the
 App on it.
 
+Only reviews of private repos get the token. Review comments on a public repo like
+eigen are public, and an agent that can read gravity could quote it there. So public
+repos read only public related repos, and their private entries are skipped.
+
 ## Skills
 
 Skills live in `.claude/skills/` at the root of this repo, so they are live for anyone
