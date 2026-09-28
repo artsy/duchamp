@@ -230,8 +230,9 @@ secrets:
 **Secrets:**
 
 - `anthropic-api-key` (required): Anthropic API key for Claude access
-- `related-repos-token` (optional): read-only token for private repos listed in
-  `related_repos`. Without it, private repos are skipped
+- `review-app-private-key` (optional): private key of the Artsy Review Context GitHub
+  App (org secret `REVIEW_APP_PRIVATE_KEY`). The workflow mints a read-only token from
+  it for private repos listed in `related_repos`. Without it, private repos are skipped
 
 **Setting Up the API Key:**
 

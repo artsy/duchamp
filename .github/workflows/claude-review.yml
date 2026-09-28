@@ -5,8 +5,8 @@ on:
     secrets:
       anthropic-api-key:
         required: true
-      related-repos-token:
-        description: "Read-only token for private repos listed in related_repos. Without it, private repos are skipped"
+      review-app-private-key:
+        description: "Private key of the Artsy Review Context GitHub App, which reads private repos listed in related_repos. Without it, private repos are skipped"
         required: false
     inputs:
       model:
@@ -196,6 +196,19 @@ jobs:
         env:
           YARN_IGNORE_PATH: 1
 
+      # Reads private related repos. A caller that doesn't pass the key yet still
+      # gets a review, just without the private repos.
+      - name: Mint related repos token
+        id: related-token
+        if: vars.REVIEW_APP_ID != ''
+        continue-on-error: true
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.REVIEW_APP_ID }}
+          private-key: ${{ secrets.review-app-private-key }}
+          owner: artsy
+          permission-contents: read
+
       - name: Build review prompt
         id: prompt
         run: npx ts-node .tooling/scripts/build-review-prompt.ts
@@ -203,7 +216,7 @@ jobs:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
           DEFAULT_MODEL: ${{ inputs.model }}
-          RELATED_REPOS_TOKEN: ${{ secrets.related-repos-token }}
+          RELATED_REPOS_TOKEN: ${{ steps.related-token.outputs.token }}
 
       # claude-code-action@v1 installs Claude Code 2.1.278, and the API rejects
       # claude-opus-5-5 from anything older than 2.1.280.

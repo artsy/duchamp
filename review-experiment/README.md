@@ -75,10 +75,17 @@ Changes another repo would need go under Suggestions, never Blocking. Default re
 ignore the list.
 
 Only `artsy/<name>` entries count, the repo under review is dropped, and the list is
-capped at five. Private repos need the optional `related-repos-token` secret, which
-must be a token with Contents: read on them. Without it, the clone fails and the
-review skips that repo with a log line. The token goes to git as a one-off header, so
-it is never written to disk where the agent could read it.
+capped at five.
+
+Private repos are read through the Artsy Review Context GitHub App, which has
+Contents: read on the repos it is installed on. The org holds its ID as the
+`REVIEW_APP_ID` variable and its key as the `REVIEW_APP_PRIVATE_KEY` secret. Callers
+pass the key as `review-app-private-key`, and the workflow mints a token that lasts
+one hour and is revoked when the job ends. A private repo the App isn't installed
+on, or a caller that doesn't pass the key, fails to clone, and the review skips that
+repo with a log line. The token goes to git as a one-off header, so it is never
+written to disk where the agent could read it. To add a private repo, install the
+App on it.
 
 ## Skills
 
