@@ -1,3 +1,4 @@
+import { execFileSync } from "child_process"
 import * as fs from "fs"
 import * as yaml from "js-yaml"
 import * as os from "os"
@@ -18,7 +19,8 @@ import {
  * - focus_areas: Array of specific things to watch for (added to default prompt)
  * - ignore_paths: Glob patterns for files to skip
  * - context: Additional context about the codebase
- * - related_repos: Other artsy/<name> repos that experiment reviews can read
+ * - related_repos: Other artsy/<name> repos that experiment reviews can read. Read
+ *   from the base branch, so a PR cannot grant its own review access to a repo
  *
  * PRs in the review experiment swap DEFAULT_PROMPT for review-experiment/prompt.md
  * and run on EXPERIMENT_MODEL. A PR is in the experiment when its author is listed in
@@ -310,10 +312,34 @@ export const buildPrompt = (): ReviewPrompt => {
   return { prompt: sections.join(""), experiment: base.experiment }
 }
 
+/**
+ * Read the repo config from the base branch rather than the PR head, so adding a
+ * related repo takes a merged, reviewed change. The review job checks out with
+ * fetch-depth: 0, so origin/<base> is available.
+ */
+export const loadBaseRepoConfig = (
+  baseRef: string | undefined
+): RepoConfig | null => {
+  if (!baseRef) {
+    return null
+  }
+
+  try {
+    const content = execFileSync(
+      "git",
+      ["show", `origin/${baseRef}:.claude-review.yml`],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+    )
+    return yaml.load(content) as RepoConfig
+  } catch {
+    return null
+  }
+}
+
 /** Clone the repo's related repos for an experiment review. Default reviews skip them. */
 export const resolveRelatedRepos = (experiment: boolean): RelatedRepo[] => {
   const repos = parseRelatedRepos(
-    loadRepoConfig()?.related_repos,
+    loadBaseRepoConfig(process.env.BASE_REF)?.related_repos,
     process.env.GITHUB_REPOSITORY
   )
 

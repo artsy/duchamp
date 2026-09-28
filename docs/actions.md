@@ -272,7 +272,8 @@ context: |
 - `context`: Additional context about your codebase architecture
 - `exclude`: PR exclusion rules (see below)
 - `related_repos`: other `artsy/<name>` repos that experiment reviews can read, such as
-  `artsy/metaphysics` (see `review-experiment/README.md`)
+  `artsy/metaphysics`. Read from the base branch, so changes apply once merged (see
+  `review-experiment/README.md`)
 
 **PR Exclusions:**
 

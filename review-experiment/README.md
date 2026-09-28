@@ -75,7 +75,10 @@ Changes another repo would need go under Suggestions, never Blocking. Default re
 ignore the list.
 
 Only `artsy/<name>` entries count, the repo under review is dropped, and the list is
-capped at five.
+capped at five. The list is read from the base branch's `.claude-review.yml`, not the
+PR's. A PR can't grant its own review access to a repo, so adding one takes a merged,
+reviewed change. A PR that adds `related_repos` gets no related repos in its own
+review.
 
 Private repos are read through the Artsy Review Context GitHub App, which has
 Contents: read on the repos it is installed on. The org holds its ID as the

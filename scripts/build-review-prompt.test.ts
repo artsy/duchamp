@@ -357,24 +357,49 @@ describe("resolveModelArgs", () => {
 
 describe("resolveRelatedRepos", () => {
   const config = 'related_repos:\n  - "artsy/metaphysics"\n'
+  const mockGit = execFileSync as jest.Mock
+
+  /** Answer `git show` with the base branch config and `git clone` with success. */
+  const mockBaseConfig = (
+    baseConfig: string | null,
+    clone: (args: string[]) => void = () => {}
+  ): void => {
+    mockGit.mockImplementation((_cmd: string, args: string[]) => {
+      if (args[0] === "show") {
+        if (baseConfig === null) {
+          throw new Error("fatal: path does not exist")
+        }
+        return baseConfig
+      }
+      clone(args)
+      return ""
+    })
+  }
+
+  const cloneCalls = (): string[][] =>
+    mockGit.mock.calls
+      .map(([, args]) => args as string[])
+      .filter(args => args[0] !== "show")
 
   beforeEach(() => {
     jest.clearAllMocks()
     jest.spyOn(console, "log").mockImplementation()
     process.env.GITHUB_REPOSITORY = "artsy/eigen"
     process.env.RUNNER_TEMP = "/runner/tmp"
+    process.env.BASE_REF = "main"
     delete process.env.RELATED_REPOS_TOKEN
-    delete process.env.REPO_PRIVATE
   })
 
   afterEach(() => {
     jest.restoreAllMocks()
+    mockGit.mockReset()
     delete process.env.GITHUB_REPOSITORY
     delete process.env.RUNNER_TEMP
+    delete process.env.BASE_REF
   })
 
-  it("clones related repos for an experiment review", () => {
-    mockExperimentFiles({ ".claude-review.yml": config })
+  it("clones the related repos the base branch lists", () => {
+    mockBaseConfig(config)
 
     expect(resolveRelatedRepos(true)).toEqual([
       {
@@ -383,24 +408,55 @@ describe("resolveRelatedRepos", () => {
         private: false,
       },
     ])
-    expect(execFileSync).toHaveBeenCalledTimes(1)
+    expect(mockGit).toHaveBeenCalledWith(
+      "git",
+      ["show", "origin/main:.claude-review.yml"],
+      expect.anything()
+    )
+    expect(cloneCalls()).toHaveLength(1)
+  })
+
+  it("ignores related repos that only the PR head lists", () => {
+    mockExperimentFiles({
+      ".claude-review.yml": 'related_repos:\n  - "artsy/gravity"\n',
+    })
+    mockBaseConfig("context: Rails\n")
+
+    expect(resolveRelatedRepos(true)).toEqual([])
+    expect(cloneCalls()).toHaveLength(0)
+  })
+
+  it("does nothing when the base branch has no config", () => {
+    mockBaseConfig(null)
+
+    expect(resolveRelatedRepos(true)).toEqual([])
+    expect(cloneCalls()).toHaveLength(0)
+  })
+
+  it("does nothing without a base ref", () => {
+    delete process.env.BASE_REF
+    mockBaseConfig(config)
+
+    expect(resolveRelatedRepos(true)).toEqual([])
+    expect(mockGit).not.toHaveBeenCalled()
   })
 
   it("skips them for a default review", () => {
-    mockExperimentFiles({ ".claude-review.yml": config })
+    mockBaseConfig(config)
 
     expect(resolveRelatedRepos(false)).toEqual([])
-    expect(execFileSync).not.toHaveBeenCalled()
+    expect(cloneCalls()).toHaveLength(0)
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining("Ignoring related_repos")
     )
   })
 
   it("passes the token on so a private repo can be cloned", () => {
-    mockExperimentFiles({ ".claude-review.yml": config })
     process.env.RELATED_REPOS_TOKEN = "secret-token"
-    ;(execFileSync as jest.Mock).mockImplementationOnce(() => {
-      throw new Error("could not read Username")
+    mockBaseConfig(config, args => {
+      if (args[0] === "clone") {
+        throw new Error("could not read Username")
+      }
     })
 
     expect(resolveRelatedRepos(true)).toEqual([
@@ -410,13 +466,6 @@ describe("resolveRelatedRepos", () => {
         private: true,
       },
     ])
-  })
-
-  it("does nothing when the repo lists none", () => {
-    mockExperimentFiles({ ".claude-review.yml": "context: Rails\n" })
-
-    expect(resolveRelatedRepos(true)).toEqual([])
-    expect(execFileSync).not.toHaveBeenCalled()
   })
 })
 
