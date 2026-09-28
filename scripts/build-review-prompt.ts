@@ -1,6 +1,14 @@
 import * as fs from "fs"
 import * as yaml from "js-yaml"
+import * as os from "os"
 import * as path from "path"
+import {
+  addDirArgs,
+  cloneRelatedRepos,
+  formatRelatedReposSection,
+  parseRelatedRepos,
+  type RelatedRepo,
+} from "./related-repos"
 
 /**
  * Build a review prompt by merging default Artsy guidelines with repo-specific configuration.
@@ -10,6 +18,7 @@ import * as path from "path"
  * - focus_areas: Array of specific things to watch for (added to default prompt)
  * - ignore_paths: Glob patterns for files to skip
  * - context: Additional context about the codebase
+ * - related_repos: Other artsy/<name> repos that experiment reviews can read
  *
  * PRs in the review experiment swap DEFAULT_PROMPT for review-experiment/prompt.md
  * and run on EXPERIMENT_MODEL. A PR is in the experiment when its author is listed in
@@ -34,6 +43,7 @@ interface RepoConfig {
   ignore_paths?: string[]
   context?: string
   exclude?: ExcludeConfig
+  related_repos?: string[]
 }
 
 export const DEFAULT_PROMPT = `You are a senior staff engineer conducting a code review.
@@ -300,12 +310,43 @@ export const buildPrompt = (): ReviewPrompt => {
   return { prompt: sections.join(""), experiment: base.experiment }
 }
 
-const main = (): void => {
-  const { prompt, experiment } = buildPrompt()
-  const modelArgs = resolveModelArgs(
-    experiment,
-    process.env.DEFAULT_MODEL ?? "claude-opus-4-8"
+/** Clone the repo's related repos for an experiment review. Default reviews skip them. */
+export const resolveRelatedRepos = (experiment: boolean): RelatedRepo[] => {
+  const repos = parseRelatedRepos(
+    loadRepoConfig()?.related_repos,
+    process.env.GITHUB_REPOSITORY
   )
+
+  if (repos.length === 0) {
+    return []
+  }
+
+  if (!experiment) {
+    console.log("Ignoring related_repos: only experiment reviews read them")
+    return []
+  }
+
+  const destRoot = path.join(process.env.RUNNER_TEMP || os.tmpdir(), "related")
+  return cloneRelatedRepos(
+    repos,
+    destRoot,
+    process.env.RELATED_REPOS_TOKEN || undefined
+  )
+}
+
+const main = (): void => {
+  const { prompt: basePrompt, experiment } = buildPrompt()
+  const related = resolveRelatedRepos(experiment)
+  const prompt = basePrompt + formatRelatedReposSection(related)
+  const modelArgs = [
+    resolveModelArgs(
+      experiment,
+      process.env.DEFAULT_MODEL ?? "claude-opus-4-8"
+    ),
+    addDirArgs(related),
+  ]
+    .filter(Boolean)
+    .join(" ")
 
   // Set the output for GitHub Actions
   const outputPath = process.env.GITHUB_OUTPUT

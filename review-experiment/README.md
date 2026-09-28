@@ -55,6 +55,31 @@ reviewer with no verification requirement produces confident wrong comments, whi
 worse than a shallow review. Concerns that cannot be confirmed from the available code
 go under Suggestions or as a `q:`, never as Blocking.
 
+## Related repos
+
+An experiment review can read other Artsy repos, so it can tell when a field already
+exists in metaphysics, or when logic added to a client belongs in metaphysics instead.
+A repo lists them in `.claude-review.yml`:
+
+```yaml
+related_repos:
+  - artsy/metaphysics
+  - artsy/gravity
+```
+
+For experiment PRs, `scripts/build-review-prompt.ts` shallow-clones each one's
+default branch into `$RUNNER_TEMP/related/` and passes it to Claude with `--add-dir`.
+It also appends a "Related Repositories" section to the prompt. That section tells the
+agent the checkouts are the default branch, so a missing field may be in an open PR.
+Changes another repo would need go under Suggestions, never Blocking. Default reviews
+ignore the list.
+
+Only `artsy/<name>` entries count, the repo under review is dropped, and the list is
+capped at five. Private repos need the optional `related-repos-token` secret, which
+must be a token with Contents: read on them. Without it, the clone fails and the
+review skips that repo with a log line. The token goes to git as a one-off header, so
+it is never written to disk where the agent could read it.
+
 ## Skills
 
 Skills live in `.claude/skills/` at the root of this repo, so they are live for anyone
@@ -82,6 +107,7 @@ and never runs.
 2. Otherwise the experiment prompt applies if the PR is in the experiment, and the
    default prompt if not.
 3. The repo's `context`, `focus_areas`, and `ignore_paths` are appended either way.
+   Its `related_repos` apply only to experiment reviews.
    Scope stays with the repo; the experiment only changes review style and depth.
 
 ## Attribution

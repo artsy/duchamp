@@ -230,6 +230,8 @@ secrets:
 **Secrets:**
 
 - `anthropic-api-key` (required): Anthropic API key for Claude access
+- `related-repos-token` (optional): read-only token for private repos listed in
+  `related_repos`. Without it, private repos are skipped
 
 **Setting Up the API Key:**
 
@@ -267,6 +269,8 @@ context: |
 - `ignore_paths`: Glob patterns for files Claude should skip reviewing
 - `context`: Additional context about your codebase architecture
 - `exclude`: PR exclusion rules (see below)
+- `related_repos`: other `artsy/<name>` repos that experiment reviews can read, such as
+  `artsy/metaphysics` (see `review-experiment/README.md`)
 
 **PR Exclusions:**
 

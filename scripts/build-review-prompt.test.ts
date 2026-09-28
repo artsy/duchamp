@@ -1,3 +1,4 @@
+import { execFileSync } from "child_process"
 import * as fs from "fs"
 import {
   buildPrompt,
@@ -11,9 +12,11 @@ import {
   parseLabels,
   resolveBasePrompt,
   resolveModelArgs,
+  resolveRelatedRepos,
 } from "./build-review-prompt"
 
 jest.mock("fs")
+jest.mock("child_process")
 
 const mockFs = fs as jest.Mocked<typeof fs>
 
@@ -349,6 +352,50 @@ describe("resolveModelArgs", () => {
     expect(resolveModelArgs(false, "claude-opus-4-8")).toBe(
       "--model claude-opus-4-8"
     )
+  })
+})
+
+describe("resolveRelatedRepos", () => {
+  const config = 'related_repos:\n  - "artsy/metaphysics"\n'
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    jest.spyOn(console, "log").mockImplementation()
+    process.env.GITHUB_REPOSITORY = "artsy/eigen"
+    process.env.RUNNER_TEMP = "/runner/tmp"
+    delete process.env.RELATED_REPOS_TOKEN
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+    delete process.env.GITHUB_REPOSITORY
+    delete process.env.RUNNER_TEMP
+  })
+
+  it("clones related repos for an experiment review", () => {
+    mockExperimentFiles({ ".claude-review.yml": config })
+
+    expect(resolveRelatedRepos(true)).toEqual([
+      { repo: "artsy/metaphysics", path: "/runner/tmp/related/metaphysics" },
+    ])
+    expect(execFileSync).toHaveBeenCalledTimes(1)
+  })
+
+  it("skips them for a default review", () => {
+    mockExperimentFiles({ ".claude-review.yml": config })
+
+    expect(resolveRelatedRepos(false)).toEqual([])
+    expect(execFileSync).not.toHaveBeenCalled()
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("Ignoring related_repos")
+    )
+  })
+
+  it("does nothing when the repo lists none", () => {
+    mockExperimentFiles({ ".claude-review.yml": "context: Rails\n" })
+
+    expect(resolveRelatedRepos(true)).toEqual([])
+    expect(execFileSync).not.toHaveBeenCalled()
   })
 })
 
