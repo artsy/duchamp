@@ -271,7 +271,8 @@ context: |
 - `ignore_paths`: Glob patterns for files Claude should skip reviewing
 - `context`: Additional context about your codebase architecture
 - `exclude`: PR exclusion rules (see below)
-- `related_repos`: other `artsy/<name>` repos that experiment reviews can read, such as
+- `related_repos`: other `artsy/<name>` repos that experiment reviews by authors in
+  `review-experiment/related-repos-participants.yml` can read, such as
   `artsy/metaphysics`. Read from the default branch, so changes apply once merged (see
   `review-experiment/README.md`)
 

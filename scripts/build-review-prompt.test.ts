@@ -1,5 +1,6 @@
 import { execFileSync } from "child_process"
 import * as fs from "fs"
+import * as path from "path"
 import {
   buildPrompt,
   DEFAULT_PROMPT,
@@ -13,6 +14,7 @@ import {
   resolveBasePrompt,
   resolveModelArgs,
   resolveRelatedRepos,
+  usesRelatedRepos,
 } from "./build-review-prompt"
 
 jest.mock("fs")
@@ -25,11 +27,11 @@ const EXPERIMENT_PROMPT = "You are a senior engineer reviewing a pull request."
 /** Mock fs so only the named experiment files exist, each returning its content. */
 const mockExperimentFiles = (files: Record<string, string>): void => {
   mockFs.existsSync.mockImplementation(
-    p => typeof p === "string" && Object.keys(files).some(f => p.endsWith(f))
+    p => typeof p === "string" && path.basename(p) in files
   )
   mockFs.readFileSync.mockImplementation(p => {
     const match = Object.keys(files).find(
-      f => typeof p === "string" && p.endsWith(f)
+      f => typeof p === "string" && path.basename(p) === f
     )
     if (!match) {
       throw new Error(`ENOENT: ${String(p)}`)
@@ -352,6 +354,39 @@ describe("resolveModelArgs", () => {
     expect(resolveModelArgs(false, "claude-opus-4-8")).toBe(
       "--model claude-opus-4-8"
     )
+  })
+})
+
+describe("usesRelatedRepos", () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockExperimentFiles({
+      "participants.yml": "participants:\n  - MounirDhahri\n  - someone-else\n",
+      "related-repos-participants.yml": "participants:\n  - MounirDhahri\n",
+    })
+  })
+
+  it("is true for an experiment PR by a related-repos participant", () => {
+    expect(usesRelatedRepos(true, "mounirdhahri")).toBe(true)
+  })
+
+  it("is false for an experiment participant not on the related-repos list", () => {
+    expect(usesRelatedRepos(true, "someone-else")).toBe(false)
+  })
+
+  it("is false outside the experiment, even for a listed author", () => {
+    expect(usesRelatedRepos(false, "MounirDhahri")).toBe(false)
+  })
+
+  it("is false with no author", () => {
+    expect(usesRelatedRepos(true, undefined)).toBe(false)
+  })
+
+  it("is false when the list is missing", () => {
+    mockExperimentFiles({
+      "participants.yml": "participants:\n  - MounirDhahri\n",
+    })
+    expect(usesRelatedRepos(true, "MounirDhahri")).toBe(false)
   })
 })
 

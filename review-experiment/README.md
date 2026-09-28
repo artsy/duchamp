@@ -57,6 +57,11 @@ go under Suggestions or as a `q:`, never as Blocking.
 
 ## Related repos
 
+Related repos have their own opt-in list, `related-repos-participants.yml`, because
+they change more than the prompt does. A PR gets them only when it is in the
+experiment and its author is on that list. The `ai-review-experiment` label alone is
+not enough. To join, add your login there and open a PR.
+
 An experiment review can read other Artsy repos, so it can tell when a field already
 exists in metaphysics, or when logic added to a client belongs in metaphysics instead.
 A repo lists them in `.claude-review.yml`:
@@ -67,12 +72,12 @@ related_repos:
   - artsy/gravity
 ```
 
-For experiment PRs, `scripts/build-review-prompt.ts` shallow-clones each one's
+For those PRs, `scripts/build-review-prompt.ts` shallow-clones each one's
 default branch into `$RUNNER_TEMP/related/` and passes it to Claude with `--add-dir`.
 It also appends a "Related Repositories" section to the prompt. That section tells the
 agent the checkouts are the default branch, so a missing field may be in an open PR.
-Changes another repo would need go under Suggestions, never Blocking. Default reviews
-ignore the list.
+Changes another repo would need go under Suggestions, never Blocking. Every other
+review ignores the list.
 
 Only `artsy/<name>` entries count, the repo under review is dropped, and the list is
 capped at five. The list is read from the default branch's `.claude-review.yml`,
@@ -174,7 +179,8 @@ and never runs.
 2. Otherwise the experiment prompt applies if the PR is in the experiment, and the
    default prompt if not.
 3. The repo's `context`, `focus_areas`, and `ignore_paths` are appended either way.
-   Its `related_repos` apply only to experiment reviews.
+   Its `related_repos` apply only to experiment PRs by authors in
+   `related-repos-participants.yml`.
    Scope stays with the repo; the experiment only changes review style and depth.
 
 ## Attribution

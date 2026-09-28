@@ -136,8 +136,8 @@ export const EXPERIMENT_EFFORT = "high"
 const experimentPath = (file: string): string =>
   path.join(__dirname, "..", "review-experiment", file)
 
-export const loadParticipants = (): string[] => {
-  const participantsPath = experimentPath("participants.yml")
+export const loadParticipants = (file = "participants.yml"): string[] => {
+  const participantsPath = experimentPath(file)
 
   if (!fs.existsSync(participantsPath)) {
     return []
@@ -158,7 +158,7 @@ export const loadParticipants = (): string[] => {
       .map(login => login.toLowerCase())
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`Warning: Failed to parse participants.yml: ${message}`)
+    console.error(`Warning: Failed to parse ${file}: ${message}`)
     return []
   }
 }
@@ -203,6 +203,20 @@ export const isExperimentPR = (
 
   return loadParticipants().includes(author.toLowerCase())
 }
+
+export const RELATED_REPOS_PARTICIPANTS = "related-repos-participants.yml"
+
+/**
+ * Related repos are a bigger change than the experiment prompt, so they have their
+ * own, smaller opt-in list on top of the experiment. The label alone is not enough.
+ */
+export const usesRelatedRepos = (
+  experiment: boolean,
+  author: string | undefined
+): boolean =>
+  experiment &&
+  !!author &&
+  loadParticipants(RELATED_REPOS_PARTICIPANTS).includes(author.toLowerCase())
 
 export const loadExperimentPrompt = (): string | null => {
   const promptPath = experimentPath("prompt.md")
@@ -337,8 +351,8 @@ export const loadDefaultBranchRepoConfig = (
   }
 }
 
-/** Clone the repo's related repos for an experiment review. Default reviews skip them. */
-export const resolveRelatedRepos = (experiment: boolean): RelatedRepo[] => {
+/** Clone the repo's related repos when this review uses them (see usesRelatedRepos). */
+export const resolveRelatedRepos = (enabled: boolean): RelatedRepo[] => {
   const repos = parseRelatedRepos(
     loadDefaultBranchRepoConfig(process.env.DEFAULT_BRANCH)?.related_repos,
     process.env.GITHUB_REPOSITORY
@@ -348,8 +362,10 @@ export const resolveRelatedRepos = (experiment: boolean): RelatedRepo[] => {
     return []
   }
 
-  if (!experiment) {
-    console.log("Ignoring related_repos: only experiment reviews read them")
+  if (!enabled) {
+    console.log(
+      `Ignoring related_repos: only experiment PRs by authors in ${RELATED_REPOS_PARTICIPANTS} read them`
+    )
     return []
   }
 
@@ -364,17 +380,24 @@ export const resolveRelatedRepos = (experiment: boolean): RelatedRepo[] => {
 const main = (): void => {
   const { prompt: basePrompt, experiment } = buildPrompt()
 
-  // Lets the workflow skip minting the related repos token for default reviews.
+  const relatedEnabled = usesRelatedRepos(experiment, process.env.PR_AUTHOR)
+
+  // Lets the workflow skip minting the related repos token for reviews that don't use it.
   if (process.argv.includes("--experiment-only")) {
     const outputPath = process.env.GITHUB_OUTPUT
     if (outputPath) {
-      fs.appendFileSync(outputPath, `experiment=${experiment}\n`)
+      fs.appendFileSync(
+        outputPath,
+        `experiment=${experiment}\nrelated_repos=${relatedEnabled}\n`
+      )
     }
-    console.log(`Experiment review: ${experiment}`)
+    console.log(
+      `Experiment review: ${experiment}, related repos: ${relatedEnabled}`
+    )
     return
   }
 
-  const related = resolveRelatedRepos(experiment)
+  const related = resolveRelatedRepos(relatedEnabled)
   const prompt =
     basePrompt +
     formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true")
