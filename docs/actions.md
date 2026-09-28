@@ -230,6 +230,10 @@ secrets:
 **Secrets:**
 
 - `anthropic-api-key` (required): Anthropic API key for Claude access
+- `review-app-private-key` (optional): private key of the Artsy Review Context GitHub
+  App (org secret `REVIEW_APP_PRIVATE_KEY`). The workflow mints a read-only token from
+  it for private repos listed in `related_repos`. Without it, private related repos are
+  skipped
 
 **Setting Up the API Key:**
 
@@ -267,6 +271,10 @@ context: |
 - `ignore_paths`: Glob patterns for files Claude should skip reviewing
 - `context`: Additional context about your codebase architecture
 - `exclude`: PR exclusion rules (see below)
+- `related_repos`: other `artsy/<name>` repos that experiment reviews by authors in
+  `review-experiment/related-repos-participants.yml` can read, such as
+  `artsy/metaphysics`. Read from the default branch, so changes apply once merged (see
+  `review-experiment/README.md`)
 
 **PR Exclusions:**
 

@@ -1,4 +1,6 @@
+import { execFileSync } from "child_process"
 import * as fs from "fs"
+import * as path from "path"
 import {
   buildPrompt,
   DEFAULT_PROMPT,
@@ -11,9 +13,12 @@ import {
   parseLabels,
   resolveBasePrompt,
   resolveModelArgs,
+  resolveRelatedRepos,
+  usesRelatedRepos,
 } from "./build-review-prompt"
 
 jest.mock("fs")
+jest.mock("child_process")
 
 const mockFs = fs as jest.Mocked<typeof fs>
 
@@ -22,11 +27,11 @@ const EXPERIMENT_PROMPT = "You are a senior engineer reviewing a pull request."
 /** Mock fs so only the named experiment files exist, each returning its content. */
 const mockExperimentFiles = (files: Record<string, string>): void => {
   mockFs.existsSync.mockImplementation(
-    p => typeof p === "string" && Object.keys(files).some(f => p.endsWith(f))
+    p => typeof p === "string" && path.basename(p) in files
   )
   mockFs.readFileSync.mockImplementation(p => {
     const match = Object.keys(files).find(
-      f => typeof p === "string" && p.endsWith(f)
+      f => typeof p === "string" && path.basename(p) === f
     )
     if (!match) {
       throw new Error(`ENOENT: ${String(p)}`)
@@ -349,6 +354,172 @@ describe("resolveModelArgs", () => {
     expect(resolveModelArgs(false, "claude-opus-4-8")).toBe(
       "--model claude-opus-4-8"
     )
+  })
+})
+
+describe("usesRelatedRepos", () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockExperimentFiles({
+      "participants.yml": "participants:\n  - MounirDhahri\n  - someone-else\n",
+      "related-repos-participants.yml": "participants:\n  - MounirDhahri\n",
+    })
+  })
+
+  it("is true for an experiment PR by a related-repos participant", () => {
+    expect(usesRelatedRepos(true, "mounirdhahri")).toBe(true)
+  })
+
+  it("is false for an experiment participant not on the related-repos list", () => {
+    expect(usesRelatedRepos(true, "someone-else")).toBe(false)
+  })
+
+  it("is false outside the experiment, even for a listed author", () => {
+    expect(usesRelatedRepos(false, "MounirDhahri")).toBe(false)
+  })
+
+  it("is false with no author", () => {
+    expect(usesRelatedRepos(true, undefined)).toBe(false)
+  })
+
+  it("is false when the list is missing", () => {
+    mockExperimentFiles({
+      "participants.yml": "participants:\n  - MounirDhahri\n",
+    })
+    expect(usesRelatedRepos(true, "MounirDhahri")).toBe(false)
+  })
+})
+
+describe("resolveRelatedRepos", () => {
+  const config = 'related_repos:\n  - "artsy/metaphysics"\n'
+  const mockGit = execFileSync as jest.Mock
+
+  /** Answer `git show` with the default branch config and `git clone` with success. */
+  const mockBaseConfig = (
+    baseConfig: string | null,
+    clone: (args: string[]) => void = () => {}
+  ): void => {
+    mockGit.mockImplementation((_cmd: string, args: string[]) => {
+      if (args[0] === "show") {
+        if (baseConfig === null) {
+          throw new Error("fatal: path does not exist")
+        }
+        return baseConfig
+      }
+      clone(args)
+      return ""
+    })
+  }
+
+  const cloneCalls = (): string[][] =>
+    mockGit.mock.calls
+      .map(([, args]) => args as string[])
+      .filter(args => args[0] !== "show")
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    jest.spyOn(console, "log").mockImplementation()
+    process.env.GITHUB_REPOSITORY = "artsy/eigen"
+    process.env.RUNNER_TEMP = "/runner/tmp"
+    process.env.DEFAULT_BRANCH = "main"
+    delete process.env.RELATED_REPOS_TOKEN
+  })
+
+  afterEach(() => {
+    jest.restoreAllMocks()
+    mockGit.mockReset()
+    delete process.env.GITHUB_REPOSITORY
+    delete process.env.RUNNER_TEMP
+    delete process.env.DEFAULT_BRANCH
+    delete process.env.BASE_REF
+  })
+
+  it("clones the related repos the default branch lists", () => {
+    mockBaseConfig(config)
+
+    expect(resolveRelatedRepos(true)).toEqual([
+      {
+        repo: "artsy/metaphysics",
+        path: "/runner/tmp/related/metaphysics",
+        private: false,
+      },
+    ])
+    expect(mockGit).toHaveBeenCalledWith(
+      "git",
+      ["show", "origin/main:.claude-review.yml"],
+      expect.anything()
+    )
+    expect(cloneCalls()).toHaveLength(1)
+  })
+
+  it("ignores related repos that only the PR head lists", () => {
+    mockExperimentFiles({
+      ".claude-review.yml": 'related_repos:\n  - "artsy/gravity"\n',
+    })
+    mockBaseConfig("context: Rails\n")
+
+    expect(resolveRelatedRepos(true)).toEqual([])
+    expect(cloneCalls()).toHaveLength(0)
+  })
+
+  it("does nothing when the default branch has no config", () => {
+    mockBaseConfig(null)
+
+    expect(resolveRelatedRepos(true)).toEqual([])
+    expect(cloneCalls()).toHaveLength(0)
+  })
+
+  it("reads the default branch even when the PR targets another branch", () => {
+    process.env.BASE_REF = "foo"
+    mockBaseConfig(config)
+
+    resolveRelatedRepos(true)
+
+    expect(mockGit).toHaveBeenCalledWith(
+      "git",
+      ["show", "origin/main:.claude-review.yml"],
+      expect.anything()
+    )
+    expect(mockGit).not.toHaveBeenCalledWith(
+      "git",
+      ["show", "origin/foo:.claude-review.yml"],
+      expect.anything()
+    )
+  })
+
+  it("does nothing without a default branch", () => {
+    delete process.env.DEFAULT_BRANCH
+    mockBaseConfig(config)
+
+    expect(resolveRelatedRepos(true)).toEqual([])
+    expect(mockGit).not.toHaveBeenCalled()
+  })
+
+  it("skips them for a default review", () => {
+    mockBaseConfig(config)
+
+    expect(resolveRelatedRepos(false)).toEqual([])
+    expect(cloneCalls()).toHaveLength(0)
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("Ignoring related_repos")
+    )
+  })
+
+  it("passes the token on so a private repo can be cloned", () => {
+    process.env.RELATED_REPOS_TOKEN = "secret-token"
+    mockBaseConfig(config, args => {
+      if (args[0] === "clone") {
+        throw new Error("could not read Username")
+      }
+    })
+
+    expect(resolveRelatedRepos(true)).toEqual([
+      {
+        repo: "artsy/metaphysics",
+        path: "/runner/tmp/related/metaphysics",
+        private: true,
+      },
+    ])
   })
 })
 

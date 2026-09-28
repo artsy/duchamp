@@ -1,6 +1,15 @@
+import { execFileSync } from "child_process"
 import * as fs from "fs"
 import * as yaml from "js-yaml"
+import * as os from "os"
 import * as path from "path"
+import {
+  addDirArgs,
+  cloneRelatedRepos,
+  formatRelatedReposSection,
+  parseRelatedRepos,
+  type RelatedRepo,
+} from "./related-repos"
 
 /**
  * Build a review prompt by merging default Artsy guidelines with repo-specific configuration.
@@ -10,6 +19,8 @@ import * as path from "path"
  * - focus_areas: Array of specific things to watch for (added to default prompt)
  * - ignore_paths: Glob patterns for files to skip
  * - context: Additional context about the codebase
+ * - related_repos: Other artsy/<name> repos that experiment reviews can read. Read
+ *   from the default branch, so a PR cannot grant its own review access to a repo
  *
  * PRs in the review experiment swap DEFAULT_PROMPT for review-experiment/prompt.md
  * and run on EXPERIMENT_MODEL. A PR is in the experiment when its author is listed in
@@ -34,6 +45,7 @@ interface RepoConfig {
   ignore_paths?: string[]
   context?: string
   exclude?: ExcludeConfig
+  related_repos?: string[]
 }
 
 export const DEFAULT_PROMPT = `You are a senior staff engineer conducting a code review.
@@ -124,8 +136,8 @@ export const EXPERIMENT_EFFORT = "high"
 const experimentPath = (file: string): string =>
   path.join(__dirname, "..", "review-experiment", file)
 
-export const loadParticipants = (): string[] => {
-  const participantsPath = experimentPath("participants.yml")
+export const loadParticipants = (file = "participants.yml"): string[] => {
+  const participantsPath = experimentPath(file)
 
   if (!fs.existsSync(participantsPath)) {
     return []
@@ -146,7 +158,7 @@ export const loadParticipants = (): string[] => {
       .map(login => login.toLowerCase())
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`Warning: Failed to parse participants.yml: ${message}`)
+    console.error(`Warning: Failed to parse ${file}: ${message}`)
     return []
   }
 }
@@ -191,6 +203,20 @@ export const isExperimentPR = (
 
   return loadParticipants().includes(author.toLowerCase())
 }
+
+export const RELATED_REPOS_PARTICIPANTS = "related-repos-participants.yml"
+
+/**
+ * Related repos are a bigger change than the experiment prompt, so they have their
+ * own, smaller opt-in list on top of the experiment. The label alone is not enough.
+ */
+export const usesRelatedRepos = (
+  experiment: boolean,
+  author: string | undefined
+): boolean =>
+  experiment &&
+  !!author &&
+  loadParticipants(RELATED_REPOS_PARTICIPANTS).includes(author.toLowerCase())
 
 export const loadExperimentPrompt = (): string | null => {
   const promptPath = experimentPath("prompt.md")
@@ -300,12 +326,90 @@ export const buildPrompt = (): ReviewPrompt => {
   return { prompt: sections.join(""), experiment: base.experiment }
 }
 
-const main = (): void => {
-  const { prompt, experiment } = buildPrompt()
-  const modelArgs = resolveModelArgs(
-    experiment,
-    process.env.DEFAULT_MODEL ?? "claude-opus-4-8"
+/**
+ * Read the repo config from the default branch, so adding a related repo takes a
+ * merged, reviewed change. Not the PR's base branch: the author picks that, and can
+ * point the PR at a branch they pushed themselves. The review job checks out with
+ * fetch-depth: 0, so origin/<default> is available.
+ */
+export const loadDefaultBranchRepoConfig = (
+  defaultBranch: string | undefined
+): RepoConfig | null => {
+  if (!defaultBranch) {
+    return null
+  }
+
+  try {
+    const content = execFileSync(
+      "git",
+      ["show", `origin/${defaultBranch}:.claude-review.yml`],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+    )
+    return yaml.load(content) as RepoConfig
+  } catch {
+    return null
+  }
+}
+
+/** Clone the repo's related repos when this review uses them (see usesRelatedRepos). */
+export const resolveRelatedRepos = (enabled: boolean): RelatedRepo[] => {
+  const repos = parseRelatedRepos(
+    loadDefaultBranchRepoConfig(process.env.DEFAULT_BRANCH)?.related_repos,
+    process.env.GITHUB_REPOSITORY
   )
+
+  if (repos.length === 0) {
+    return []
+  }
+
+  if (!enabled) {
+    console.log(
+      `Ignoring related_repos: only experiment PRs by authors in ${RELATED_REPOS_PARTICIPANTS} read them`
+    )
+    return []
+  }
+
+  const destRoot = path.join(process.env.RUNNER_TEMP || os.tmpdir(), "related")
+  return cloneRelatedRepos(
+    repos,
+    destRoot,
+    process.env.RELATED_REPOS_TOKEN || undefined
+  )
+}
+
+const main = (): void => {
+  const { prompt: basePrompt, experiment } = buildPrompt()
+
+  const relatedEnabled = usesRelatedRepos(experiment, process.env.PR_AUTHOR)
+
+  // Lets the workflow skip minting the related repos token for reviews that don't use it.
+  if (process.argv.includes("--experiment-only")) {
+    const outputPath = process.env.GITHUB_OUTPUT
+    if (outputPath) {
+      fs.appendFileSync(
+        outputPath,
+        `experiment=${experiment}\nrelated_repos=${relatedEnabled}\n`
+      )
+    }
+    console.log(
+      `Experiment review: ${experiment}, related repos: ${relatedEnabled}`
+    )
+    return
+  }
+
+  const related = resolveRelatedRepos(relatedEnabled)
+  const prompt =
+    basePrompt +
+    formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true")
+  const modelArgs = [
+    resolveModelArgs(
+      experiment,
+      process.env.DEFAULT_MODEL ?? "claude-opus-4-8"
+    ),
+    addDirArgs(related),
+  ]
+    .filter(Boolean)
+    .join(" ")
 
   // Set the output for GitHub Actions
   const outputPath = process.env.GITHUB_OUTPUT
