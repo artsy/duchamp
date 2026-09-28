@@ -95,6 +95,54 @@ inside the private repo. The rule is enforced only by the prompt, so check the f
 reviews on public repos for slips. A repo counts as private when it can't be cloned
 without the token.
 
+### What changes in a review
+
+These are made-up PRs, to show the shape of the comments.
+
+**A gravity PR (private): full detail.** The PR renames `sale_message` to
+`availability_message` in the artwork API response. Gravity reads metaphysics and
+volt, which consume that API.
+
+- Before, seeing gravity only:
+  > 🔵 **nit:** `availability_message` duplicates the `availability` field's meaning.
+  > Consider folding it into `availability_details`.
+- After, also seeing metaphysics and volt:
+  > 🔴 **blocking:** metaphysics still reads `sale_message` from this endpoint
+  > (`src/schema/v2/artwork/index.ts`, the `saleMessage` resolver). After this ships,
+  > `saleMessage` returns `null` for every artwork, on web and in the app. Keep
+  > `sale_message` as an alias until metaphysics moves over, or pair this with an MP PR.
+
+A private PR can name consumer files, because everyone who can read it can read them.
+
+**An eigen PR (public): nudges only.** The PR adds a "Sold out" badge by working out
+availability in the app from `artwork.editionSets`.
+
+- Before:
+  > 🔵 **nit:** extract `isSoldOut` into `app/utils/artwork.ts` so other scenes can
+  > share it.
+- After:
+  > 🟠 **required:** `isSoldOut` recomputes availability that the API already decides,
+  > and gets it wrong for works with a hold. The badge will disagree with the Buy
+  > button. Use `artwork.isSold` (already in `data/schema.graphql`) instead of
+  > deriving it here.
+
+  > ⚪ **q:** the backend treats "on hold" as unavailable, but this counts it as
+  > available. Is showing those works as for sale intended?
+- Not allowed, because it describes how gravity is built on a public PR:
+  > ~~🟠 **required:** gravity's `Artwork#sold?` checks `edition_sets.any?(&:on_hold)`
+  > too, so this disagrees with it.~~
+
+**A metaphysics PR (public): nudges only.** The PR adds a `partnerRevenue` field to
+`Partner` with a new loader.
+
+- After:
+  > ⚪ **q:** the API doesn't seem to serve revenue at this endpoint for non-admin
+  > tokens. Does this loader need `authenticatedLoaders`, or will it return `null`
+  > for every regular user?
+
+On a private PR, related repos give full specifics. On a public PR, they give
+conclusions about the PR's own lines.
+
 ## Skills
 
 Skills live in `.claude/skills/` at the root of this repo, so they are live for anyone
