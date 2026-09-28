@@ -232,8 +232,8 @@ secrets:
 - `anthropic-api-key` (required): Anthropic API key for Claude access
 - `review-app-private-key` (optional): private key of the Artsy Review Context GitHub
   App (org secret `REVIEW_APP_PRIVATE_KEY`). The workflow mints a read-only token from
-  it for private repos listed in `related_repos`, only when the reviewed repo is private
-  too. Without it, and on public repos, private related repos are skipped
+  it for private repos listed in `related_repos`. Without it, private related repos are
+  skipped
 
 **Setting Up the API Key:**
 

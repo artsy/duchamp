@@ -377,7 +377,11 @@ describe("resolveRelatedRepos", () => {
     mockExperimentFiles({ ".claude-review.yml": config })
 
     expect(resolveRelatedRepos(true)).toEqual([
-      { repo: "artsy/metaphysics", path: "/runner/tmp/related/metaphysics" },
+      {
+        repo: "artsy/metaphysics",
+        path: "/runner/tmp/related/metaphysics",
+        private: false,
+      },
     ])
     expect(execFileSync).toHaveBeenCalledTimes(1)
   })
@@ -392,27 +396,20 @@ describe("resolveRelatedRepos", () => {
     )
   })
 
-  it("uses the token when the reviewed repo is private", () => {
+  it("passes the token on so a private repo can be cloned", () => {
     mockExperimentFiles({ ".claude-review.yml": config })
     process.env.RELATED_REPOS_TOKEN = "secret-token"
-    process.env.REPO_PRIVATE = "true"
+    ;(execFileSync as jest.Mock).mockImplementationOnce(() => {
+      throw new Error("could not read Username")
+    })
 
-    resolveRelatedRepos(true)
-
-    const args = (execFileSync as jest.Mock).mock.calls[0][1] as string[]
-    expect(args[0]).toBe("-c")
-  })
-
-  it("never uses the token when the reviewed repo is public", () => {
-    mockExperimentFiles({ ".claude-review.yml": config })
-    process.env.RELATED_REPOS_TOKEN = "secret-token"
-    process.env.REPO_PRIVATE = "false"
-
-    resolveRelatedRepos(true)
-
-    const args = (execFileSync as jest.Mock).mock.calls[0][1] as string[]
-    expect(args).not.toContain("-c")
-    expect(args[0]).toBe("clone")
+    expect(resolveRelatedRepos(true)).toEqual([
+      {
+        repo: "artsy/metaphysics",
+        path: "/runner/tmp/related/metaphysics",
+        private: true,
+      },
+    ])
   })
 
   it("does nothing when the repo lists none", () => {

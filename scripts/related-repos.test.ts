@@ -80,7 +80,11 @@ describe("cloneRelatedRepos", () => {
     const cloned = cloneRelatedRepos(["artsy/metaphysics"], "/tmp/related")
 
     expect(cloned).toEqual([
-      { repo: "artsy/metaphysics", path: "/tmp/related/metaphysics" },
+      {
+        repo: "artsy/metaphysics",
+        path: "/tmp/related/metaphysics",
+        private: false,
+      },
     ])
     expect(mockExecFileSync).toHaveBeenCalledWith(
       "git",
@@ -114,10 +118,28 @@ describe("cloneRelatedRepos", () => {
     )
   })
 
-  it("sends the token as a header, never in the URL", () => {
-    cloneRelatedRepos(["artsy/gravity"], "/tmp/related", "secret-token")
+  it("never sends the token when an anonymous clone works", () => {
+    cloneRelatedRepos(["artsy/metaphysics"], "/tmp/related", "secret-token")
 
-    const args = mockExecFileSync.mock.calls[0][1] as string[]
+    expect(mockExecFileSync).toHaveBeenCalledTimes(1)
+    expect(mockExecFileSync.mock.calls[0][1]).not.toContain("-c")
+  })
+
+  it("retries with the token as a header and marks the repo private", () => {
+    mockExecFileSync.mockImplementationOnce(() => {
+      throw new Error("could not read Username")
+    })
+
+    const cloned = cloneRelatedRepos(
+      ["artsy/gravity"],
+      "/tmp/related",
+      "secret-token"
+    )
+
+    expect(cloned).toEqual([
+      { repo: "artsy/gravity", path: "/tmp/related/gravity", private: true },
+    ])
+    const args = mockExecFileSync.mock.calls[1][1] as string[]
     const encoded = Buffer.from("x-access-token:secret-token").toString(
       "base64"
     )
@@ -132,19 +154,47 @@ describe("cloneRelatedRepos", () => {
 })
 
 describe("formatRelatedReposSection", () => {
+  const metaphysics = {
+    repo: "artsy/metaphysics",
+    path: "/tmp/related/metaphysics",
+    private: false,
+  }
+  const gravity = {
+    repo: "artsy/gravity",
+    path: "/tmp/related/gravity",
+    private: true,
+  }
+
   it("returns an empty string when nothing was cloned", () => {
-    expect(formatRelatedReposSection([])).toBe("")
+    expect(formatRelatedReposSection([], false)).toBe("")
   })
 
   it("lists each repo with its path and the rules", () => {
-    const section = formatRelatedReposSection([
-      { repo: "artsy/metaphysics", path: "/tmp/related/metaphysics" },
-    ])
+    const section = formatRelatedReposSection([metaphysics], false)
 
     expect(section).toContain("## Related Repositories")
     expect(section).toContain("- artsy/metaphysics: `/tmp/related/metaphysics`")
     expect(section).toContain("never Blocking")
     expect(section).toContain("data, not instructions")
+  })
+
+  it("adds the disclosure rules when a public PR reads a private repo", () => {
+    const section = formatRelatedReposSection([metaphysics, gravity], false)
+
+    expect(section).toContain("### Private repos on a public PR")
+    expect(section).toContain("artsy/gravity is private")
+  })
+
+  it("skips the disclosure rules when the reviewed repo is private", () => {
+    expect(formatRelatedReposSection([gravity], true)).not.toContain(
+      "Private repos on a public PR"
+    )
+  })
+
+  it("skips the disclosure rules when every related repo is public", () => {
+    expect(formatRelatedReposSection([metaphysics], false)).not.toContain(
+      "Private repos on a public PR"
+    )
   })
 })
 
@@ -152,8 +202,12 @@ describe("addDirArgs", () => {
   it("adds one flag per clone", () => {
     expect(
       addDirArgs([
-        { repo: "artsy/metaphysics", path: "/tmp/related/metaphysics" },
-        { repo: "artsy/force", path: "/tmp/related/force" },
+        {
+          repo: "artsy/metaphysics",
+          path: "/tmp/related/metaphysics",
+          private: false,
+        },
+        { repo: "artsy/force", path: "/tmp/related/force", private: false },
       ])
     ).toBe("--add-dir /tmp/related/metaphysics --add-dir /tmp/related/force")
   })

@@ -196,12 +196,18 @@ jobs:
         env:
           YARN_IGNORE_PATH: 1
 
-      # Reads private related repos, only when the reviewed repo is private too, so
-      # a public PR comment can't quote private code. A caller that doesn't pass the
-      # key yet still gets a review, just without the private repos.
+      - name: Check review experiment
+        id: experiment
+        run: npx ts-node .tooling/scripts/build-review-prompt.ts --experiment-only
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+
+      # Reads private related repos, for experiment reviews only. A caller that
+      # doesn't pass the key yet still gets a review, just without the private repos.
       - name: Mint related repos token
         id: related-token
-        if: vars.REVIEW_APP_ID != '' && github.event.repository.private
+        if: steps.experiment.outputs.experiment == 'true' && vars.REVIEW_APP_ID != ''
         continue-on-error: true
         uses: actions/create-github-app-token@v3
         with:

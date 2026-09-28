@@ -87,9 +87,13 @@ repo with a log line. The token goes to git as a one-off header, so it is never
 written to disk where the agent could read it. To add a private repo, install the
 App on it.
 
-Only reviews of private repos get the token. Review comments on a public repo like
-eigen are public, and an agent that can read gravity could quote it there. So public
-repos read only public related repos, and their private entries are skipped.
+Review comments on a public repo like eigen are public. When a public PR's review
+reads a private repo, the script adds a "Private repos on a public PR" section to the
+prompt. It lets a comment state a conclusion about the PR's own line ("`saleMessage`
+isn't served by the API") and forbids quoting, paraphrasing, or naming anything
+inside the private repo. The rule is enforced only by the prompt, so check the first
+reviews on public repos for slips. A repo counts as private when it can't be cloned
+without the token.
 
 ## Skills
 
