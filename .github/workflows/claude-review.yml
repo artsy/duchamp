@@ -225,7 +225,7 @@ jobs:
           DEFAULT_MODEL: ${{ inputs.model }}
           RELATED_REPOS_TOKEN: ${{ steps.related-token.outputs.token }}
           REPO_PRIVATE: ${{ github.event.repository.private }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
 
       # claude-code-action@v1 installs Claude Code 2.1.278, and the API rejects
       # claude-opus-5-5 from anything older than 2.1.280.

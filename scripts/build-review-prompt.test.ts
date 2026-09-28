@@ -359,7 +359,7 @@ describe("resolveRelatedRepos", () => {
   const config = 'related_repos:\n  - "artsy/metaphysics"\n'
   const mockGit = execFileSync as jest.Mock
 
-  /** Answer `git show` with the base branch config and `git clone` with success. */
+  /** Answer `git show` with the default branch config and `git clone` with success. */
   const mockBaseConfig = (
     baseConfig: string | null,
     clone: (args: string[]) => void = () => {}
@@ -386,7 +386,7 @@ describe("resolveRelatedRepos", () => {
     jest.spyOn(console, "log").mockImplementation()
     process.env.GITHUB_REPOSITORY = "artsy/eigen"
     process.env.RUNNER_TEMP = "/runner/tmp"
-    process.env.BASE_REF = "main"
+    process.env.DEFAULT_BRANCH = "main"
     delete process.env.RELATED_REPOS_TOKEN
   })
 
@@ -395,10 +395,11 @@ describe("resolveRelatedRepos", () => {
     mockGit.mockReset()
     delete process.env.GITHUB_REPOSITORY
     delete process.env.RUNNER_TEMP
+    delete process.env.DEFAULT_BRANCH
     delete process.env.BASE_REF
   })
 
-  it("clones the related repos the base branch lists", () => {
+  it("clones the related repos the default branch lists", () => {
     mockBaseConfig(config)
 
     expect(resolveRelatedRepos(true)).toEqual([
@@ -426,15 +427,33 @@ describe("resolveRelatedRepos", () => {
     expect(cloneCalls()).toHaveLength(0)
   })
 
-  it("does nothing when the base branch has no config", () => {
+  it("does nothing when the default branch has no config", () => {
     mockBaseConfig(null)
 
     expect(resolveRelatedRepos(true)).toEqual([])
     expect(cloneCalls()).toHaveLength(0)
   })
 
-  it("does nothing without a base ref", () => {
-    delete process.env.BASE_REF
+  it("reads the default branch even when the PR targets another branch", () => {
+    process.env.BASE_REF = "foo"
+    mockBaseConfig(config)
+
+    resolveRelatedRepos(true)
+
+    expect(mockGit).toHaveBeenCalledWith(
+      "git",
+      ["show", "origin/main:.claude-review.yml"],
+      expect.anything()
+    )
+    expect(mockGit).not.toHaveBeenCalledWith(
+      "git",
+      ["show", "origin/foo:.claude-review.yml"],
+      expect.anything()
+    )
+  })
+
+  it("does nothing without a default branch", () => {
+    delete process.env.DEFAULT_BRANCH
     mockBaseConfig(config)
 
     expect(resolveRelatedRepos(true)).toEqual([])
