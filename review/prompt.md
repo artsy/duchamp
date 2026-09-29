@@ -245,5 +245,5 @@ If you have not investigated the first four, you have not reviewed deeply enough
 
 ---
 
-Adapted from two MIT-licensed skills. See `review-experiment/README.md` for
+Adapted from two MIT-licensed skills. See `review/README.md` for
 attribution.

@@ -3,15 +3,12 @@ import * as fs from "fs"
 import * as path from "path"
 import {
   buildPrompt,
-  DEFAULT_PROMPT,
-  EXPERIMENT_EFFORT,
   EXPERIMENT_LABEL,
-  EXPERIMENT_MODEL,
-  isExperimentPR,
   loadParticipants,
   loadRepoConfig,
+  loadReviewPrompt,
   parseLabels,
-  resolveBasePrompt,
+  REVIEW_EFFORT,
   resolveModelArgs,
   resolveRelatedRepos,
   usesRelatedRepos,
@@ -22,10 +19,10 @@ jest.mock("child_process")
 
 const mockFs = fs as jest.Mocked<typeof fs>
 
-const EXPERIMENT_PROMPT = "You are a senior engineer reviewing a pull request."
+const REVIEW_PROMPT = "You are a senior engineer reviewing a pull request."
 
-/** Mock fs so only the named experiment files exist, each returning its content. */
-const mockExperimentFiles = (files: Record<string, string>): void => {
+/** Mock fs so only the named files exist, each returning its content. */
+const mockFiles = (files: Record<string, string>): void => {
   mockFs.existsSync.mockImplementation(
     p => typeof p === "string" && path.basename(p) in files
   )
@@ -135,64 +132,49 @@ prompt: |
 describe("buildPrompt", () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    delete process.env.PR_AUTHOR
-    delete process.env.PR_LABELS
   })
 
-  it("returns default prompt when no config exists", () => {
-    mockFs.existsSync.mockReturnValue(false)
+  it("returns the review prompt when no config exists", () => {
+    mockFiles({ "prompt.md": REVIEW_PROMPT })
 
-    const { prompt: result } = buildPrompt()
-
-    expect(result).toContain("senior staff engineer")
-    expect(result).toContain("### Summary")
-    expect(result).toContain("### Issues Found")
-    expect(result).toContain("🔴 **Blocking**")
-    expect(result).toContain("🟡 **Important**")
-    expect(result).toContain("🟢 **Suggestion**")
-    expect(result).toContain("### Areas Reviewed")
-    expect(result).toContain("Architecture & Design")
-    expect(result).toContain("Security")
-    expect(result).toContain("Performance")
+    expect(buildPrompt()).toBe(REVIEW_PROMPT)
   })
 
-  it("uses custom prompt when provided", () => {
-    mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue(`
-prompt: |
-  You are a custom security reviewer.
-  Only look for security issues.
-`)
+  it("uses the repo's custom prompt instead of the review prompt", () => {
+    mockFiles({
+      "prompt.md": REVIEW_PROMPT,
+      ".claude-review.yml":
+        "prompt: |\n  You are a custom security reviewer.\n  Only look for security issues.\n",
+    })
 
-    const { prompt: result } = buildPrompt()
+    const result = buildPrompt()
 
     expect(result).toContain("You are a custom security reviewer.")
     expect(result).toContain("Only look for security issues.")
-    expect(result).not.toContain("### Summary")
+    expect(result).not.toContain(REVIEW_PROMPT)
   })
 
   it("includes repo context when configured", () => {
-    mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue(`
-context: |
-  This is a Rails API.
-`)
+    mockFiles({
+      "prompt.md": REVIEW_PROMPT,
+      ".claude-review.yml": "context: |\n  This is a Rails API.\n",
+    })
 
-    const { prompt: result } = buildPrompt()
+    const result = buildPrompt()
 
+    expect(result).toContain(REVIEW_PROMPT)
     expect(result).toContain("## Repository Context")
     expect(result).toContain("This is a Rails API.")
   })
 
   it("includes focus areas when configured", () => {
-    mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue(`
-focus_areas:
-  - "Watch for N+1 queries"
-  - "Check authentication"
-`)
+    mockFiles({
+      "prompt.md": REVIEW_PROMPT,
+      ".claude-review.yml":
+        'focus_areas:\n  - "Watch for N+1 queries"\n  - "Check authentication"\n',
+    })
 
-    const { prompt: result } = buildPrompt()
+    const result = buildPrompt()
 
     expect(result).toContain("## Additional Focus Areas")
     expect(result).toContain("- Watch for N+1 queries")
@@ -200,159 +182,29 @@ focus_areas:
   })
 
   it("includes ignore paths when configured", () => {
-    mockFs.existsSync.mockReturnValue(true)
-    mockFs.readFileSync.mockReturnValue(`
-ignore_paths:
-  - "**/*.generated.ts"
-`)
+    mockFiles({
+      "prompt.md": REVIEW_PROMPT,
+      ".claude-review.yml": 'ignore_paths:\n  - "**/*.generated.ts"\n',
+    })
 
-    const { prompt: result } = buildPrompt()
+    const result = buildPrompt()
 
     expect(result).toContain("## Files to Skip")
     expect(result).toContain("- **/*.generated.ts")
   })
 
-  it("uses the experiment prompt for an enrolled author", () => {
-    process.env.PR_AUTHOR = "MounirDhahri"
-    mockExperimentFiles({
-      "participants.yml": "participants:\n  - MounirDhahri\n",
-      "prompt.md": EXPERIMENT_PROMPT,
-    })
+  it("throws when the review prompt is missing", () => {
+    mockFiles({})
 
-    const { prompt: result } = buildPrompt()
-
-    expect(result).toContain(EXPERIMENT_PROMPT)
-    expect(result).not.toContain("senior staff engineer")
-  })
-
-  it("uses the experiment prompt for a labelled PR by any author", () => {
-    process.env.PR_AUTHOR = "someone-else"
-    process.env.PR_LABELS = JSON.stringify([EXPERIMENT_LABEL])
-    mockExperimentFiles({
-      "participants.yml": "participants: []\n",
-      "prompt.md": EXPERIMENT_PROMPT,
-    })
-
-    const { prompt: result } = buildPrompt()
-
-    expect(result).toContain(EXPERIMENT_PROMPT)
-  })
-
-  it("uses the default prompt for an author outside the experiment", () => {
-    process.env.PR_AUTHOR = "someone-else"
-    mockExperimentFiles({
-      "participants.yml": "participants:\n  - MounirDhahri\n",
-      "prompt.md": EXPERIMENT_PROMPT,
-    })
-
-    const { prompt: result } = buildPrompt()
-
-    expect(result).toBe(DEFAULT_PROMPT)
-  })
-
-  it("lets a repo prompt override beat the experiment prompt", () => {
-    process.env.PR_AUTHOR = "MounirDhahri"
-    mockExperimentFiles({
-      ".claude-review.yml":
-        "prompt: |\n  You are a custom security reviewer.\n",
-      "participants.yml": "participants:\n  - MounirDhahri\n",
-      "prompt.md": EXPERIMENT_PROMPT,
-    })
-
-    const { prompt: result } = buildPrompt()
-
-    expect(result).toContain("You are a custom security reviewer.")
-    expect(result).not.toContain(EXPERIMENT_PROMPT)
-  })
-
-  it("still applies repo focus areas and ignore paths in the experiment", () => {
-    process.env.PR_AUTHOR = "MounirDhahri"
-    mockExperimentFiles({
-      ".claude-review.yml":
-        'focus_areas:\n  - "Watch for N+1 queries"\nignore_paths:\n  - "**/*.generated.ts"\n',
-      "participants.yml": "participants:\n  - MounirDhahri\n",
-      "prompt.md": EXPERIMENT_PROMPT,
-    })
-
-    const { prompt: result } = buildPrompt()
-
-    expect(result).toContain(EXPERIMENT_PROMPT)
-    expect(result).toContain("- Watch for N+1 queries")
-    expect(result).toContain("- **/*.generated.ts")
-  })
-})
-
-describe("buildPrompt experiment flag", () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-    delete process.env.PR_AUTHOR
-    delete process.env.PR_LABELS
-  })
-
-  it("is true for an enrolled author", () => {
-    process.env.PR_AUTHOR = "MounirDhahri"
-    mockExperimentFiles({
-      "participants.yml": "participants:\n  - MounirDhahri\n",
-      "prompt.md": EXPERIMENT_PROMPT,
-    })
-
-    expect(buildPrompt().experiment).toBe(true)
-  })
-
-  it("is true for a labelled PR", () => {
-    process.env.PR_LABELS = JSON.stringify([EXPERIMENT_LABEL])
-    mockExperimentFiles({
-      "participants.yml": "participants: []\n",
-      "prompt.md": EXPERIMENT_PROMPT,
-    })
-
-    expect(buildPrompt().experiment).toBe(true)
-  })
-
-  it("is false for an author outside the experiment", () => {
-    process.env.PR_AUTHOR = "someone-else"
-    mockExperimentFiles({
-      "participants.yml": "participants:\n  - MounirDhahri\n",
-      "prompt.md": EXPERIMENT_PROMPT,
-    })
-
-    expect(buildPrompt().experiment).toBe(false)
-  })
-
-  it("is false when a repo prompt override opts out", () => {
-    process.env.PR_AUTHOR = "MounirDhahri"
-    mockExperimentFiles({
-      ".claude-review.yml":
-        "prompt: |\n  You are a custom security reviewer.\n",
-      "participants.yml": "participants:\n  - MounirDhahri\n",
-      "prompt.md": EXPERIMENT_PROMPT,
-    })
-
-    expect(buildPrompt().experiment).toBe(false)
-  })
-
-  it("is false when prompt.md is unreadable", () => {
-    const consoleSpy = jest.spyOn(console, "error").mockImplementation()
-    process.env.PR_AUTHOR = "MounirDhahri"
-    mockExperimentFiles({
-      "participants.yml": "participants:\n  - MounirDhahri\n",
-    })
-
-    expect(buildPrompt().experiment).toBe(false)
-    consoleSpy.mockRestore()
+    expect(() => buildPrompt()).toThrow("ENOENT")
   })
 })
 
 describe("resolveModelArgs", () => {
-  it("uses the experiment model and effort in the experiment", () => {
-    expect(resolveModelArgs(true, "claude-opus-4-8")).toBe(
-      `--model ${EXPERIMENT_MODEL} --effort ${EXPERIMENT_EFFORT}`
-    )
-  })
-
-  it("uses the workflow model with no effort flag otherwise", () => {
-    expect(resolveModelArgs(false, "claude-opus-4-8")).toBe(
-      "--model claude-opus-4-8"
+  it("passes the model with high effort", () => {
+    expect(REVIEW_EFFORT).toBe("high")
+    expect(resolveModelArgs("claude-opus-5-5")).toBe(
+      "--model claude-opus-5-5 --effort high"
     )
   })
 })
@@ -360,33 +212,31 @@ describe("resolveModelArgs", () => {
 describe("usesRelatedRepos", () => {
   beforeEach(() => {
     jest.clearAllMocks()
-    mockExperimentFiles({
-      "participants.yml": "participants:\n  - MounirDhahri\n  - someone-else\n",
-      "related-repos-participants.yml": "participants:\n  - MounirDhahri\n",
-    })
   })
 
-  it("is true for an experiment PR by a related-repos participant", () => {
-    expect(usesRelatedRepos(true, "mounirdhahri")).toBe(true)
+  it("is true for an enrolled author, case-insensitively", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+
+    expect(usesRelatedRepos("mounirdhahri", [])).toBe(true)
   })
 
-  it("is false for an experiment participant not on the related-repos list", () => {
-    expect(usesRelatedRepos(true, "someone-else")).toBe(false)
+  it("is true for a labelled PR without reading participants", () => {
+    mockFs.existsSync.mockReturnValue(false)
+
+    expect(usesRelatedRepos("someone-else", [EXPERIMENT_LABEL])).toBe(true)
+    expect(mockFs.existsSync).not.toHaveBeenCalled()
   })
 
-  it("is false outside the experiment, even for a listed author", () => {
-    expect(usesRelatedRepos(false, "MounirDhahri")).toBe(false)
+  it("is false for an author outside the experiment", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+
+    expect(usesRelatedRepos("someone-else", ["in-progress"])).toBe(false)
   })
 
-  it("is false with no author", () => {
-    expect(usesRelatedRepos(true, undefined)).toBe(false)
-  })
+  it("is false with no author and no label", () => {
+    mockFs.existsSync.mockReturnValue(false)
 
-  it("is false when the list is missing", () => {
-    mockExperimentFiles({
-      "participants.yml": "participants:\n  - MounirDhahri\n",
-    })
-    expect(usesRelatedRepos(true, "MounirDhahri")).toBe(false)
+    expect(usesRelatedRepos(undefined, [])).toBe(false)
   })
 })
 
@@ -453,7 +303,7 @@ describe("resolveRelatedRepos", () => {
   })
 
   it("ignores related repos that only the PR head lists", () => {
-    mockExperimentFiles({
+    mockFiles({
       ".claude-review.yml": 'related_repos:\n  - "artsy/gravity"\n',
     })
     mockBaseConfig("context: Rails\n")
@@ -495,7 +345,7 @@ describe("resolveRelatedRepos", () => {
     expect(mockGit).not.toHaveBeenCalled()
   })
 
-  it("skips them for a default review", () => {
+  it("skips them outside the experiment", () => {
     mockBaseConfig(config)
 
     expect(resolveRelatedRepos(false)).toEqual([])
@@ -550,7 +400,7 @@ describe("loadParticipants", () => {
   })
 
   it("returns lowercased logins", () => {
-    mockExperimentFiles({
+    mockFiles({
       "participants.yml": "participants:\n  - MounirDhahri\n  - AmonKHouse\n",
     })
 
@@ -565,7 +415,7 @@ describe("loadParticipants", () => {
 
   it("warns and returns an empty list on malformed yaml", () => {
     const consoleSpy = jest.spyOn(console, "error").mockImplementation()
-    mockExperimentFiles({ "participants.yml": "participants: [unterminated\n" })
+    mockFiles({ "participants.yml": "participants: [unterminated\n" })
 
     expect(loadParticipants()).toEqual([])
     expect(consoleSpy).toHaveBeenCalledWith(
@@ -575,61 +425,15 @@ describe("loadParticipants", () => {
   })
 })
 
-describe("isExperimentPR", () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-  })
+describe("loadReviewPrompt", () => {
+  it("reads the real review prompt", () => {
+    const actualFs = jest.requireActual<typeof fs>("fs")
+    mockFs.readFileSync.mockImplementation(actualFs.readFileSync)
 
-  it("matches an enrolled login case-insensitively", () => {
-    mockExperimentFiles({
-      "participants.yml": "participants:\n  - MounirDhahri\n",
-    })
+    const prompt = loadReviewPrompt()
 
-    expect(isExperimentPR("mounirdhahri", [])).toBe(true)
-  })
-
-  it("matches the experiment label without reading participants", () => {
-    mockFs.existsSync.mockReturnValue(false)
-
-    expect(isExperimentPR(undefined, [EXPERIMENT_LABEL])).toBe(true)
-    expect(mockFs.existsSync).not.toHaveBeenCalled()
-  })
-
-  it("is false with no author and no label", () => {
-    mockFs.existsSync.mockReturnValue(false)
-
-    expect(isExperimentPR(undefined, ["in-progress"])).toBe(false)
-  })
-})
-
-describe("resolveBasePrompt", () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-  })
-
-  it("falls back to the default prompt when prompt.md is unreadable", () => {
-    const consoleSpy = jest.spyOn(console, "error").mockImplementation()
-    mockExperimentFiles({
-      "participants.yml": "participants:\n  - MounirDhahri\n",
-    })
-
-    expect(resolveBasePrompt("MounirDhahri", [])).toEqual({
-      prompt: DEFAULT_PROMPT,
-      experiment: false,
-    })
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Failed to read review-experiment/prompt.md")
-    )
-    consoleSpy.mockRestore()
-  })
-})
-
-describe("DEFAULT_PROMPT", () => {
-  it("contains expected structure", () => {
-    expect(DEFAULT_PROMPT).toContain("senior staff engineer")
-    expect(DEFAULT_PROMPT).toContain("### Summary")
-    expect(DEFAULT_PROMPT).toContain("### Issues Found")
-    expect(DEFAULT_PROMPT).toContain("### Areas Reviewed")
-    expect(DEFAULT_PROMPT).toContain("### Questions for Author")
+    expect(prompt).toContain("## Verify Before You Claim")
+    expect(prompt).toContain("🔴 **blocking:**")
+    expect(prompt).toContain("### Verdict")
   })
 })

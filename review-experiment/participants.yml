@@ -1,8 +1,9 @@
-# GitHub logins enrolled in the experimental review mode.
+# GitHub logins enrolled in the review experiment.
 #
-# PRs authored by anyone on this list are reviewed with review-experiment/prompt.md
-# instead of the default prompt, in every repo that uses the shared AI review
-# workflow. Everyone else is unaffected.
+# The experiment is related repos: PRs by anyone on this list can also read the other
+# Artsy repos listed in their repo's `.claude-review.yml` `related_repos`, such as
+# metaphysics when reviewing eigen. Every review, in or out of the experiment, uses
+# review/prompt.md.
 #
 # To join or leave, add or remove your login and open a PR. Case does not matter.
 # Anyone can also try it on a single PR by adding the `ai-review-experiment` label,
@@ -12,7 +13,3 @@
 
 participants:
   - MounirDhahri
-  - amonkhouse
-  - gkartalis
-  - MrSltun
-  - chr-tatu
