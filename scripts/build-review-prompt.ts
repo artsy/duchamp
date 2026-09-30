@@ -12,24 +12,31 @@ import {
 } from "./related-repos"
 
 /**
- * Build the review prompt from review/prompt.md plus repo-specific configuration.
+ * Build a review prompt by merging default Artsy guidelines with repo-specific configuration.
  *
  * Repos can create a .claude-review.yml file with:
- * - prompt: Complete custom prompt (replaces review/prompt.md)
- * - focus_areas: Array of specific things to watch for (added to the prompt)
+ * - prompt: Complete custom prompt (overrides everything else)
+ * - focus_areas: Array of specific things to watch for (added to default prompt)
  * - ignore_paths: Glob patterns for files to skip
  * - context: Additional context about the codebase
  * - related_repos: Other artsy/<name> repos that experiment reviews can read. Read
  *   from the default branch, so a PR cannot grant its own review access to a repo
  *
- * The review experiment adds related repos. A PR is in it when its author is listed
- * in review-experiment/participants.yml, or when it carries the EXPERIMENT_LABEL.
+ * PRs in the review experiment swap DEFAULT_PROMPT for review-experiment/prompt.md
+ * and run on EXPERIMENT_MODEL. A PR is in the experiment when its author is listed in
+ * review-experiment/participants.yml, or when it carries the EXPERIMENT_LABEL.
  * See review-experiment/README.md.
  */
 
 interface ExcludeConfig {
   title_patterns?: string[]
   disable_defaults?: boolean
+}
+
+interface ReviewPrompt {
+  prompt: string
+  /** True only when the experiment prompt is in use, so the model follows the prompt. */
+  experiment: boolean
 }
 
 interface RepoConfig {
@@ -41,25 +48,96 @@ interface RepoConfig {
   related_repos?: string[]
 }
 
+export const DEFAULT_PROMPT = `You are a senior staff engineer conducting a code review.
+You have access to the full codebase. The PR branch has been checked out.
+
+## Critical: Avoid False Positives
+
+**False positives damage developer trust more than missed issues help.**
+
+Before suggesting ANY change:
+1. Read the actual code/diff to verify your claim
+2. If suggesting something "should be" a certain way, CHECK if it already IS that way
+3. Do not suggest changes that are already implemented
+4. If you cannot verify a claim with evidence from the code, do not make it
+
+Common hallucination patterns to avoid:
+- Suggesting alphabetization when items are already alphabetized
+- Recommending error handling that already exists
+- Proposing tests that are already present
+- Claiming missing documentation that exists elsewhere
+
+## Your Task
+1. Use git diff to see the changes, then use Glob/Grep/Read to explore related files
+2. Check how the changed code integrates with existing patterns in the codebase
+3. Look for existing tests - use Glob to find test files, Read to check coverage
+4. VERIFY before suggesting: only raise issues you can prove with specific code references
+5. Provide a focused code review - quality over quantity
+6. **Post your review as a comment on this pull request**
+
+## Review Format
+
+### Summary
+2-3 sentences on what this PR does.
+
+### Issues Found
+Organize by priority:
+- 🔴 **Blocking**: Must fix before merge (bugs, security issues, broken functionality)
+- 🟡 **Important**: Should fix (performance problems, missing error handling, test gaps)
+- 🟢 **Suggestion**: Nice to have (code style, minor improvements)
+
+For each issue you report:
+1. State the specific file and line
+2. Quote the relevant code
+3. Explain why it is a problem with evidence
+
+**Only report issues you are confident about.** If you are uncertain, use "Questions for Author" instead.
+
+If the PR looks good, say so! Many PRs have no significant issues - this is normal and good.
+
+### Areas Reviewed
+Briefly note any concerns in these areas (skip if nothing notable):
+- Architecture & Design
+- Security
+- Performance (N+1 queries, unnecessary computation, memory issues)
+- Bugs & Edge Cases
+- Testing
+
+### Questions for Author
+List anything unclear that needs clarification before you can fully assess the PR.
+
+## How to write
+- Lead with the problem. No preamble like "I noticed that" or "It might be worth considering".
+- Short words, active voice: "this leaks the handle", not "a resource leak may be introduced".
+- Cut every word that adds nothing. "Because", not "due to the fact that"; "to", not "in order to"; "before", not "prior to".
+- Concrete subjects. "The query runs once per row", not "there is a potential performance implication".
+- Cut hedges. One "may" per comment at most; if you are not sure, verify or drop it.
+- No filler praise and no closing summary. State the issue and the fix, then stop.
+- Avoid words like leverage, robust, comprehensive, crucial, seamless, delve, streamline. Use everyday words.
+- Go easy on em-dashes; prefer commas and full stops.
+
+---
+Be constructive and explain your reasoning. Focus on substantive issues, not style nitpicks.
+
+Remember: An empty "Issues Found" section is a valid and often correct outcome. The goal is accurate review, not comprehensive critique.
+`
+
 /** Label that opts a single PR into the experiment without enrolling its author. */
 export const EXPERIMENT_LABEL = "ai-review-experiment"
 
-export const DEFAULT_MODEL = "claude-opus-5-5"
+export const EXPERIMENT_MODEL = "claude-opus-5-5"
 
-export const REVIEW_EFFORT = "high"
+export const EXPERIMENT_EFFORT = "high"
 
 /**
- * Prompt and experiment files live in this repo's checkout, never in the PR under
- * review, so a PR author cannot swap in their own review prompt through their changes.
+ * Experiment files live in this repo's checkout, never in the PR under review, so a
+ * PR author cannot swap in their own review prompt through their own changes.
  */
-const toolingPath = (...parts: string[]): string =>
-  path.join(__dirname, "..", ...parts)
+const experimentPath = (file: string): string =>
+  path.join(__dirname, "..", "review-experiment", file)
 
-export const loadReviewPrompt = (): string =>
-  fs.readFileSync(toolingPath("review", "prompt.md"), "utf8")
-
-export const loadParticipants = (): string[] => {
-  const participantsPath = toolingPath("review-experiment", "participants.yml")
+export const loadParticipants = (file = "participants.yml"): string[] => {
+  const participantsPath = experimentPath(file)
 
   if (!fs.existsSync(participantsPath)) {
     return []
@@ -80,7 +158,7 @@ export const loadParticipants = (): string[] => {
       .map(login => login.toLowerCase())
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`Warning: Failed to parse participants.yml: ${message}`)
+    console.error(`Warning: Failed to parse ${file}: ${message}`)
     return []
   }
 }
@@ -111,8 +189,7 @@ export const parseLabels = (raw: string | undefined): string[] => {
     .filter(label => label.length > 0)
 }
 
-/** The experiment is related repos: on for listed authors and for labelled PRs. */
-export const usesRelatedRepos = (
+export const isExperimentPR = (
   author: string | undefined,
   labels: string[]
 ): boolean => {
@@ -127,9 +204,64 @@ export const usesRelatedRepos = (
   return loadParticipants().includes(author.toLowerCase())
 }
 
+export const RELATED_REPOS_PARTICIPANTS = "related-repos-participants.yml"
+
+/**
+ * Related repos are a bigger change than the experiment prompt, so they have their
+ * own, smaller opt-in list on top of the experiment. The label alone is not enough.
+ */
+export const usesRelatedRepos = (
+  experiment: boolean,
+  author: string | undefined
+): boolean =>
+  experiment &&
+  !!author &&
+  loadParticipants(RELATED_REPOS_PARTICIPANTS).includes(author.toLowerCase())
+
+export const loadExperimentPrompt = (): string | null => {
+  const promptPath = experimentPath("prompt.md")
+
+  try {
+    return fs.readFileSync(promptPath, "utf8")
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(
+      `Warning: Failed to read review-experiment/prompt.md, falling back to the default prompt: ${message}`
+    )
+    return null
+  }
+}
+
+/**
+ * Pick the base prompt for this PR. Repo-level customisations are layered on top of
+ * whichever one comes back.
+ */
+export const resolveBasePrompt = (
+  author: string | undefined,
+  labels: string[]
+): ReviewPrompt => {
+  if (!isExperimentPR(author, labels)) {
+    return { prompt: DEFAULT_PROMPT, experiment: false }
+  }
+
+  const experimentPrompt = loadExperimentPrompt()
+
+  if (!experimentPrompt) {
+    return { prompt: DEFAULT_PROMPT, experiment: false }
+  }
+
+  console.log("Using experimental review prompt")
+  return { prompt: experimentPrompt, experiment: true }
+}
+
 /** Claude Code CLI flags that select the model for this review. */
-export const resolveModelArgs = (model: string): string =>
-  `--model ${model} --effort ${REVIEW_EFFORT}`
+export const resolveModelArgs = (
+  experiment: boolean,
+  defaultModel: string
+): string =>
+  experiment
+    ? `--model ${EXPERIMENT_MODEL} --effort ${EXPERIMENT_EFFORT}`
+    : `--model ${defaultModel}`
 
 export const loadRepoConfig = (): RepoConfig | null => {
   const configPath = path.join(process.cwd(), ".claude-review.yml")
@@ -148,16 +280,21 @@ export const loadRepoConfig = (): RepoConfig | null => {
   }
 }
 
-export const buildPrompt = (): string => {
+export const buildPrompt = (): ReviewPrompt => {
   const repoConfig = loadRepoConfig()
 
-  // If repo provides a complete custom prompt, use it directly
+  // If repo provides a complete custom prompt, use it directly. This wins over the
+  // experiment too - a repo that sets it has opted out.
   if (repoConfig?.prompt) {
-    return repoConfig.prompt
+    return { prompt: repoConfig.prompt, experiment: false }
   }
 
-  // Otherwise, build from the review prompt + customizations
-  const sections = [loadReviewPrompt()]
+  // Otherwise, build from the base prompt + customizations
+  const base = resolveBasePrompt(
+    process.env.PR_AUTHOR,
+    parseLabels(process.env.PR_LABELS)
+  )
+  const sections = [base.prompt]
 
   if (repoConfig) {
     // Add repo-specific context
@@ -186,7 +323,7 @@ export const buildPrompt = (): string => {
     }
   }
 
-  return sections.join("")
+  return { prompt: sections.join(""), experiment: base.experiment }
 }
 
 /**
@@ -227,7 +364,7 @@ export const resolveRelatedRepos = (enabled: boolean): RelatedRepo[] => {
 
   if (!enabled) {
     console.log(
-      "Ignoring related_repos: only PRs in the review experiment read them"
+      `Ignoring related_repos: only experiment PRs by authors in ${RELATED_REPOS_PARTICIPANTS} read them`
     )
     return []
   }
@@ -241,27 +378,34 @@ export const resolveRelatedRepos = (enabled: boolean): RelatedRepo[] => {
 }
 
 const main = (): void => {
-  const relatedEnabled = usesRelatedRepos(
-    process.env.PR_AUTHOR,
-    parseLabels(process.env.PR_LABELS)
-  )
+  const { prompt: basePrompt, experiment } = buildPrompt()
+
+  const relatedEnabled = usesRelatedRepos(experiment, process.env.PR_AUTHOR)
 
   // Lets the workflow skip minting the related repos token for reviews that don't use it.
-  if (process.argv.includes("--check-experiment")) {
+  if (process.argv.includes("--experiment-only")) {
     const outputPath = process.env.GITHUB_OUTPUT
     if (outputPath) {
-      fs.appendFileSync(outputPath, `related_repos=${relatedEnabled}\n`)
+      fs.appendFileSync(
+        outputPath,
+        `experiment=${experiment}\nrelated_repos=${relatedEnabled}\n`
+      )
     }
-    console.log(`Related repos: ${relatedEnabled}`)
+    console.log(
+      `Experiment review: ${experiment}, related repos: ${relatedEnabled}`
+    )
     return
   }
 
   const related = resolveRelatedRepos(relatedEnabled)
   const prompt =
-    buildPrompt() +
+    basePrompt +
     formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true")
   const modelArgs = [
-    resolveModelArgs(process.env.DEFAULT_MODEL || DEFAULT_MODEL),
+    resolveModelArgs(
+      experiment,
+      process.env.DEFAULT_MODEL ?? "claude-opus-4-8"
+    ),
     addDirArgs(related),
   ]
     .filter(Boolean)
@@ -274,7 +418,7 @@ const main = (): void => {
     const delimiter = `EOF_${Date.now()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\n`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\nexperiment=${experiment}\n`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {
