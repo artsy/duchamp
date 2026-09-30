@@ -253,7 +253,7 @@ jobs:
             The PR branch has been checked out. You have full access to the codebase.
             Use Read, Glob, and Grep to explore files. Use `git diff origin/${{ github.event.pull_request.base.ref }}...HEAD` to see changes.
 
-            If a CLAUDE.md file exists in the repo root, read it first for project-specific guidelines.
+            If an AGENTS.md or CLAUDE.md file exists in the repo root, read it first for project-specific guidelines.
 
             ${{ steps.prompt.outputs.review_prompt }}
 
