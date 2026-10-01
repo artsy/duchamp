@@ -11,6 +11,7 @@ Duchamp provides shared GitHub Actions and Danger.js configurations that help en
 - **Standardized CI/CD workflows** for Node.js projects
 - **Conventional commits** validation
 - **AGENTS.md tooling** — lint and auto-sync agent instruction files across repos
+- **Deploy Slack notifications** — AI-generated digests posted to subscribed Slack channels when a Deploy PR merges
 
 ## 🚀 Quick Start
 
@@ -43,6 +44,7 @@ For detailed documentation, see the [docs/](./docs/) directory:
 - [Available Actions](./docs/actions.md) - Detailed action reference
 - [Examples](./docs/examples.md) - Real-world usage examples
 - [Adopting AGENTS.md tooling](./docs/adopting-agents-md.md) - Add AGENTS.md lint + wrapper auto-sync to a repo
+- [Deploy Slack Notifications](./docs/deploy-notifications.md) - AI-generated deploy digests for Slack channels
 
 ## 🛠 Development
 
