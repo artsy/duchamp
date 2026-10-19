@@ -202,7 +202,7 @@ on:
 ```yaml
 uses: artsy/duchamp/.github/workflows/claude-review.yml@main
 with:
-  model: "claude-opus-4-8" # Claude model (default)
+  model: "claude-opus-5-5" # Claude model (default)
   timeout-minutes: 30 # Maximum review time (default: 30)
 secrets:
   anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }} # Required
@@ -211,6 +211,9 @@ secrets:
 **Features:**
 
 - Full codebase context with `fetch-depth: 0`
+- Reviews with `review/prompt.md` at `high` effort: severity-marked comments
+  (`blocking:` / `required:` / `nit:` / `q:`) and a Request Changes / Needs Discussion
+  / Approve verdict (see `review/README.md`)
 - Customizable review focus via `.claude-review.yml` config file
 - Configurable PR exclusions (see below)
 - Comments directly on the PR with findings
@@ -223,8 +226,7 @@ secrets:
 
 **Inputs:**
 
-- `model` (optional): Claude model to use for the review. PRs in the experimental
-  review mode ignore it and run on `claude-opus-5-5`
+- `model` (optional): Claude model to use for the review (default `claude-opus-5-5`)
 - `timeout-minutes` (optional): Maximum time for the review job
 
 **Secrets:**
@@ -266,13 +268,12 @@ context: |
 
 **Configuration Options:**
 
-- `prompt`: Complete custom prompt (overrides everything else - use this for full control)
-- `focus_areas`: Array of specific concerns for Claude to watch for (added to default prompt)
+- `prompt`: Complete custom prompt (replaces `review/prompt.md` - use this for full control)
+- `focus_areas`: Array of specific concerns for Claude to watch for (added to the prompt)
 - `ignore_paths`: Glob patterns for files Claude should skip reviewing
 - `context`: Additional context about your codebase architecture
 - `exclude`: PR exclusion rules (see below)
-- `related_repos`: other `artsy/<name>` repos that experiment reviews by authors in
-  `review-experiment/related-repos-participants.yml` can read, such as
+- `related_repos`: other `artsy/<name>` repos that experiment reviews can read, such as
   `artsy/metaphysics`. Read from the default branch, so changes apply once merged (see
   `review-experiment/README.md`)
 
@@ -313,14 +314,12 @@ prompt: |
   Ignore style and formatting issues entirely.
 ```
 
-**Experimental Review Mode:**
+**Review Experiment:**
 
-An opt-in variant that reviews more deeply and comments more bluntly, with explicit
-`blocking:` / `required:` / `nit:` / `q:` severities and a Request Changes / Needs
-Discussion / Approve verdict. It runs on `claude-opus-5-5` at `high` effort. Opt in by adding your GitHub login to
-`review-experiment/participants.yml`, or by adding the `ai-review-experiment` label to
-a single PR. See `review-experiment/README.md` for what changes and how it interacts
-with `.claude-review.yml`.
+An opt-in addition that lets a review read the other Artsy repos in the repo's
+`related_repos`, such as metaphysics when reviewing eigen. Opt in by adding your
+GitHub login to `review-experiment/participants.yml`, or by adding the
+`ai-review-experiment` label to a single PR. See `review-experiment/README.md`.
 
 **Security Notes:**
 
