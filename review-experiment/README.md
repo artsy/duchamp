@@ -7,6 +7,9 @@ An opt-in addition to the [AI PR review](../review/README.md). Experiment PRs:
   [Context in the prompt](../review/README.md#context-in-the-prompt))
 - after the first review, re-review only what changed (see
   [Re-reviews](../review/README.md#re-reviews))
+- get the summary posted by the workflow with a "Review stats" block (cost, turns,
+  tokens), where other PRs get it from Claude directly (see
+  [Usage](../review/README.md#usage))
 
 Every review uses the same prompt file and model, in the experiment or not.
 

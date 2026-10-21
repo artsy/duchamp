@@ -5,6 +5,7 @@ import {
   buildPrompt,
   EXPERIMENT_LABEL,
   formatContextSection,
+  formatDelivery,
   formatDiffSection,
   formatInstructionsSection,
   formatReviewModeOutputs,
@@ -686,7 +687,12 @@ describe("formatContextSection", () => {
     mockFiles({})
     mockGit.mockReturnValue("diff --git a/x.ts b/x.ts\n")
 
-    const { section, reviewMode } = formatContextSection("main", [], 0, REREVIEW)
+    const { section, reviewMode } = formatContextSection(
+      "main",
+      [],
+      0,
+      REREVIEW
+    )
 
     expect(section).toContain("## Re-review")
     expect(section).not.toContain("## The Diff")
@@ -703,7 +709,12 @@ describe("formatContextSection", () => {
       return args.includes("--name-only") ? "" : "diff --git a/x.ts b/x.ts\n"
     })
 
-    const { section, reviewMode } = formatContextSection("main", [], 0, REREVIEW)
+    const { section, reviewMode } = formatContextSection(
+      "main",
+      [],
+      0,
+      REREVIEW
+    )
 
     expect(section).toContain("## The Diff")
     expect(reviewMode.mode).toBe("full")
@@ -725,5 +736,23 @@ describe("formatReviewModeOutputs", () => {
     expect(formatReviewModeOutputs({ mode: "full", reason: "" })).toBe(
       "review_mode=full\nreviewed_since=\n"
     )
+  })
+})
+
+describe("formatDelivery", () => {
+  it("has experiment reviews return the summary as structured output", () => {
+    const { toolArgs, section } = formatDelivery(true, "42")
+
+    expect(toolArgs).toContain("--json-schema")
+    expect(toolArgs).not.toContain("gh pr comment")
+    expect(section).toContain("`summary` field of your structured output")
+  })
+
+  it("has other reviews post the summary themselves", () => {
+    const { toolArgs, section } = formatDelivery(false, "42")
+
+    expect(toolArgs).toMatch(/^--allowedTools "Bash\(gh pr comment:\*\),Read,/)
+    expect(toolArgs).not.toContain("--json-schema")
+    expect(section).toContain("`gh pr comment 42`")
   })
 })

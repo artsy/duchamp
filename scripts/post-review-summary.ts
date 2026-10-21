@@ -7,9 +7,12 @@ import {
 } from "./review-usage"
 
 /**
- * Post the review summary. The model returns it as structured output instead of
- * posting it, because only after the run do we know what the run cost. The action
- * revokes the Claude app token when it ends, so this posts as github-actions[bot].
+ * Post the summary of an experiment review. The model returns it as structured output
+ * instead of posting it, because only after the run do we know what the run cost. The
+ * action revokes the Claude app token when it ends, so this posts as github-actions[bot].
+ *
+ * Other reviews post their summary themselves, as claude[bot], and this only deletes
+ * the earlier ones.
  *
  * Earlier summaries are deleted only after the new one posts, so a run that is
  * cancelled or fails leaves the earlier summary in place.
@@ -89,10 +92,24 @@ const gh = (args: string[], input?: string): string =>
     stdio: ["pipe", "pipe", "inherit"],
   })
 
+/**
+ * Every review summary but the one to keep: the given one, or else the newest, which
+ * is the summary the model just posted, or the earlier one if the run posted none.
+ * Comments arrive oldest first.
+ */
+export const earlierSummaries = (
+  comments: IssueComment[],
+  keepId?: number
+): IssueComment[] => {
+  const summaries = comments.filter(isReviewSummary)
+  const keep = keepId ?? summaries[summaries.length - 1]?.id
+  return summaries.filter(comment => comment.id !== keep)
+}
+
 const deleteEarlierSummaries = (
   repo: string,
   prNumber: string,
-  keepId: number
+  keepId?: number
 ): void => {
   const comments = gh([
     "api",
@@ -105,10 +122,7 @@ const deleteEarlierSummaries = (
     .filter(line => line.length > 0)
     .map(line => JSON.parse(line) as IssueComment)
 
-  for (const comment of comments) {
-    if (comment.id === keepId || !isReviewSummary(comment)) {
-      continue
-    }
+  for (const comment of earlierSummaries(comments, keepId)) {
     try {
       gh(["api", "-X", "DELETE", `repos/${repo}/issues/comments/${comment.id}`])
     } catch {
@@ -118,6 +132,14 @@ const deleteEarlierSummaries = (
 }
 
 const main = (): void => {
+  const repo = process.env.GITHUB_REPOSITORY ?? ""
+  const prNumber = process.env.PR_NUMBER ?? ""
+
+  if (process.env.EXPERIMENT !== "true") {
+    deleteEarlierSummaries(repo, prNumber)
+    return
+  }
+
   const summary = parseSummary(process.env.STRUCTURED_OUTPUT)
   if (!summary) {
     console.log(
@@ -140,8 +162,6 @@ const main = (): void => {
     reviewedSince: process.env.REVIEWED_SINCE ?? "",
   })
 
-  const repo = process.env.GITHUB_REPOSITORY ?? ""
-  const prNumber = process.env.PR_NUMBER ?? ""
   const posted = JSON.parse(
     gh(
       ["api", `repos/${repo}/issues/${prNumber}/comments`, "-F", "body=@-"],

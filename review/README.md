@@ -104,14 +104,21 @@ experiment accepts that. Signing the marker would close it before a wider rollou
 
 ## Usage
 
-The model posts its inline comments as `claude[bot]`, but it returns the summary as
-structured output instead of posting it. `scripts/post-review-summary.ts` then posts
-the summary as `github-actions[bot]`, with a collapsed "Review stats" block for that
-run: model and effort, cost, turns, duration, tokens, and denied tool calls. It has to
-work this way: the run's cost is only known after the run, and the action revokes the
-Claude app token when its step ends, so nothing can edit Claude's comment afterwards.
+The model posts its inline comments as `claude[bot]`. Who posts the summary depends on
+the group (`formatDelivery` in `scripts/build-review-prompt.ts`):
 
-The earlier summary is deleted only after the new one posts; the step before the run
+- **Standard PRs.** The model posts the summary itself with `gh pr comment`, so it
+  shows as `claude[bot]`, with no stats.
+- **[Experiment](../review-experiment/README.md) PRs.** The model returns the summary
+  as structured output, and `scripts/post-review-summary.ts` posts it as
+  `github-actions[bot]` with a collapsed "Review stats" block: model and effort, cost,
+  turns, duration, tokens, and denied tool calls. It has to work this way: the run's
+  cost is only known after the run, and the action revokes the Claude app token when
+  its step ends, so nothing can edit Claude's comment afterwards. The re-review marker
+  rides in the same footer.
+
+In both groups the earlier summary is deleted only after the new one posts: the step
+after the run keeps the newest summary and deletes the rest. The step before the run
 just resolves Claude's old inline threads. So a run that is cancelled or fails leaves
 the earlier summary up.
 

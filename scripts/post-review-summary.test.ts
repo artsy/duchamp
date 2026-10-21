@@ -1,5 +1,6 @@
 import {
   buildCommentBody,
+  earlierSummaries,
   FOOTER_SENTINEL,
   isReviewSummary,
   parseSummary,
@@ -126,5 +127,39 @@ describe("isReviewSummary", () => {
       isReviewSummary(comment("claude[bot]", "User", FOOTER_SENTINEL))
     ).toBe(false)
     expect(isReviewSummary({ id: 2, user: null, body: null })).toBe(false)
+  })
+})
+
+describe("earlierSummaries", () => {
+  const actions = (id: number) => ({
+    id,
+    user: { login: "github-actions[bot]", type: "Bot" },
+    body: `Summary\n\n${FOOTER_SENTINEL}`,
+  })
+  const claude = (id: number) => ({
+    id,
+    user: { login: "claude[bot]", type: "Bot" },
+    body: "## Code Review",
+  })
+  const person = (id: number) => ({
+    id,
+    user: { login: "octocat", type: "User" },
+    body: "Thanks",
+  })
+
+  it("keeps the summary just posted", () => {
+    const comments = [actions(1), person(2), actions(3), claude(4)]
+
+    expect(earlierSummaries(comments, 3).map(c => c.id)).toEqual([1, 4])
+  })
+
+  it("keeps the newest summary when the model posted it itself", () => {
+    const comments = [actions(1), claude(2), person(3), claude(4), person(5)]
+
+    expect(earlierSummaries(comments).map(c => c.id)).toEqual([1, 2])
+  })
+
+  it("deletes nothing when there is only one summary", () => {
+    expect(earlierSummaries([person(1), claude(2)])).toEqual([])
   })
 })
