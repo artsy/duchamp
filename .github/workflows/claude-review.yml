@@ -241,6 +241,7 @@ jobs:
             await cleanupPreviousAIReviews({ github, context, core });
 
       - name: Run Claude Code Review
+        id: review
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.anthropic-api-key }}
@@ -261,3 +262,10 @@ jobs:
             Use `gh pr comment ${{ github.event.pull_request.number }}` for your main review.
             Use `mcp__github_inline_comment__create_inline_comment` for inline code comments.
             Only post GitHub comments - do not submit review text as messages.
+
+      - name: Report review usage
+        if: always() && steps.review.outputs.execution_file != ''
+        run: npx ts-node .tooling/scripts/review-usage.ts
+        env:
+          EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+          MODEL_ARGS: ${{ steps.prompt.outputs.model_args }}
