@@ -37,7 +37,10 @@ const mockFiles = (
   )
   mockFs.lstatSync.mockImplementation(((p: string) =>
     path.basename(p) in files
-      ? { isFile: () => !symlinks.includes(path.basename(p)) }
+      ? {
+          isFile: () => !symlinks.includes(path.basename(p)),
+          isSymbolicLink: () => symlinks.includes(path.basename(p)),
+        }
       : undefined) as unknown as typeof fs.lstatSync)
   mockFs.readFileSync.mockImplementation(p => {
     const match = Object.keys(files).find(
@@ -484,6 +487,13 @@ describe("formatInstructionsSection", () => {
     expect(formatInstructionsSection()).toBe("")
   })
 
+  it("leaves out AGENTS.md when CLAUDE.md is a symlink to it", () => {
+    mockFiles({ "AGENTS.md": "Use yarn.", "CLAUDE.md": "" }, ["CLAUDE.md"])
+    mockFs.readlinkSync.mockReturnValue("AGENTS.md")
+
+    expect(formatInstructionsSection()).toBe("")
+  })
+
   it("skips a symlinked AGENTS.md, which could point at the runner's environment", () => {
     mockFiles({ "AGENTS.md": "RELATED_REPOS_TOKEN=secret" }, ["AGENTS.md"])
 
@@ -510,6 +520,19 @@ describe("formatInstructionsSection", () => {
 describe("formatDiffSection", () => {
   const mockGit = execFileSync as jest.Mock
 
+  /** Answer `git diff` by its flags: --name-only lists left-out files. */
+  const mockGitDiff = (answers: {
+    diff?: string
+    leftOut?: string
+    numstat?: string
+  }): void => {
+    mockGit.mockImplementation((_cmd: string, args: string[]) => {
+      if (args.includes("--name-only")) return answers.leftOut ?? ""
+      if (args.includes("--numstat")) return answers.numstat ?? ""
+      return answers.diff ?? ""
+    })
+  }
+
   const gitCalls = (): string[][] =>
     mockGit.mock.calls.map(([, args]) => args as string[])
 
@@ -524,12 +547,13 @@ describe("formatDiffSection", () => {
   })
 
   it("inlines the diff and tells the reviewer not to fetch it again", () => {
-    mockGit.mockReturnValue("diff --git a/x.ts b/x.ts\n+const x = 1\n")
+    mockGitDiff({ diff: "diff --git a/x.ts b/x.ts\n+const x = 1\n" })
 
     const section = formatDiffSection("main", [])
 
     expect(section).toContain("```diff\ndiff --git a/x.ts b/x.ts")
     expect(section).toContain("Do not run git diff for it again")
+    expect(section).not.toContain("left out")
     expect(gitCalls()[0].slice(0, 3)).toEqual([
       "diff",
       "origin/main...HEAD",
@@ -538,22 +562,34 @@ describe("formatDiffSection", () => {
   })
 
   it("leaves out lockfiles and the repo's ignore_paths", () => {
-    mockGit.mockReturnValue("")
+    mockGitDiff({})
 
-    formatDiffSection("main", ["**/*.generated.ts", "*.snap"])
+    formatDiffSection("main", ["**/*.generated.ts", "vendor"])
 
     const args = gitCalls()[0]
     expect(args).toContain(":(exclude,glob)**/yarn.lock")
     expect(args).toContain(":(exclude,glob)**/*.generated.ts")
-    expect(args).toContain(":(exclude,glob)**/*.snap")
+    expect(args).toContain(":(exclude,glob)**/vendor/**")
+  })
+
+  it("names the lockfiles and ignored files it left out", () => {
+    mockGitDiff({ leftOut: "yarn.lock\n" })
+
+    const section = formatDiffSection("main", [])
+
+    expect(section).toContain("No changes outside lockfiles and ignored paths.")
+    expect(section).toContain(
+      "Also changed, but left out as lockfiles or ignored paths:\n\n```\nyarn.lock\n```"
+    )
+    const nameOnly = gitCalls().find(args => args.includes("--name-only"))
+    expect(nameOnly).toContain(":(glob)**/yarn.lock")
   })
 
   it("lists the changed files when the diff is over the cap", () => {
-    mockGit.mockImplementation((_cmd: string, args: string[]) =>
-      args.includes("--numstat")
-        ? "1\t1\tsrc/app/Scenes/Insights/Components/Foo.tsx\n"
-        : "+".repeat(MAX_DIFF_BYTES + 1)
-    )
+    mockGitDiff({
+      diff: "+".repeat(MAX_DIFF_BYTES + 1),
+      numstat: "1\t1\tsrc/app/Scenes/Insights/Components/Foo.tsx\n",
+    })
 
     const section = formatDiffSection("main", [])
 
@@ -565,17 +601,24 @@ describe("formatDiffSection", () => {
   })
 
   it("cuts the file list when it is over the cap too", () => {
-    const line = "1\t1\tsome/long/path/to/a/file.ts"
-    mockGit.mockImplementation((_cmd: string, args: string[]) =>
-      args.includes("--numstat")
-        ? Array(5_000).fill(line).join("\n")
-        : "+".repeat(MAX_DIFF_BYTES + 1)
-    )
+    mockGitDiff({
+      diff: "+".repeat(MAX_DIFF_BYTES + 1),
+      numstat: Array(5_000)
+        .fill("1\t1\tsome/long/path/to/a/file.ts")
+        .join("\n"),
+    })
 
     const section = formatDiffSection("main", [])
 
     expect(Buffer.byteLength(section)).toBeLessThan(MAX_DIFF_BYTES + 1_000)
     expect(section).toMatch(/\.\.\. \d+ more lines/)
+  })
+
+  it("asks the reviewer to run git diff when there is no room left", () => {
+    expect(formatDiffSection("main", [], 0)).toContain(
+      "Run `git diff origin/main...HEAD` to see the changes."
+    )
+    expect(mockGit).not.toHaveBeenCalled()
   })
 
   it("falls back to asking the reviewer to run git diff when git fails", () => {
@@ -598,41 +641,31 @@ describe("formatContextSection", () => {
     mockGit.mockReset()
   })
 
-  it("tells reviews outside the experiment where to find the context", () => {
+  it("replaces the workflow's read and diff steps with the inlined context", () => {
     mockFiles({ "AGENTS.md": "Use yarn." })
+    mockGit.mockImplementation((_cmd: string, args: string[]) =>
+      args.includes("--name-only") ? "" : "diff --git a/x.ts b/x.ts\n"
+    )
 
-    const section = formatContextSection(false, "main", [])
+    const section = formatContextSection("main", [])
 
-    expect(section).toContain("If an AGENTS.md or CLAUDE.md file exists")
-    expect(section).toContain("`git diff origin/main...HEAD`")
-    expect(section).not.toContain("Use yarn.")
-    expect(mockGit).not.toHaveBeenCalled()
-  })
-
-  it("inlines the context for experiment reviews", () => {
-    mockFiles({ "AGENTS.md": "Use yarn." })
-    mockGit.mockReturnValue("diff --git a/x.ts b/x.ts\n")
-
-    const section = formatContextSection(true, "main", [])
-
+    expect(section).toContain(
+      "Skip the steps above to read AGENTS.md or CLAUDE.md and run `git diff`"
+    )
+    expect(section).toContain("read them all in one turn")
     expect(section).toContain("Use yarn.")
     expect(section).toContain("```diff\ndiff --git a/x.ts b/x.ts")
-    expect(section).toContain("read them all in one turn")
-    expect(section).not.toContain("If an AGENTS.md or CLAUDE.md file exists")
   })
 
   it("shrinks the diff to keep the whole prompt under the cap", () => {
     mockFiles({})
-    mockGit.mockImplementation((_cmd: string, args: string[]) =>
-      args.includes("--numstat") ? "1\t1\tx.ts\n" : "+".repeat(30_000)
-    )
+    mockGit.mockImplementation((_cmd: string, args: string[]) => {
+      if (args.includes("--name-only")) return ""
+      if (args.includes("--numstat")) return "1\t1\tx.ts\n"
+      return "+".repeat(30_000)
+    })
 
-    const section = formatContextSection(
-      true,
-      "main",
-      [],
-      MAX_PROMPT_BYTES - 20_000
-    )
+    const section = formatContextSection("main", [], MAX_PROMPT_BYTES - 20_000)
 
     expect(section).toContain("too large to include")
     expect(section).not.toContain("++++")

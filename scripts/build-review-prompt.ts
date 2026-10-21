@@ -25,9 +25,8 @@ import { fenced, MAX_DIFF_BYTES, renderDiff } from "./review-diff"
  *   from the default branch, so a PR cannot grant its own review access to a repo
  *
  * The review experiment adds related repos, and AGENTS.md and the diff in the prompt.
- * A PR is in it when its author is listed
- * in review-experiment/participants.yml, or when it carries the EXPERIMENT_LABEL.
- * See review-experiment/README.md.
+ * A PR is in it when its author is listed in review-experiment/participants.yml, or
+ * when it carries the EXPERIMENT_LABEL. See review-experiment/README.md.
  */
 
 interface ExcludeConfig {
@@ -261,13 +260,22 @@ const readRegularFile = (file: string): string | undefined => {
   return fs.readFileSync(filePath, "utf8")
 }
 
+/** CLAUDE.md imports AGENTS.md, or is a symlink to it. readlink reads nothing through the link. */
+const claudeMdLoadsAgentsMd = (): boolean => {
+  const filePath = path.join(process.cwd(), "CLAUDE.md")
+  if (fs.lstatSync(filePath, { throwIfNoEntry: false })?.isSymbolicLink()) {
+    return path.basename(fs.readlinkSync(filePath)) === "AGENTS.md"
+  }
+  return readRegularFile("CLAUDE.md")?.includes("@AGENTS.md") ?? false
+}
+
 /**
  * Inline the repo's root AGENTS.md, which the reviewer would otherwise spend a turn
  * reading. The action already loads CLAUDE.md, and AGENTS.md with it when CLAUDE.md
  * imports it, so those stay out.
  */
 export const formatInstructionsSection = (): string => {
-  if (readRegularFile("CLAUDE.md")?.includes("@AGENTS.md")) {
+  if (claudeMdLoadsAgentsMd()) {
     return ""
   }
 
@@ -302,6 +310,11 @@ export const formatDiffSection = (
   }
 
   const range = `origin/${baseRef}...HEAD`
+  const runGitDiff = `\n## The Diff\n\nRun \`git diff ${range}\` to see the changes.\n`
+  if (maxBytes <= 0) {
+    return runGitDiff
+  }
+
   try {
     const { inlined, block } = renderDiff(range, ignorePaths, maxBytes)
     const intro = inlined
@@ -311,37 +324,29 @@ export const formatDiffSection = (
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`Warning: Failed to read the PR diff: ${message}`)
-    return `\n## The Diff\n\nRun \`git diff ${range}\` to see the changes.\n`
+    return runGitDiff
   }
 }
 
 /**
- * How the reviewer gets the repo instructions and the diff. Experiment reviews get
- * them in the prompt, sized to what promptBytes leaves under MAX_PROMPT_BYTES. The
- * rest are told where to find them, as before.
+ * The repo instructions and the diff for experiment reviews, sized to what promptBytes
+ * leaves under MAX_PROMPT_BYTES. They replace the workflow's steps to read AGENTS.md
+ * or CLAUDE.md and run git diff, which other reviews still follow.
  */
 export const formatContextSection = (
-  inExperiment: boolean,
   baseRef: string | undefined,
   ignorePaths: string[],
   promptBytes = 0
 ): string => {
-  if (!inExperiment) {
-    const diffHint = baseRef
-      ? ` Use \`git diff origin/${baseRef}...HEAD\` to see changes.`
-      : ""
-    return `\nIf an AGENTS.md or CLAUDE.md file exists in the repo root, read it first for project-specific guidelines.${diffHint}\n`
-  }
-
+  const lead =
+    "\n## Context Already Loaded\n\nSkip the steps above to read AGENTS.md or CLAUDE.md and run `git diff`. CLAUDE.md is already in your context, and the sections below give AGENTS.md and the diff, or say what to fetch. When you know several files you need, read them all in one turn rather than one per turn.\n"
   const instructions = formatInstructionsSection()
-  const readHint =
-    "\nWhen you know several files you need, read them all in one turn rather than one per turn.\n"
   const diffBytes = Math.min(
     MAX_DIFF_BYTES,
-    MAX_PROMPT_BYTES - promptBytes - Buffer.byteLength(instructions + readHint)
+    MAX_PROMPT_BYTES - promptBytes - Buffer.byteLength(lead + instructions)
   )
   return (
-    instructions + formatDiffSection(baseRef, ignorePaths, diffBytes) + readHint
+    lead + instructions + formatDiffSection(baseRef, ignorePaths, diffBytes)
   )
 }
 
@@ -365,14 +370,14 @@ const main = (): void => {
   const promptHead =
     buildPrompt() +
     formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true")
-  const prompt =
-    promptHead +
-    formatContextSection(
-      inExperiment,
-      process.env.BASE_REF,
-      loadRepoConfig()?.ignore_paths ?? [],
-      Buffer.byteLength(promptHead)
-    )
+  const prompt = inExperiment
+    ? promptHead +
+      formatContextSection(
+        process.env.BASE_REF,
+        loadRepoConfig()?.ignore_paths ?? [],
+        Buffer.byteLength(promptHead)
+      )
+    : promptHead
   const modelArgs = [
     resolveModelArgs(process.env.DEFAULT_MODEL || DEFAULT_MODEL),
     addDirArgs(related),

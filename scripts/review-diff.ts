@@ -52,27 +52,37 @@ export const truncateLines = (text: string, maxBytes: number): string => {
  * depth, and a leading slash anchors it to the root. Under git's glob magic, `*` stops
  * at `/` and a leading `/` is a fatal error.
  */
-export const toGitGlob = (pattern: string): string => {
+export const toGitGlobs = (pattern: string): string[] => {
   let glob = pattern.trim()
-  if (glob.endsWith("/")) {
-    glob = `${glob}**`
+  const dirOnly = glob.endsWith("/")
+  if (dirOnly) {
+    glob = glob.slice(0, -1)
   }
-  if (glob.startsWith("/")) {
-    return glob.slice(1)
+  const anchored = glob.includes("/")
+  glob = glob.replace(/^\//, "")
+  if (!anchored) {
+    glob = `**/${glob}`
   }
-  return glob.includes("/") ? glob : `**/${glob}`
+  // A glob pathspec matches the path itself, not the files under a matching directory.
+  return dirOnly ? [`${glob}/**`] : [glob, `${glob}/**`]
 }
+
+const excludedGlobs = (excludePatterns: string[]): string[] => [
+  ...LOCKFILES.map(file => `**/${file}`),
+  ...excludePatterns.flatMap(toGitGlobs),
+]
 
 /** Everything except lockfiles and the given glob patterns. */
 export const diffPathspec = (excludePatterns: string[]): string[] => [
   ".",
-  ...LOCKFILES.map(file => `:(exclude,glob)**/${file}`),
-  ...excludePatterns.map(pattern => `:(exclude,glob)${toGitGlob(pattern)}`),
+  ...excludedGlobs(excludePatterns).map(glob => `:(exclude,glob)${glob}`),
 ]
 
+const MAX_LEFT_OUT_BYTES = 2_000
+
 /**
- * The diff for a range as a fenced block, minus lockfiles and ignored paths. Over
- * maxBytes, the `--numstat` file list instead, cut to maxBytes.
+ * The diff for a range as a fenced block, minus lockfiles and ignored paths, which are
+ * listed by name after it. Over maxBytes, the `--numstat` file list instead.
  */
 export const renderDiff = (
   range: string,
@@ -81,12 +91,28 @@ export const renderDiff = (
 ): { inlined: boolean; block: string } => {
   const pathspec = diffPathspec(ignorePaths)
   const diff = git(["diff", range, "--", ...pathspec])
+  const leftOut = git([
+    "diff",
+    "--name-only",
+    range,
+    "--",
+    ...excludedGlobs(ignorePaths).map(glob => `:(glob)${glob}`),
+  ]).trim()
+  const leftOutNote = leftOut
+    ? `\nAlso changed, but left out as lockfiles or ignored paths:\n\n${fenced(truncateLines(leftOut, MAX_LEFT_OUT_BYTES), "")}`
+    : ""
 
   if (Buffer.byteLength(diff) <= maxBytes) {
-    return { inlined: true, block: fenced(diff, "diff") }
+    const block = diff.trim()
+      ? fenced(diff, "diff")
+      : "No changes outside lockfiles and ignored paths."
+    return { inlined: true, block: block + leftOutNote }
   }
 
   // --stat shortens long paths to fit 80 columns, and a shortened path matches nothing.
   const numstat = git(["diff", "--numstat", range, "--", ...pathspec])
-  return { inlined: false, block: fenced(truncateLines(numstat, maxBytes), "") }
+  return {
+    inlined: false,
+    block: fenced(truncateLines(numstat, maxBytes), "") + leftOutNote,
+  }
 }

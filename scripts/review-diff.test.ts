@@ -1,4 +1,4 @@
-import { fenced, toGitGlob, truncateLines } from "./review-diff"
+import { fenced, toGitGlobs, truncateLines } from "./review-diff"
 
 describe("truncateLines", () => {
   it("returns text under the cap unchanged", () => {
@@ -22,21 +22,22 @@ describe("fenced", () => {
   })
 })
 
-describe("toGitGlob", () => {
-  it("matches a pattern without a slash at any depth", () => {
-    expect(toGitGlob("*.snap")).toBe("**/*.snap")
+describe("toGitGlobs", () => {
+  it("matches a pattern without a slash at any depth, and what's under it", () => {
+    expect(toGitGlobs("*.snap")).toEqual(["**/*.snap", "**/*.snap/**"])
+    expect(toGitGlobs("vendor")).toEqual(["**/vendor", "**/vendor/**"])
   })
 
-  it("anchors a pattern with a leading slash to the root", () => {
-    expect(toGitGlob("/vendor/**")).toBe("vendor/**")
+  it("anchors a pattern with a leading or middle slash to the root", () => {
+    expect(toGitGlobs("/vendor")).toEqual(["vendor", "vendor/**"])
+    expect(toGitGlobs("src/gen/*.ts")).toEqual([
+      "src/gen/*.ts",
+      "src/gen/*.ts/**",
+    ])
   })
 
-  it("keeps a pattern that already has a slash", () => {
-    expect(toGitGlob("**/migrations/**")).toBe("**/migrations/**")
-    expect(toGitGlob("src/gen/*.ts")).toBe("src/gen/*.ts")
-  })
-
-  it("matches everything under a directory pattern", () => {
-    expect(toGitGlob("vendor/")).toBe("vendor/**")
+  it("matches a directory pattern at any depth, unless anchored", () => {
+    expect(toGitGlobs("generated/")).toEqual(["**/generated/**"])
+    expect(toGitGlobs("/generated/")).toEqual(["generated/**"])
   })
 })
