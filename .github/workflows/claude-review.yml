@@ -280,7 +280,8 @@ jobs:
           EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           MODEL_ARGS: ${{ steps.prompt.outputs.model_args }}
-          # Only experiment reviews carry the re-review marker.
+          # Only experiment reviews carry the stats block and the re-review marker.
+          EXPERIMENT: ${{ steps.experiment.outputs.related_repos }}
           HEAD_SHA: ${{ steps.experiment.outputs.related_repos == 'true' && github.event.pull_request.head.sha || '' }}
           REVIEWED_SINCE: ${{ steps.prompt.outputs.reviewed_since }}
           GH_TOKEN: ${{ github.token }}

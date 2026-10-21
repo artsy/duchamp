@@ -106,8 +106,10 @@ experiment accepts that. Signing the marker would close it before a wider rollou
 
 The model posts its inline comments as `claude[bot]`, but it returns the summary as
 structured output instead of posting it. `scripts/post-review-summary.ts` then posts
-the summary as `github-actions[bot]`, with a collapsed "Review stats" block for that
-run: model and effort, cost, turns, duration, tokens, and denied tool calls. It has to
+the summary as `github-actions[bot]`. For PRs in the
+[review experiment](../review-experiment/README.md), it adds a collapsed "Review stats"
+block for that run: model and effort, cost, turns, duration, tokens, and denied tool
+calls. Other summaries leave it out; their numbers still go to the job log. It has to
 work this way: the run's cost is only known after the run, and the action revokes the
 Claude app token when its step ends, so nothing can edit Claude's comment afterwards.
 

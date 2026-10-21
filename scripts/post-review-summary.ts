@@ -48,7 +48,8 @@ export interface CommentInput {
   summary: string
   usage: ReviewUsage | null
   modelArgs: string
-  /** Experiment reviews only: the commit reviewed, and the earlier one on a re-review. */
+  /** Experiment reviews only: the stats block, the commit reviewed, and the earlier one on a re-review. */
+  showStats: boolean
   headSha: string
   reviewedSince: string
 }
@@ -56,7 +57,8 @@ export interface CommentInput {
 /** Summary, then the footer: the sentinel, this run's stats, and the marker. */
 export const buildCommentBody = (input: CommentInput): string => {
   const footer = [
-    input.usage &&
+    input.showStats &&
+      input.usage &&
       formatStatsDetails(input.usage, input.modelArgs, input.reviewedSince),
     input.headSha && reviewMarker(input.headSha),
   ]
@@ -136,6 +138,7 @@ const main = (): void => {
     summary,
     usage,
     modelArgs: process.env.MODEL_ARGS ?? "",
+    showStats: process.env.EXPERIMENT === "true",
     headSha: process.env.HEAD_SHA ?? "",
     reviewedSince: process.env.REVIEWED_SINCE ?? "",
   })

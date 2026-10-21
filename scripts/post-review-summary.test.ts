@@ -24,6 +24,7 @@ const input = {
   summary: "## Code Review\n\n### Verdict\nRequest Changes\n",
   usage: USAGE,
   modelArgs: "--model claude-opus-5-5 --effort high",
+  showStats: true,
   headSha: "",
   reviewedSince: "",
 }
@@ -85,6 +86,21 @@ describe("buildCommentBody", () => {
 
     expect(findPreviousReview([body])).toMatchObject({ sha: SHA })
     expect(stripReviewFooter(body)).toBe(summary)
+  })
+
+  it("leaves the stats out of reviews outside the experiment", () => {
+    const body = buildCommentBody({ ...input, showStats: false })
+
+    expect(body).toBe(
+      `## Code Review\n\n### Verdict\nRequest Changes\n\n${FOOTER_SENTINEL}`
+    )
+    expect(
+      isReviewSummary({
+        id: 1,
+        user: { login: "github-actions[bot]", type: "Bot" },
+        body,
+      })
+    ).toBe(true)
   })
 
   it("posts the summary with the sentinel but no stats without usage", () => {
