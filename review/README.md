@@ -78,7 +78,12 @@ yarn ts-node scripts/collect-review-usage.ts --repos eigen,force,metaphysics \
   --since 2026-10-14 --split 2026-10-22
 ```
 
-It prints median cost, turns, time and cache hit rate per window and review mode.
+It prints median cost, turns, time and cache hit rate per window, group and review
+mode. The group is `experiment` for PRs in the
+[review experiment](../review-experiment/README.md), `standard` for the rest, and
+`unknown` for log lines from before the group was recorded. The two groups differ in
+more than one way (experiment PRs also read related repos), so compare each group
+with itself before and after a change.
 It finds runs by the caller's workflow file, `run-claude-review.yml` unless you pass
 `--workflow`. GitHub keeps logs for 90 days by default, so older windows are gone.
 This is a before/after comparison, not a controlled test: the mix of PRs changes
