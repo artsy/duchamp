@@ -4,6 +4,7 @@ import {
   isReviewSummary,
   parseSummary,
 } from "./post-review-summary"
+import { findPreviousReview, stripReviewFooter } from "./review-mode"
 import type { ReviewUsage } from "./review-usage"
 
 const USAGE: ReviewUsage = {
@@ -23,7 +24,11 @@ const input = {
   summary: "## Code Review\n\n### Verdict\nRequest Changes\n",
   usage: USAGE,
   modelArgs: "--model claude-opus-5-5 --effort high",
+  headSha: "",
+  reviewedSince: "",
 }
+
+const SHA = "c".repeat(40)
 
 describe("parseSummary", () => {
   it("reads the summary field", () => {
@@ -59,6 +64,27 @@ describe("buildCommentBody", () => {
     expect(buildCommentBody(input)).toBe(
       `## Code Review\n\n### Verdict\nRequest Changes\n\n<!-- ai-review-footer -->\n${stats}`
     )
+  })
+
+  it("adds the marker and the re-review row for experiment reviews", () => {
+    const body = buildCommentBody({
+      ...input,
+      headSha: SHA,
+      reviewedSince: "a1b2c3d",
+    })
+
+    expect(body).toContain("| Mode | rereview since `a1b2c3d` |")
+    expect(body.endsWith(`</details>\n\n<!-- ai-review-sha: ${SHA} -->`)).toBe(
+      true
+    )
+  })
+
+  it("round-trips through the next run's marker lookup, even when the summary quotes one", () => {
+    const summary = `## Code Review\n\nThe marker looks like \`<!-- ai-review-sha: ${"d".repeat(40)} -->\`, after \`${FOOTER_SENTINEL}\`.`
+    const body = buildCommentBody({ ...input, summary, headSha: SHA })
+
+    expect(findPreviousReview([body])).toMatchObject({ sha: SHA })
+    expect(stripReviewFooter(body)).toBe(summary)
   })
 
   it("posts the summary with the sentinel but no stats without usage", () => {

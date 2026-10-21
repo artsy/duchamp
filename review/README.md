@@ -74,6 +74,26 @@ before.
   the prompt leaves under 120 KB. Over its cap, the reviewer gets the list of changed
   files and reads the diff itself.
 
+## Re-reviews
+
+For PRs in the [review experiment](../review-experiment/README.md), the posted summary
+ends with a hidden marker naming the commit it reviewed:
+`<!-- ai-review-sha: <commit> -->`. On the next push, `scripts/review-mode.ts` reads
+the marker from the latest `github-actions[bot]` comment and picks a mode:
+
+| Mode | When | What happens |
+| --- | --- | --- |
+| full | No earlier review, its commit left the branch history (force push, rebase), or a merge since then (such as "Update branch") | The whole PR, as on a first review |
+| skip | Only lockfiles or `ignore_paths` changed since | No run. The earlier review stays up |
+| rereview | Anything else | The prompt holds the earlier summary and the diff since then. The reviewer re-checks the earlier findings, reviews the new changes in depth, and returns a full summary |
+
+Other PRs get a full review on every push and no marker.
+
+Anything that posts with the repo's `GITHUB_TOKEN` writes as `github-actions[bot]`,
+including a workflow a PR adds. So a PR author with write access could plant a marker
+and skip the AI review of their own changes. The AI review is not a merge gate, so the
+experiment accepts that. Signing the marker would close it before a wider rollout.
+
 ## Precedence
 
 1. A repo's `.claude-review.yml` `prompt:` field replaces `prompt.md`.

@@ -7,6 +7,7 @@ import {
   formatContextSection,
   formatDiffSection,
   formatInstructionsSection,
+  formatReviewModeOutputs,
   loadParticipants,
   loadRepoConfig,
   loadReviewPrompt,
@@ -647,7 +648,7 @@ describe("formatContextSection", () => {
       args.includes("--name-only") ? "" : "diff --git a/x.ts b/x.ts\n"
     )
 
-    const section = formatContextSection("main", [])
+    const { section } = formatContextSection("main", [])
 
     expect(section).toContain(
       "Skip the steps above to read AGENTS.md or CLAUDE.md and run `git diff`"
@@ -665,9 +666,64 @@ describe("formatContextSection", () => {
       return "+".repeat(30_000)
     })
 
-    const section = formatContextSection("main", [], MAX_PROMPT_BYTES - 20_000)
+    const { section } = formatContextSection(
+      "main",
+      [],
+      MAX_PROMPT_BYTES - 20_000
+    )
 
     expect(section).toContain("too large to include")
     expect(section).not.toContain("++++")
+  })
+
+  const REREVIEW = {
+    mode: "rereview",
+    reason: "",
+    previous: { sha: "a".repeat(40), body: "## Code Review" },
+  } as const
+
+  it("builds on the earlier review for re-reviews", () => {
+    mockFiles({})
+    mockGit.mockReturnValue("diff --git a/x.ts b/x.ts\n")
+
+    const { section, reviewMode } = formatContextSection("main", [], 0, REREVIEW)
+
+    expect(section).toContain("## Re-review")
+    expect(section).not.toContain("## The Diff")
+    expect(reviewMode.mode).toBe("rereview")
+  })
+
+  it("reports a full review when the re-review falls back to the full diff", () => {
+    jest.spyOn(console, "error").mockImplementation()
+    mockFiles({})
+    mockGit.mockImplementation((_cmd: string, args: string[]) => {
+      if (args[0] === "log") {
+        throw new Error("fatal: bad revision")
+      }
+      return args.includes("--name-only") ? "" : "diff --git a/x.ts b/x.ts\n"
+    })
+
+    const { section, reviewMode } = formatContextSection("main", [], 0, REREVIEW)
+
+    expect(section).toContain("## The Diff")
+    expect(reviewMode.mode).toBe("full")
+  })
+})
+
+describe("formatReviewModeOutputs", () => {
+  it("passes the earlier review's short SHA on a re-review", () => {
+    expect(
+      formatReviewModeOutputs({
+        mode: "rereview",
+        reason: "",
+        previous: { sha: "a".repeat(40), body: "" },
+      })
+    ).toBe("review_mode=rereview\nreviewed_since=aaaaaaa\n")
+  })
+
+  it("leaves reviewed_since empty on a full review", () => {
+    expect(formatReviewModeOutputs({ mode: "full", reason: "" })).toBe(
+      "review_mode=full\nreviewed_since=\n"
+    )
   })
 })
