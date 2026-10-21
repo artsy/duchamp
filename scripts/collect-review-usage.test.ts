@@ -165,8 +165,16 @@ describe("summarize", () => {
           turns: 16,
           outcome: "error_max_turns",
         }),
-        run("2026-10-23T00:00:00Z", { costUsd: 0.5, reviewMode: "full" }),
-        run("2026-10-24T00:00:00Z", { costUsd: 0.2, reviewMode: "rereview" }),
+        run("2026-10-23T00:00:00Z", {
+          costUsd: 0.5,
+          reviewMode: "full",
+          experiment: false,
+        }),
+        run("2026-10-24T00:00:00Z", {
+          costUsd: 0.2,
+          reviewMode: "rereview",
+          experiment: true,
+        }),
         run("2026-10-01T00:00:00Z", { costUsd: 99 }),
       ],
       "2026-10-14",
@@ -175,9 +183,9 @@ describe("summarize", () => {
 
     const rows = table.split("\n").slice(2)
     expect(rows).toEqual([
-      "| 2026-10-14 to 2026-10-22 | all | 2 | 1 | $1.50 | 15 | 2m 00s | 90.0% | $3.00 |",
-      "| 2026-10-22 on | full | 1 | 0 | $0.50 | 10 | 2m 00s | 90.0% | $0.50 |",
-      "| 2026-10-22 on | rereview | 1 | 0 | $0.20 | 10 | 2m 00s | 90.0% | $0.20 |",
+      "| 2026-10-14 to 2026-10-22 | unknown | all | 2 | 1 | $1.50 | 15 | 2m 00s | 90.0% | $3.00 |",
+      "| 2026-10-22 on | experiment | rereview | 1 | 0 | $0.20 | 10 | 2m 00s | 90.0% | $0.20 |",
+      "| 2026-10-22 on | standard | full | 1 | 0 | $0.50 | 10 | 2m 00s | 90.0% | $0.50 |",
     ])
   })
 })

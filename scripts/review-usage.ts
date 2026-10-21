@@ -126,10 +126,17 @@ export const USAGE_LOG_PREFIX = "REVIEW_USAGE "
 export const formatUsageLogLine = (
   usage: ReviewUsage,
   modelArgs: string,
-  reviewMode: string
+  reviewMode: string,
+  experiment: string
 ): string =>
   USAGE_LOG_PREFIX +
-  JSON.stringify({ ...usage, modelArgs, reviewMode: reviewMode || null })
+  JSON.stringify({
+    ...usage,
+    modelArgs,
+    reviewMode: reviewMode || null,
+    experiment:
+      experiment === "true" ? true : experiment === "false" ? false : null,
+  })
 
 const main = (): void => {
   const executionFile = process.env.EXECUTION_FILE
@@ -150,7 +157,8 @@ const main = (): void => {
     formatUsageLogLine(
       usage,
       process.env.MODEL_ARGS ?? "",
-      process.env.REVIEW_MODE ?? ""
+      process.env.REVIEW_MODE ?? "",
+      process.env.EXPERIMENT ?? ""
     )
   )
 
