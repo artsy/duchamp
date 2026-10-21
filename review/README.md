@@ -55,6 +55,25 @@ To add another, drop it in `.claude/skills/<name>/SKILL.md` and reference it fro
 prompt. A skill nothing references is dead weight: it costs context on every review
 and never runs.
 
+## Context in the prompt
+
+For PRs in the [review experiment](../review-experiment/README.md),
+`build-review-prompt.ts` puts the repo's root `AGENTS.md` and the PR diff into the
+prompt, so the reviewer doesn't spend its first turns fetching them. Every turn resends
+the whole conversation, so fewer turns cost less. Other reviews get the same prompt as
+before.
+
+- `CLAUDE.md` stays out: the action loads it itself, and `AGENTS.md` with it when
+  `CLAUDE.md` imports `@AGENTS.md`.
+- A symlinked `AGENTS.md` is skipped, since a PR could point it at the runner's
+  environment.
+- The diff leaves out lockfiles and `ignore_paths` (read with `.gitignore` rules), and
+  lists the left-out files by name.
+- The prompt reaches the action as one environment variable, which Linux caps at
+  128 KB. `AGENTS.md` is capped at 20 KB, and the diff at 60 KB or whatever the rest of
+  the prompt leaves under 120 KB. Over its cap, the reviewer gets the list of changed
+  files and reads the diff itself.
+
 ## Precedence
 
 1. A repo's `.claude-review.yml` `prompt:` field replaces `prompt.md`.

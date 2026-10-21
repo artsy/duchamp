@@ -1,4 +1,5 @@
 import { execFileSync } from "child_process"
+import { randomUUID } from "crypto"
 import * as fs from "fs"
 import * as yaml from "js-yaml"
 import * as os from "os"
@@ -10,6 +11,7 @@ import {
   parseRelatedRepos,
   type RelatedRepo,
 } from "./related-repos"
+import { fenced, MAX_DIFF_BYTES, renderDiff } from "./review-diff"
 
 /**
  * Build the review prompt from review/prompt.md plus repo-specific configuration.
@@ -22,9 +24,9 @@ import {
  * - related_repos: Other artsy/<name> repos that experiment reviews can read. Read
  *   from the default branch, so a PR cannot grant its own review access to a repo
  *
- * The review experiment adds related repos. A PR is in it when its author is listed
- * in review-experiment/participants.yml, or when it carries the EXPERIMENT_LABEL.
- * See review-experiment/README.md.
+ * The review experiment adds related repos, and AGENTS.md and the diff in the prompt.
+ * A PR is in it when its author is listed in review-experiment/participants.yml, or
+ * when it carries the EXPERIMENT_LABEL. See review-experiment/README.md.
  */
 
 interface ExcludeConfig {
@@ -111,7 +113,7 @@ export const parseLabels = (raw: string | undefined): string[] => {
     .filter(label => label.length > 0)
 }
 
-/** The experiment is related repos: on for listed authors and for labelled PRs. */
+/** Whether this review is in the experiment: on for listed authors and labelled PRs. */
 export const usesRelatedRepos = (
   author: string | undefined,
   labels: string[]
@@ -240,8 +242,116 @@ export const resolveRelatedRepos = (enabled: boolean): RelatedRepo[] => {
   )
 }
 
+/**
+ * The prompt reaches claude-code-action as an input, which the runner passes as one
+ * environment variable. Linux caps a single one at 128 KB; MAX_PROMPT_BYTES leaves
+ * room for the workflow's own text around the prompt.
+ */
+export const MAX_PROMPT_BYTES = 120_000
+export const MAX_INSTRUCTIONS_BYTES = 20_000
+
+/** A PR controls these files, so a symlink could point at the runner's secrets. */
+const readRegularFile = (file: string): string | undefined => {
+  const filePath = path.join(process.cwd(), file)
+  const stat = fs.lstatSync(filePath, { throwIfNoEntry: false })
+  if (!stat?.isFile()) {
+    return undefined
+  }
+  return fs.readFileSync(filePath, "utf8")
+}
+
+/** CLAUDE.md imports AGENTS.md, or is a symlink to it. readlink reads nothing through the link. */
+const claudeMdLoadsAgentsMd = (): boolean => {
+  const filePath = path.join(process.cwd(), "CLAUDE.md")
+  if (fs.lstatSync(filePath, { throwIfNoEntry: false })?.isSymbolicLink()) {
+    return path.basename(fs.readlinkSync(filePath)) === "AGENTS.md"
+  }
+  return readRegularFile("CLAUDE.md")?.includes("@AGENTS.md") ?? false
+}
+
+/**
+ * Inline the repo's root AGENTS.md, which the reviewer would otherwise spend a turn
+ * reading. The action already loads CLAUDE.md, and AGENTS.md with it when CLAUDE.md
+ * imports it, so those stay out.
+ */
+export const formatInstructionsSection = (): string => {
+  if (claudeMdLoadsAgentsMd()) {
+    return ""
+  }
+
+  const content = readRegularFile("AGENTS.md")
+  if (content === undefined) {
+    return ""
+  }
+
+  if (Buffer.byteLength(content) > MAX_INSTRUCTIONS_BYTES) {
+    return "\n## Repository Instructions\n\nRead `AGENTS.md` in the repo root first; it is too large to include here.\n"
+  }
+
+  return [
+    "\n## Repository Instructions\n",
+    "The repo's root AGENTS.md, already read for you. Do not read it again.\n",
+    fenced(content, "markdown"),
+    "",
+  ].join("\n")
+}
+
+/**
+ * Inline the PR diff, minus lockfiles and the repo's ignore_paths. Over maxBytes, give
+ * the file list instead and leave the reviewer to read the diff per file.
+ */
+export const formatDiffSection = (
+  baseRef: string | undefined,
+  ignorePaths: string[],
+  maxBytes: number = MAX_DIFF_BYTES
+): string => {
+  if (!baseRef) {
+    return ""
+  }
+
+  const range = `origin/${baseRef}...HEAD`
+  const runGitDiff = `\n## The Diff\n\nRun \`git diff ${range}\` to see the changes.\n`
+  if (maxBytes <= 0) {
+    return runGitDiff
+  }
+
+  try {
+    const { inlined, block } = renderDiff(range, ignorePaths, maxBytes)
+    const intro = inlined
+      ? `The full output of \`git diff ${range}\`, leaving out lockfiles and ignored paths. Do not run git diff for it again; read files for the code around it.`
+      : `The diff is too large to include. These files changed (lines added, lines removed, path); run \`git diff ${range} -- <path>\` for the ones you need.`
+    return ["\n## The Diff\n", `${intro}\n`, block, ""].join("\n")
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`Warning: Failed to read the PR diff: ${message}`)
+    return runGitDiff
+  }
+}
+
+/**
+ * The repo instructions and the diff for experiment reviews, sized to what promptBytes
+ * leaves under MAX_PROMPT_BYTES. They replace the workflow's steps to read AGENTS.md
+ * or CLAUDE.md and run git diff, which other reviews still follow.
+ */
+export const formatContextSection = (
+  baseRef: string | undefined,
+  ignorePaths: string[],
+  promptBytes = 0
+): string => {
+  const lead =
+    "\n## Context Already Loaded\n\nSkip the steps above to read AGENTS.md or CLAUDE.md and run `git diff`. CLAUDE.md is already in your context, and the sections below give AGENTS.md and the diff, or say what to fetch. When you know several files you need, read them all in one turn rather than one per turn.\n"
+  const instructions = formatInstructionsSection()
+  const diffBytes = Math.min(
+    MAX_DIFF_BYTES,
+    MAX_PROMPT_BYTES - promptBytes - Buffer.byteLength(lead + instructions)
+  )
+  return (
+    lead + instructions + formatDiffSection(baseRef, ignorePaths, diffBytes)
+  )
+}
+
 const main = (): void => {
-  const relatedEnabled = usesRelatedRepos(
+  const inExperiment = usesRelatedRepos(
     process.env.PR_AUTHOR,
     parseLabels(process.env.PR_LABELS)
   )
@@ -250,16 +360,24 @@ const main = (): void => {
   if (process.argv.includes("--check-experiment")) {
     const outputPath = process.env.GITHUB_OUTPUT
     if (outputPath) {
-      fs.appendFileSync(outputPath, `related_repos=${relatedEnabled}\n`)
+      fs.appendFileSync(outputPath, `related_repos=${inExperiment}\n`)
     }
-    console.log(`Related repos: ${relatedEnabled}`)
+    console.log(`Related repos: ${inExperiment}`)
     return
   }
 
-  const related = resolveRelatedRepos(relatedEnabled)
-  const prompt =
+  const related = resolveRelatedRepos(inExperiment)
+  const promptHead =
     buildPrompt() +
     formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true")
+  const prompt = inExperiment
+    ? promptHead +
+      formatContextSection(
+        process.env.BASE_REF,
+        loadRepoConfig()?.ignore_paths ?? [],
+        Buffer.byteLength(promptHead)
+      )
+    : promptHead
   const modelArgs = [
     resolveModelArgs(process.env.DEFAULT_MODEL || DEFAULT_MODEL),
     addDirArgs(related),
@@ -270,8 +388,8 @@ const main = (): void => {
   // Set the output for GitHub Actions
   const outputPath = process.env.GITHUB_OUTPUT
   if (outputPath) {
-    // Use heredoc-style delimiter for multiline output (modern GitHub Actions approach)
-    const delimiter = `EOF_${Date.now()}`
+    // Repo files reach the prompt verbatim, so a guessable delimiter could end it early
+    const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
       `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\n`
