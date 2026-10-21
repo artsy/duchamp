@@ -365,7 +365,9 @@ export const formatContextSection = (
       )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      console.error(`Warning: Failed to build the re-review section: ${message}`)
+      console.error(
+        `Warning: Failed to build the re-review section: ${message}`
+      )
     }
   }
   if (changes === undefined) {
@@ -390,6 +392,35 @@ export const formatReviewModeOutputs = (reviewMode: ReviewMode): string =>
     `reviewed_since=${reviewMode.mode === "rereview" ? reviewMode.previous.sha.slice(0, 7) : ""}`,
     "",
   ].join("\n")
+
+const REVIEW_TOOLS =
+  "Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(gh pr diff:*),Bash(gh pr view:*),Skill,mcp__github_inline_comment__create_inline_comment"
+
+const SUMMARY_SCHEMA =
+  '{"type":"object","properties":{"summary":{"type":"string","description":"The review summary comment, in Markdown"}},"required":["summary"]}'
+
+/**
+ * Experiment reviews return the summary, and the workflow posts it with the run's
+ * stats and re-review marker as github-actions[bot]. Other reviews post it themselves,
+ * so it shows as claude[bot].
+ */
+export const formatDelivery = (
+  inExperiment: boolean,
+  prNumber = ""
+): { toolArgs: string; section: string } => {
+  const inline =
+    "Use `mcp__github_inline_comment__create_inline_comment` for inline code comments."
+  if (inExperiment) {
+    return {
+      toolArgs: `--allowedTools "${REVIEW_TOOLS}" --json-schema '${SUMMARY_SCHEMA}'`,
+      section: `\n## How to Deliver Your Review\n\n${inline}\nReturn the summary comment as the \`summary\` field of your structured output. The workflow posts it on the PR; do not post it yourself.\n`,
+    }
+  }
+  return {
+    toolArgs: `--allowedTools "Bash(gh pr comment:*),${REVIEW_TOOLS}"`,
+    section: `\n## How to Deliver Your Review\n\n${inline}\nPost the summary comment with \`gh pr comment ${prNumber}\`, once. Only post GitHub comments; do not submit review text as messages.\n`,
+  }
+}
 
 const main = (): void => {
   const inExperiment = usesRelatedRepos(
@@ -442,7 +473,8 @@ const main = (): void => {
         reviewMode
       )
     : { section: "", reviewMode }
-  const prompt = promptHead + context.section
+  const delivery = formatDelivery(inExperiment, process.env.PR_NUMBER)
+  const prompt = promptHead + context.section + delivery.section
   const modelArgs = [
     resolveModelArgs(process.env.DEFAULT_MODEL || DEFAULT_MODEL),
     addDirArgs(related),
@@ -456,12 +488,13 @@ const main = (): void => {
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\n${formatReviewModeOutputs(context.reviewMode)}`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\n${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {
     // For local testing, just print the prompt
     console.log(`Model args: ${modelArgs}`)
+    console.log(`Tool args: ${delivery.toolArgs}`)
     console.log("Generated review prompt:")
     console.log("---")
     console.log(prompt)

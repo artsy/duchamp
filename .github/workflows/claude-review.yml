@@ -250,11 +250,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.anthropic-api-key }}
-          # The summary comes back as structured output; the next step posts it with stats.
+          # tool_args decide who posts the summary: see formatDelivery in build-review-prompt.ts.
           claude_args: >-
             ${{ steps.prompt.outputs.model_args }}
-            --allowedTools "Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(gh pr diff:*),Bash(gh pr view:*),Skill,mcp__github_inline_comment__create_inline_comment"
-            --json-schema '{"type":"object","properties":{"summary":{"type":"string","description":"The review summary comment, in Markdown"}},"required":["summary"]}'
+            ${{ steps.prompt.outputs.tool_args }}
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
@@ -267,22 +266,16 @@ jobs:
 
             ${{ steps.prompt.outputs.review_prompt }}
 
-            ## How to Deliver Your Review
-            Use `mcp__github_inline_comment__create_inline_comment` for inline code comments.
-            Return the summary comment as the `summary` field of your structured output. The
-            workflow posts it on the PR; do not post it yourself.
-
       - name: Post review summary
-        if: always() && steps.review.outputs.structured_output != ''
+        if: always() && steps.review.outcome != 'skipped'
         run: npx ts-node .tooling/scripts/post-review-summary.ts
         env:
           STRUCTURED_OUTPUT: ${{ steps.review.outputs.structured_output }}
           EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           MODEL_ARGS: ${{ steps.prompt.outputs.model_args }}
-          # Only experiment reviews carry the stats block and the re-review marker.
           EXPERIMENT: ${{ steps.experiment.outputs.related_repos }}
-          HEAD_SHA: ${{ steps.experiment.outputs.related_repos == 'true' && github.event.pull_request.head.sha || '' }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REVIEWED_SINCE: ${{ steps.prompt.outputs.reviewed_since }}
           GH_TOKEN: ${{ github.token }}
 
