@@ -68,6 +68,24 @@ The prompt reaches the action as one environment variable, which Linux caps at
 128 KB. So each instruction file is capped at 20 KB and the diff at 60 KB. Over the
 cap, the reviewer gets the list of changed files and reads the diff itself.
 
+## Re-reviews
+
+For PRs in the [review experiment](../review-experiment/README.md), pushes after the
+first review can be skipped or narrowed. Other PRs get a full review on every push.
+
+Every summary ends with a hidden marker, `<!-- ai-review-sha: <commit> -->`, naming
+the commit it reviewed. On the next push, `scripts/review-mode.ts` reads the marker
+from the latest `claude[bot]` comment and picks a mode:
+
+| Mode | When | What happens |
+| --- | --- | --- |
+| full | No earlier review, or its commit left the branch history (force push, rebase) | The whole PR, as on a first review |
+| skip | Only Markdown, lockfiles, or `ignore_paths` changed since | No run. The earlier review stays up |
+| rereview | Anything else | The prompt holds the earlier summary and the diff since then. The reviewer re-checks the earlier findings, reviews the new changes in depth, and posts a full summary |
+
+Only comments by `claude[bot]` count, so a PR author can't post a marker that makes
+the review skip their changes. The mode shows in the usage table.
+
 ## Precedence
 
 1. A repo's `.claude-review.yml` `prompt:` field replaces `prompt.md`.

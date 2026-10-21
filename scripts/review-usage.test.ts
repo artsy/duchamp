@@ -101,11 +101,13 @@ describe("formatUsageSummary", () => {
   const usage = parseReviewUsage(executionFile(RESULT)) as ReviewUsage
   const summary = formatUsageSummary(
     usage,
-    "--model claude-opus-5-5 --effort high"
+    "--model claude-opus-5-5 --effort high",
+    "rereview"
   )
 
   it("lists the numbers", () => {
     expect(summary).toContain("| Cost | $0.77 |")
+    expect(summary).toContain("| Review mode | rereview |")
     expect(summary).toContain("| Turns | 9 |")
     expect(summary).toContain("| Duration | 1m 32s |")
     expect(summary).toContain("| Cache read tokens | 179,000 |")

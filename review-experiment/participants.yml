@@ -2,8 +2,8 @@
 #
 # PRs by anyone on this list get the experimental review: they can read the other
 # Artsy repos listed in their repo's `.claude-review.yml` `related_repos` (such as
-# metaphysics when reviewing eigen), and they get AGENTS.md, CLAUDE.md and the diff in
-# the prompt. Every review, in or out of the experiment, uses review/prompt.md.
+# metaphysics when reviewing eigen), they get AGENTS.md, CLAUDE.md and the diff in
+# the prompt, and pushes after the first review are skipped or re-reviewed. Every review, in or out of the experiment, uses review/prompt.md.
 #
 # To join or leave, add or remove your login and open a PR. Case does not matter.
 # Anyone can also try it on a single PR by adding the `ai-review-experiment` label,

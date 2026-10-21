@@ -93,10 +93,12 @@ const formatCount = (n: number): string => n.toLocaleString("en-US")
 
 export const formatUsageSummary = (
   usage: ReviewUsage,
-  modelArgs: string
+  modelArgs: string,
+  reviewMode: string
 ): string => {
   const rows: [string, string][] = [
     ["Outcome", usage.outcome],
+    ["Review mode", reviewMode || "unknown"],
     ["Model", usage.models.join(", ") || "unknown"],
     ["Claude args", modelArgs ? `\`${modelArgs}\`` : "unknown"],
     ["Cost", `$${usage.costUsd.toFixed(2)}`],
@@ -133,7 +135,11 @@ const main = (): void => {
     return
   }
 
-  const summary = formatUsageSummary(usage, process.env.MODEL_ARGS ?? "")
+  const summary = formatUsageSummary(
+    usage,
+    process.env.MODEL_ARGS ?? "",
+    process.env.REVIEW_MODE ?? ""
+  )
   console.log(summary)
 
   const summaryPath = process.env.GITHUB_STEP_SUMMARY

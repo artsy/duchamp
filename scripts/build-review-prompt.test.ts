@@ -17,7 +17,6 @@ import {
   REVIEW_EFFORT,
   resolveModelArgs,
   resolveRelatedRepos,
-  truncateLines,
 } from "./build-review-prompt"
 
 jest.mock("fs")
@@ -566,20 +565,9 @@ describe("formatDiffSection", () => {
   })
 })
 
-describe("truncateLines", () => {
-  it("returns text under the cap unchanged", () => {
-    expect(truncateLines("a\nb", 10)).toBe("a\nb")
-  })
-
-  it("keeps whole lines and counts the rest", () => {
-    expect(truncateLines("aaaa\nbbbb\ncccc", 10)).toBe(
-      "aaaa\nbbbb\n... 1 more lines"
-    )
-  })
-})
-
 describe("formatContextSection", () => {
   const mockGit = execFileSync as jest.Mock
+  const FULL = { mode: "full", reason: "" } as const
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -589,7 +577,7 @@ describe("formatContextSection", () => {
   it("tells reviews outside the experiment where to find the context", () => {
     mockFiles({ "AGENTS.md": "Use yarn." })
 
-    const section = formatContextSection(false, "main", [])
+    const section = formatContextSection(false, FULL, "main", [])
 
     expect(section).toContain("If an AGENTS.md or CLAUDE.md file exists")
     expect(section).toContain("`git diff origin/main...HEAD`")
@@ -601,11 +589,30 @@ describe("formatContextSection", () => {
     mockFiles({ "AGENTS.md": "Use yarn." })
     mockGit.mockReturnValue("diff --git a/x.ts b/x.ts\n")
 
-    const section = formatContextSection(true, "main", [])
+    const section = formatContextSection(true, FULL, "main", [])
 
     expect(section).toContain("Use yarn.")
     expect(section).toContain("```diff\ndiff --git a/x.ts b/x.ts")
     expect(section).toContain("read them all in one turn")
     expect(section).not.toContain("If an AGENTS.md or CLAUDE.md file exists")
+  })
+
+  it("builds on the earlier review for experiment re-reviews", () => {
+    mockFiles({})
+    mockGit.mockReturnValue("diff --git a/x.ts b/x.ts\n")
+
+    const section = formatContextSection(
+      true,
+      {
+        mode: "rereview",
+        reason: "",
+        previous: { sha: "a".repeat(40), body: "## Code Review" },
+      },
+      "main",
+      []
+    )
+
+    expect(section).toContain("## Re-review")
+    expect(section).not.toContain("## The Diff")
   })
 })

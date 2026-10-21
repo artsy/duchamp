@@ -10,6 +10,13 @@ import {
   parseRelatedRepos,
   type RelatedRepo,
 } from "./related-repos"
+import { fenced, git, renderDiff } from "./review-diff"
+import {
+  formatMarkerInstruction,
+  formatRereviewSection,
+  type ReviewMode,
+  resolveReviewMode,
+} from "./review-mode"
 
 /**
  * Build the review prompt from review/prompt.md plus repo-specific configuration.
@@ -253,24 +260,6 @@ export const MAX_INSTRUCTIONS_BYTES = 20_000
 
 const INSTRUCTION_FILES = ["AGENTS.md", "CLAUDE.md"]
 
-const LOCKFILES = [
-  "yarn.lock",
-  "package-lock.json",
-  "pnpm-lock.yaml",
-  "Gemfile.lock",
-  "Podfile.lock",
-]
-
-/** A code fence longer than any backtick run in the content, so it can't break out. */
-const fenced = (content: string, lang: string): string => {
-  const longestRun = Math.max(
-    0,
-    ...(content.match(/`+/g) ?? []).map(run => run.length)
-  )
-  const fence = "`".repeat(Math.max(3, longestRun + 1))
-  return `${fence}${lang}\n${content.trimEnd()}\n${fence}`
-}
-
 /**
  * Inline the repo's root AGENTS.md and CLAUDE.md, which the reviewer would otherwise
  * spend its first turns reading. A file over the cap is left for it to read.
@@ -313,12 +302,6 @@ export const formatInstructionsSection = (): string => {
   return lines.join("\n")
 }
 
-const diffPathspec = (ignorePaths: string[]): string[] => [
-  ".",
-  ...LOCKFILES.map(file => `:(exclude,glob)**/${file}`),
-  ...ignorePaths.map(pattern => `:(exclude,glob)${pattern}`),
-]
-
 /**
  * Inline the PR diff, minus lockfiles and the repo's ignore_paths. Over the cap, give
  * the file list instead and leave the reviewer to read the diff per file.
@@ -332,33 +315,12 @@ export const formatDiffSection = (
   }
 
   const range = `origin/${baseRef}...HEAD`
-  const git = (args: string[]): string =>
-    execFileSync("git", args, {
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-      stdio: ["ignore", "pipe", "ignore"],
-    })
-
   try {
-    const pathspec = diffPathspec(ignorePaths)
-    const diff = git(["diff", range, "--", ...pathspec])
-
-    if (Buffer.byteLength(diff) <= MAX_DIFF_BYTES) {
-      return [
-        "\n## The Diff\n",
-        `The full output of \`git diff ${range}\`, leaving out lockfiles and ignored paths. Do not run git diff for it again; read files for the code around it.\n`,
-        fenced(diff, "diff"),
-        "",
-      ].join("\n")
-    }
-
-    const stat = git(["diff", "--stat", range, "--", ...pathspec])
-    return [
-      "\n## The Diff\n",
-      `The diff is too large to include. These files changed; run \`git diff ${range} -- <path>\` for the ones you need.\n`,
-      fenced(truncateLines(stat, MAX_DIFF_BYTES), ""),
-      "",
-    ].join("\n")
+    const { inlined, block } = renderDiff(range, ignorePaths, MAX_DIFF_BYTES)
+    const intro = inlined
+      ? `The full output of \`git diff ${range}\`, leaving out lockfiles and ignored paths. Do not run git diff for it again; read files for the code around it.`
+      : `The diff is too large to include. These files changed; run \`git diff ${range} -- <path>\` for the ones you need.`
+    return ["\n## The Diff\n", `${intro}\n`, block, ""].join("\n")
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`Warning: Failed to read the PR diff: ${message}`)
@@ -366,31 +328,33 @@ export const formatDiffSection = (
   }
 }
 
-/** Whole lines up to maxBytes, with a note of how many were cut. */
-export const truncateLines = (text: string, maxBytes: number): string => {
-  if (Buffer.byteLength(text) <= maxBytes) {
-    return text
-  }
-
-  const lines = text.split("\n")
-  const kept: string[] = []
-  let bytes = 0
-  for (const line of lines) {
-    bytes += Buffer.byteLength(line) + 1
-    if (bytes > maxBytes) {
-      break
+/** The re-review section when there is an earlier review to build on, else the full diff. */
+export const formatChangesSection = (
+  reviewMode: ReviewMode,
+  baseRef: string | undefined,
+  ignorePaths: string[]
+): string => {
+  if (reviewMode.mode === "rereview" && baseRef) {
+    try {
+      return formatRereviewSection(reviewMode.previous, baseRef, ignorePaths)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(
+        `Warning: Failed to build the re-review section: ${message}`
+      )
     }
-    kept.push(line)
   }
-  return `${kept.join("\n")}\n... ${lines.length - kept.length} more lines`
+  return formatDiffSection(baseRef, ignorePaths)
 }
 
 /**
- * How the reviewer gets the repo instructions and the diff. Experiment reviews get
- * them in the prompt; the rest are told where to find them.
+ * How the reviewer gets the repo instructions and the changes. Experiment reviews get
+ * them in the prompt, as a re-review when there is an earlier review to build on; the
+ * rest are told where to find them.
  */
 export const formatContextSection = (
   inExperiment: boolean,
+  reviewMode: ReviewMode,
   baseRef: string | undefined,
   ignorePaths: string[]
 ): string => {
@@ -403,7 +367,7 @@ export const formatContextSection = (
 
   return (
     formatInstructionsSection() +
-    formatDiffSection(baseRef, ignorePaths) +
+    formatChangesSection(reviewMode, baseRef, ignorePaths) +
     "\nWhen you know several files you need, read them all in one turn rather than one per turn.\n"
   )
 }
@@ -424,15 +388,41 @@ const main = (): void => {
     return
   }
 
+  const ignorePaths = loadRepoConfig()?.ignore_paths ?? []
+  const reviewMode: ReviewMode = inExperiment
+    ? resolveReviewMode(
+        process.env.GITHUB_REPOSITORY,
+        process.env.PR_NUMBER,
+        ignorePaths
+      )
+    : { mode: "full", reason: "not in the review experiment" }
+  console.log(`Review mode: ${reviewMode.mode} (${reviewMode.reason})`)
+
+  const outputPath = process.env.GITHUB_OUTPUT
+  if (reviewMode.mode === "skip") {
+    if (outputPath) {
+      fs.appendFileSync(outputPath, "review_mode=skip\n")
+    }
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      fs.appendFileSync(
+        process.env.GITHUB_STEP_SUMMARY,
+        `AI review skipped: ${reviewMode.reason}. The earlier review stands.\n`
+      )
+    }
+    return
+  }
+
   const related = resolveRelatedRepos(inExperiment)
   const prompt =
     buildPrompt() +
     formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true") +
     formatContextSection(
       inExperiment,
+      reviewMode,
       process.env.BASE_REF,
-      loadRepoConfig()?.ignore_paths ?? []
-    )
+      ignorePaths
+    ) +
+    formatMarkerInstruction(git(["rev-parse", "HEAD"]).trim())
   const modelArgs = [
     resolveModelArgs(process.env.DEFAULT_MODEL || DEFAULT_MODEL),
     addDirArgs(related),
@@ -441,13 +431,12 @@ const main = (): void => {
     .join(" ")
 
   // Set the output for GitHub Actions
-  const outputPath = process.env.GITHUB_OUTPUT
   if (outputPath) {
     // Use heredoc-style delimiter for multiline output (modern GitHub Actions approach)
     const delimiter = `EOF_${Date.now()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\n`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\nreview_mode=${reviewMode.mode}\n`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {
