@@ -1,4 +1,8 @@
-import { buildCommentBody, parseSummary } from "./post-review-summary"
+import {
+  buildCommentBody,
+  isReviewSummary,
+  parseSummary,
+} from "./post-review-summary"
 import { findPreviousReview, stripReviewFooter } from "./review-mode"
 import type { ReviewUsage } from "./review-usage"
 
@@ -63,7 +67,7 @@ describe("buildCommentBody", () => {
     expect(buildCommentBody(input)).toBe(
       [
         "## Code Review\n\n### Verdict\nRequest Changes",
-        stats,
+        `<!-- ai-review-footer -->\n${stats}`,
         `<!-- ai-review-sha: ${SHA} total-usd: 0.8400 runs: 1 -->`,
       ].join("\n\n")
     )
@@ -98,6 +102,19 @@ describe("buildCommentBody", () => {
     expect(body).toContain("total-usd: 1.5000 runs: 2 -->")
   })
 
+  it("survives a summary that quotes the footer and marker", () => {
+    const quoting = [
+      "## Code Review",
+      `The marker looks like \`<!-- ai-review-sha: ${"d".repeat(40)} -->\`.`,
+      "And the footer starts with `<!-- ai-review-footer -->`.",
+      "### Verdict\nApprove",
+    ].join("\n\n")
+    const body = buildCommentBody({ ...input, summary: quoting })
+
+    expect(findPreviousReview([body])).toMatchObject({ sha: SHA, runs: 1 })
+    expect(stripReviewFooter(body)).toBe(quoting)
+  })
+
   it("round-trips through the next run's marker lookup", () => {
     const body = buildCommentBody({
       ...input,
@@ -110,5 +127,47 @@ describe("buildCommentBody", () => {
     expect(stripReviewFooter(body)).toBe(
       "## Code Review\n\n### Verdict\nRequest Changes"
     )
+  })
+})
+
+describe("isReviewSummary", () => {
+  const comment = (login: string, type: string, body: string) => ({
+    id: 1,
+    user: { login, type },
+    body,
+  })
+
+  it("matches the workflow's summaries and Claude's older ones", () => {
+    expect(
+      isReviewSummary(
+        comment(
+          "github-actions[bot]",
+          "Bot",
+          `x\n<!-- ai-review-sha: ${SHA} -->`
+        )
+      )
+    ).toBe(true)
+    expect(
+      isReviewSummary(comment("claude[bot]", "Bot", "## Code Review"))
+    ).toBe(true)
+  })
+
+  it("leaves other github-actions comments, other bots and people alone", () => {
+    expect(
+      isReviewSummary(
+        comment("github-actions[bot]", "Bot", "AI Review skipped")
+      )
+    ).toBe(false)
+    expect(
+      isReviewSummary(
+        comment("dependabot[bot]", "Bot", `<!-- ai-review-sha: ${SHA} -->`)
+      )
+    ).toBe(false)
+    expect(
+      isReviewSummary(
+        comment("claude[bot]", "User", `<!-- ai-review-sha: ${SHA} -->`)
+      )
+    ).toBe(false)
+    expect(isReviewSummary({ id: 2, user: null, body: null })).toBe(false)
   })
 })

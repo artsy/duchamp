@@ -18,10 +18,14 @@ import {
  */
 
 const MARKER_PATTERN =
-  /<!-- ai-review-sha: ([0-9a-f]{40})(?: total-usd: (\d+(?:\.\d+)?) runs: (\d+))? -->/
+  /<!-- ai-review-sha: ([0-9a-f]{40})(?: total-usd: (\d+(?:\.\d+)?) runs: (\d+))? -->/g
 
-/** The stats block and marker the workflow appends, cut before reuse as notes. */
-const FOOTER_START = /<details>\s*<summary>Review stats|<!-- ai-review-sha:/
+/**
+ * Starts the footer the workflow appends: stats block, then marker. The footer comes
+ * last, so the last sentinel and the last marker are the real ones, even when a
+ * summary quotes them.
+ */
+export const FOOTER_SENTINEL = "<!-- ai-review-footer -->"
 
 /**
  * Bots whose comments can carry the marker. The workflow posts the summary as
@@ -63,16 +67,16 @@ export const reviewMarker = (
 
 /** The summary without the workflow's stats block and marker. */
 export const stripReviewFooter = (body: string): string => {
-  const match = body.match(FOOTER_START)
-  return (
-    match?.index === undefined ? body : body.slice(0, match.index)
-  ).trimEnd()
+  const sentinel = body.lastIndexOf(FOOTER_SENTINEL)
+  const end =
+    sentinel !== -1 ? sentinel : body.lastIndexOf("<!-- ai-review-sha: ")
+  return (end === -1 ? body : body.slice(0, end)).trimEnd()
 }
 
 /** The latest comment that carries a marker. Comments arrive oldest first. */
 export const findPreviousReview = (bodies: string[]): PreviousReview | null => {
   for (const body of [...bodies].reverse()) {
-    const match = body.match(MARKER_PATTERN)
+    const match = [...body.matchAll(MARKER_PATTERN)].pop()
     if (match) {
       return {
         sha: match[1],
@@ -197,7 +201,7 @@ export const formatRereviewSection = (
     "1. Check each finding in the earlier summary against the current code. Drop the ones the author fixed and keep the rest.",
     `2. Review the changes since \`${short}\` in depth.`,
     "3. Read the rest of the PR only where you need it to judge 1 and 2.\n",
-    "Then post a full, current summary as usual. It replaces the earlier one, which gets deleted. The earlier inline threads get resolved, so post inline comments again for findings that still apply.\n",
+    "Then return a full, current summary as usual. It replaces the earlier one. The earlier inline threads get resolved, so post inline comments again for findings that still apply.\n",
   ].join("\n")
 }
 

@@ -18,7 +18,7 @@ const SHA = "a".repeat(40)
 const OTHER_SHA = "b".repeat(40)
 const PREVIOUS = {
   sha: SHA,
-  body: `## Code Review\n\n1. Bug.\n\n<details>\n<summary>Review stats · $0.50</summary>\n\n| Cost | $0.50 |\n\n</details>\n\n${reviewMarker(SHA, 0.5, 1)}`,
+  body: `## Code Review\n\n1. Bug.\n\n<!-- ai-review-footer -->\n<details>\n<summary>Review stats · $0.50</summary>\n\n| Cost | $0.50 |\n\n</details>\n\n${reviewMarker(SHA, 0.5, 1)}`,
   totalUsd: 0.5,
   runs: 1,
 }

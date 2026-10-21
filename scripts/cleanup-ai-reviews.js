@@ -1,10 +1,10 @@
 /**
- * Clean up previous AI review comments before posting a new review.
+ * Resolve the inline review threads Claude started on earlier reviews, before a new
+ * review posts its own. Resolving rather than deleting keeps any conversation (resolved
+ * threads collapse in the GitHub UI).
  *
- * This script:
- * 1. Deletes main review comments (issue comments): the summary, which the workflow
- *    posts as github-actions[bot] with the review marker, or which Claude posted before
- * 2. Resolves inline review threads started by the Claude bot (preserves conversation history)
+ * Earlier summary comments are not touched here. scripts/post-review-summary.ts
+ * deletes them after the new summary posts, so a run that fails leaves them in place.
  *
  * @param {Object} params - Parameters from actions/github-script
  * @param {import('@octokit/rest').Octokit} params.github - GitHub API client
@@ -12,36 +12,12 @@
  * @param {Object} params.core - GitHub Actions core utilities
  */
 
-// Bot identification - login format differs between REST and GraphQL APIs
-const CLAUDE_BOT_LOGIN_REST = "claude[bot]"
+// GraphQL returns Bot logins without the [bot] suffix
 const CLAUDE_BOT_LOGIN_GRAPHQL = "claude"
-const ACTIONS_BOT_LOGIN_REST = "github-actions[bot]"
-const REVIEW_MARKER = "<!-- ai-review-sha: "
-
-function isClaudeBot(user) {
-  return user?.type === "Bot" && user?.login === CLAUDE_BOT_LOGIN_REST
-}
-
-/** github-actions[bot] posts other comments too, so only the ones with the marker. */
-function isReviewSummary(comment) {
-  if (isClaudeBot(comment.user)) return true
-  return (
-    comment.user?.type === "Bot" &&
-    comment.user?.login === ACTIONS_BOT_LOGIN_REST &&
-    comment.body?.includes(REVIEW_MARKER)
-  )
-}
 
 async function cleanupPreviousAIReviews({ github, context, core }) {
   const { owner, repo } = context.repo
   const prNumber = context.payload.pull_request.number
-
-  const deletedComments = await deleteMainReviewComments({
-    github,
-    owner,
-    repo,
-    prNumber,
-  })
 
   const resolvedThreads = await resolveInlineReviewThreads({
     github,
@@ -50,36 +26,7 @@ async function cleanupPreviousAIReviews({ github, context, core }) {
     prNumber,
   })
 
-  core.info(
-    `Cleanup complete: ${deletedComments} comments deleted, ${resolvedThreads} threads resolved`
-  )
-}
-
-/**
- * Delete main review comments (issue comments).
- * These don't have threaded conversations, so they're safe to delete entirely.
- */
-async function deleteMainReviewComments({ github, owner, repo, prNumber }) {
-  const comments = await github.paginate(github.rest.issues.listComments, {
-    owner,
-    repo,
-    issue_number: prNumber,
-    per_page: 100,
-  })
-
-  const aiComments = comments.filter(isReviewSummary)
-
-  await Promise.all(
-    aiComments.map(async comment => {
-      await github.rest.issues.deleteComment({
-        owner,
-        repo,
-        comment_id: comment.id,
-      })
-    })
-  )
-
-  return aiComments.length
+  core.info(`Cleanup complete: ${resolvedThreads} threads resolved`)
 }
 
 /**

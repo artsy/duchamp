@@ -236,7 +236,7 @@ jobs:
           cp -R .tooling/.claude/skills/. "$HOME/.claude/skills/"
           ls "$HOME/.claude/skills"
 
-      - name: Cleanup previous AI review comments
+      - name: Resolve previous AI inline threads
         if: steps.prompt.outputs.review_mode != 'skip'
         uses: actions/github-script@v7
         with:

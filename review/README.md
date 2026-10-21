@@ -82,7 +82,7 @@ and picks a mode:
 | --- | --- | --- |
 | full | No earlier review, or its commit left the branch history (force push, rebase) | The whole PR, as on a first review |
 | skip | Only Markdown, lockfiles, or `ignore_paths` changed since | No run. The earlier review stays up |
-| rereview | Anything else | The prompt holds the earlier summary and the diff since then. The reviewer re-checks the earlier findings, reviews the new changes in depth, and posts a full summary |
+| rereview | Anything else | The prompt holds the earlier summary and the diff since then. The reviewer re-checks the earlier findings, reviews the new changes in depth, and returns a full summary |
 
 Only comments by `github-actions[bot]` and `claude[bot]` count, so a PR author can't
 post a marker that makes the review skip their changes. The mode shows in the usage
@@ -105,10 +105,15 @@ marker. It has to work this way: the run's cost is only known after the run, and
 action revokes the Claude app token when its step ends, so nothing can edit Claude's
 comment afterwards.
 
+The earlier summary is deleted only after the new one posts; the step before the run
+just resolves Claude's old inline threads. So a run that is cancelled or fails leaves
+the earlier summary up, and the next run still finds its marker.
+
 The stats block shows this run's model, mode, cost, turns, duration and tokens, and,
 from the second review on, the PR total. The total counts finished reviews only. A
 run that a new push cancels, or that times out, costs money but posts no summary, so
-the total runs a little low.
+the total runs a little low. It never resets: the earlier marker stays until a new
+summary replaces it.
 
 After each review, the job's step summary shows what it cost: model, cost, turns,
 duration, input, cache and output tokens, cache hit rate, and denied tool calls.
