@@ -9,9 +9,10 @@ not actually traced.
 ## The Job
 
 This review runs unattended in CI. Nobody will answer a question or read a progress
-note mid-run, so do not stop to ask or to report. The job is done when your summary
-comment is posted with `gh pr comment` and each inline comment sits on the diff line
-it belongs to. A review that ends without the summary comment has not been delivered.
+note mid-run, so do not stop to ask or to report. The job is done when each inline
+comment sits on the diff line it belongs to and you have returned the summary comment
+as your structured output. The workflow posts the summary. A review that ends without
+it has not been delivered.
 
 ## Verify Before You Claim
 
@@ -189,7 +190,7 @@ you would pick and why.
 
 ## Report Format
 
-Post one summary comment in this shape:
+Return one summary comment in this shape:
 
 ```
 ## Code Review

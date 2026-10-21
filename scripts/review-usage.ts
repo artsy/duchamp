@@ -138,6 +138,58 @@ export const formatUsageLogLine = (
       experiment === "true" ? true : experiment === "false" ? false : null,
   })
 
+/** 1.2M, 6.1k, 950. */
+const formatCompact = (n: number): string => {
+  if (n >= 1_000_000) {
+    return `${(n / 1_000_000).toFixed(1)}M`
+  }
+  if (n >= 1_000) {
+    return `${(n / 1_000).toFixed(1)}k`
+  }
+  return String(n)
+}
+
+/** The collapsed stats block appended to the review summary comment. */
+export const formatStatsDetails = (
+  usage: ReviewUsage,
+  modelArgs: string
+): string => {
+  const cost = `$${usage.costUsd.toFixed(2)}`
+  const duration = formatDuration(usage.durationMs)
+  const effort = modelArgs.match(/--effort (\S+)/)?.[1]
+  const model = [
+    usage.models.join(", ") || "unknown",
+    effort && `${effort} effort`,
+  ]
+    .filter(Boolean)
+    .join(", ")
+  const totalInput =
+    usage.inputTokens + usage.cacheWriteTokens + usage.cacheReadTokens
+
+  const rows: [string, string][] = [
+    ["Model", model],
+    ["Cost", cost],
+    ["Turns", String(usage.turns)],
+    ["Duration", duration],
+    [
+      "Tokens",
+      `${formatCompact(totalInput)} in (${Math.round(cacheHitRate(usage) * 100)}% cached), ${formatCompact(usage.outputTokens)} out`,
+    ],
+    ["Denied tool calls", String(usage.permissionDenials)],
+  ]
+
+  return [
+    "<details>",
+    `<summary>Review stats · ${cost} · ${usage.turns} turns · ${duration}</summary>`,
+    "",
+    "| | |",
+    "| --- | --- |",
+    ...rows.map(([label, value]) => `| ${label} | ${value} |`),
+    "",
+    "</details>",
+  ].join("\n")
+}
+
 const main = (): void => {
   const executionFile = process.env.EXECUTION_FILE
   if (!executionFile || !fs.existsSync(executionFile)) {

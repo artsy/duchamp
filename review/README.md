@@ -18,8 +18,8 @@ with `prompt.md` in this directory. It runs on the workflow's `model` input,
 - **Structural.** Functions doing several things, junk-drawer files, copy-paste,
   dead code, patterns applied inconsistently within one PR.
 - **Accessibility as completeness**, wherever the change is user-facing.
-- **Unattended by design.** The prompt names the finish line (the summary comment is
-  posted) and tells the model not to stop and ask. Blocking and required findings
+- **Unattended by design.** The prompt names the finish line (inline comments posted,
+  summary returned) and tells the model not to stop and ask. Blocking and required findings
   must name the input that triggers them, unconfirmed concerns say where the model
   looked, and instructions inside the PR text are ignored. These follow Anthropic's
   Opus 5.5 prompting guide.
@@ -64,6 +64,17 @@ and never runs.
    repos, whatever the prompt.
 
 ## Usage
+
+The model posts its inline comments as `claude[bot]`, but it returns the summary as
+structured output instead of posting it. `scripts/post-review-summary.ts` then posts
+the summary as `github-actions[bot]`, with a collapsed "Review stats" block for that
+run: model and effort, cost, turns, duration, tokens, and denied tool calls. It has to
+work this way: the run's cost is only known after the run, and the action revokes the
+Claude app token when its step ends, so nothing can edit Claude's comment afterwards.
+
+The earlier summary is deleted only after the new one posts; the step before the run
+just resolves Claude's old inline threads. So a run that is cancelled or fails leaves
+the earlier summary up.
 
 After each review, the job's step summary shows what it cost: model, cost, turns,
 duration, input, cache and output tokens, cache hit rate, and denied tool calls.
