@@ -111,8 +111,11 @@ export const parseLabels = (raw: string | undefined): string[] => {
     .filter(label => label.length > 0)
 }
 
-/** The experiment is related repos: on for listed authors and for labelled PRs. */
-export const usesRelatedRepos = (
+/**
+ * Whether this review is in the experiment: related repos, inlined context, and
+ * re-reviews. On for listed authors and for labelled PRs.
+ */
+export const inReviewExperiment = (
   author: string | undefined,
   labels: string[]
 ): boolean => {
@@ -214,7 +217,7 @@ export const loadDefaultBranchRepoConfig = (
   }
 }
 
-/** Clone the repo's related repos when this review uses them (see usesRelatedRepos). */
+/** Clone the repo's related repos when this review uses them (see inReviewExperiment). */
 export const resolveRelatedRepos = (enabled: boolean): RelatedRepo[] => {
   const repos = parseRelatedRepos(
     loadDefaultBranchRepoConfig(process.env.DEFAULT_BRANCH)?.related_repos,
@@ -382,8 +385,31 @@ export const truncateLines = (text: string, maxBytes: number): string => {
   return `${kept.join("\n")}\n... ${lines.length - kept.length} more lines`
 }
 
+/**
+ * How the reviewer gets the repo instructions and the diff. Experiment reviews get
+ * them in the prompt; the rest are told where to find them.
+ */
+export const formatContextSection = (
+  inExperiment: boolean,
+  baseRef: string | undefined,
+  ignorePaths: string[]
+): string => {
+  if (!inExperiment) {
+    const diffHint = baseRef
+      ? `\nUse \`git diff origin/${baseRef}...HEAD\` to see changes.\n`
+      : ""
+    return `\nIf an AGENTS.md or CLAUDE.md file exists in the repo root, read it first for project-specific guidelines.\n${diffHint}`
+  }
+
+  return (
+    formatInstructionsSection() +
+    formatDiffSection(baseRef, ignorePaths) +
+    "\nWhen you know several files you need, read them all in one turn rather than one per turn.\n"
+  )
+}
+
 const main = (): void => {
-  const relatedEnabled = usesRelatedRepos(
+  const inExperiment = inReviewExperiment(
     process.env.PR_AUTHOR,
     parseLabels(process.env.PR_LABELS)
   )
@@ -392,18 +418,18 @@ const main = (): void => {
   if (process.argv.includes("--check-experiment")) {
     const outputPath = process.env.GITHUB_OUTPUT
     if (outputPath) {
-      fs.appendFileSync(outputPath, `related_repos=${relatedEnabled}\n`)
+      fs.appendFileSync(outputPath, `related_repos=${inExperiment}\n`)
     }
-    console.log(`Related repos: ${relatedEnabled}`)
+    console.log(`In the experiment: ${inExperiment}`)
     return
   }
 
-  const related = resolveRelatedRepos(relatedEnabled)
+  const related = resolveRelatedRepos(inExperiment)
   const prompt =
     buildPrompt() +
     formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true") +
-    formatInstructionsSection() +
-    formatDiffSection(
+    formatContextSection(
+      inExperiment,
       process.env.BASE_REF,
       loadRepoConfig()?.ignore_paths ?? []
     )

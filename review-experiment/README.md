@@ -1,8 +1,12 @@
-# Review experiment: related repos
+# Review experiment
 
-An opt-in addition to the [AI PR review](../review/README.md). Experiment PRs can read
-other Artsy repos alongside the one under review. Every review uses the same prompt
-and model, in the experiment or not.
+An opt-in addition to the [AI PR review](../review/README.md). Experiment PRs:
+
+- can read other Artsy repos alongside the one under review (related repos, below)
+- get the repo's AGENTS.md, CLAUDE.md and the PR diff in the prompt, so the review
+  takes fewer turns (see [Context in the prompt](../review/README.md#context-in-the-prompt))
+
+Every review uses the same prompt file and model, in the experiment or not.
 
 ## Joining
 

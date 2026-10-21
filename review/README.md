@@ -57,8 +57,10 @@ and never runs.
 
 ## Context in the prompt
 
+For PRs in the [review experiment](../review-experiment/README.md),
 `build-review-prompt.ts` puts the repo's root `AGENTS.md` and `CLAUDE.md` and the PR
 diff into the prompt, so the reviewer doesn't spend its first turns fetching them.
+Other reviews are told to read them, as before.
 Each round trip resends the whole conversation, so fewer turns cost less. The diff
 leaves out lockfiles and the repo's `ignore_paths`.
 

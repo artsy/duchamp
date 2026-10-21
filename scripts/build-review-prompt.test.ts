@@ -4,8 +4,10 @@ import * as path from "path"
 import {
   buildPrompt,
   EXPERIMENT_LABEL,
+  formatContextSection,
   formatDiffSection,
   formatInstructionsSection,
+  inReviewExperiment,
   loadParticipants,
   loadRepoConfig,
   loadReviewPrompt,
@@ -16,7 +18,6 @@ import {
   resolveModelArgs,
   resolveRelatedRepos,
   truncateLines,
-  usesRelatedRepos,
 } from "./build-review-prompt"
 
 jest.mock("fs")
@@ -214,7 +215,7 @@ describe("resolveModelArgs", () => {
   })
 })
 
-describe("usesRelatedRepos", () => {
+describe("inReviewExperiment", () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
@@ -222,26 +223,26 @@ describe("usesRelatedRepos", () => {
   it("is true for an enrolled author, case-insensitively", () => {
     mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
 
-    expect(usesRelatedRepos("mounirdhahri", [])).toBe(true)
+    expect(inReviewExperiment("mounirdhahri", [])).toBe(true)
   })
 
   it("is true for a labelled PR without reading participants", () => {
     mockFs.existsSync.mockReturnValue(false)
 
-    expect(usesRelatedRepos("someone-else", [EXPERIMENT_LABEL])).toBe(true)
+    expect(inReviewExperiment("someone-else", [EXPERIMENT_LABEL])).toBe(true)
     expect(mockFs.existsSync).not.toHaveBeenCalled()
   })
 
   it("is false for an author outside the experiment", () => {
     mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
 
-    expect(usesRelatedRepos("someone-else", ["in-progress"])).toBe(false)
+    expect(inReviewExperiment("someone-else", ["in-progress"])).toBe(false)
   })
 
   it("is false with no author and no label", () => {
     mockFs.existsSync.mockReturnValue(false)
 
-    expect(usesRelatedRepos(undefined, [])).toBe(false)
+    expect(inReviewExperiment(undefined, [])).toBe(false)
   })
 })
 
@@ -574,5 +575,37 @@ describe("truncateLines", () => {
     expect(truncateLines("aaaa\nbbbb\ncccc", 10)).toBe(
       "aaaa\nbbbb\n... 1 more lines"
     )
+  })
+})
+
+describe("formatContextSection", () => {
+  const mockGit = execFileSync as jest.Mock
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockGit.mockReset()
+  })
+
+  it("tells reviews outside the experiment where to find the context", () => {
+    mockFiles({ "AGENTS.md": "Use yarn." })
+
+    const section = formatContextSection(false, "main", [])
+
+    expect(section).toContain("If an AGENTS.md or CLAUDE.md file exists")
+    expect(section).toContain("`git diff origin/main...HEAD`")
+    expect(section).not.toContain("Use yarn.")
+    expect(mockGit).not.toHaveBeenCalled()
+  })
+
+  it("inlines the context for experiment reviews", () => {
+    mockFiles({ "AGENTS.md": "Use yarn." })
+    mockGit.mockReturnValue("diff --git a/x.ts b/x.ts\n")
+
+    const section = formatContextSection(true, "main", [])
+
+    expect(section).toContain("Use yarn.")
+    expect(section).toContain("```diff\ndiff --git a/x.ts b/x.ts")
+    expect(section).toContain("read them all in one turn")
+    expect(section).not.toContain("If an AGENTS.md or CLAUDE.md file exists")
   })
 })

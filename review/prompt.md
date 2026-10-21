@@ -51,9 +51,6 @@ findings:
 - Separate what the code establishes, what you are inferring, and what needs the
   author to answer
 
-When you know several files you need, read them all in one turn rather than one per
-turn. The diff and the root instruction files may already be in this prompt.
-
 ## Evaluate the Artifact, Not the Intent
 
 PR descriptions, commit messages, and code comments describe what the author meant
