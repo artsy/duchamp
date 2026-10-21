@@ -70,6 +70,20 @@ duration, input, cache and output tokens, cache hit rate, and denied tool calls.
 `scripts/review-usage.ts` reads these from the action's execution file. It writes
 numbers only, never the conversation, because that holds PR content.
 
+The same numbers go to the job log as one `REVIEW_USAGE {...}` JSON line. To compare
+reviews before and after a change, collect them across repos and split by date:
+
+```bash
+yarn ts-node scripts/collect-review-usage.ts --repos eigen,force,metaphysics \
+  --since 2026-10-14 --split 2026-10-22
+```
+
+It prints median cost, turns, time and cache hit rate per window and review mode.
+It finds runs by the caller's workflow file, `run-claude-review.yml` unless you pass
+`--workflow`. GitHub keeps logs for 90 days by default, so older windows are gone.
+This is a before/after comparison, not a controlled test: the mix of PRs changes
+from week to week.
+
 ## Attribution
 
 `prompt.md` is adapted from two MIT-licensed skills:

@@ -120,6 +120,17 @@ export const formatUsageSummary = (
   ].join("\n")
 }
 
+export const USAGE_LOG_PREFIX = "REVIEW_USAGE "
+
+/** One JSON line for scripts/collect-review-usage.ts to find in the job log. */
+export const formatUsageLogLine = (
+  usage: ReviewUsage,
+  modelArgs: string,
+  reviewMode: string
+): string =>
+  USAGE_LOG_PREFIX +
+  JSON.stringify({ ...usage, modelArgs, reviewMode: reviewMode || null })
+
 const main = (): void => {
   const executionFile = process.env.EXECUTION_FILE
   if (!executionFile || !fs.existsSync(executionFile)) {
@@ -135,6 +146,13 @@ const main = (): void => {
 
   const summary = formatUsageSummary(usage, process.env.MODEL_ARGS ?? "")
   console.log(summary)
+  console.log(
+    formatUsageLogLine(
+      usage,
+      process.env.MODEL_ARGS ?? "",
+      process.env.REVIEW_MODE ?? ""
+    )
+  )
 
   const summaryPath = process.env.GITHUB_STEP_SUMMARY
   if (summaryPath) {

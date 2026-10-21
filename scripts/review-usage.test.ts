@@ -1,5 +1,6 @@
 import {
   cacheHitRate,
+  formatUsageLogLine,
   formatUsageSummary,
   parseReviewUsage,
   type ReviewUsage,
@@ -116,5 +117,32 @@ describe("formatUsageSummary", () => {
 
   it("leaves out the conversation", () => {
     expect(summary).not.toContain("Secret PR text")
+  })
+})
+
+describe("formatUsageLogLine", () => {
+  const usage = parseReviewUsage(executionFile(RESULT)) as ReviewUsage
+
+  it("is the prefix and one line of JSON", () => {
+    const line = formatUsageLogLine(usage, "--effort high", "full")
+
+    expect(line).not.toContain("\n")
+    expect(line.startsWith("REVIEW_USAGE {")).toBe(true)
+    expect(JSON.parse(line.slice("REVIEW_USAGE ".length))).toMatchObject({
+      costUsd: 0.7712,
+      turns: 9,
+      modelArgs: "--effort high",
+      reviewMode: "full",
+    })
+  })
+
+  it("records a missing review mode as null", () => {
+    const line = formatUsageLogLine(usage, "", "")
+
+    expect(line).toContain('"reviewMode":null')
+  })
+
+  it("leaves out the conversation", () => {
+    expect(formatUsageLogLine(usage, "", "")).not.toContain("Secret PR text")
   })
 })
