@@ -84,7 +84,7 @@ export const cacheHitRate = (usage: ReviewUsage): number => {
   return totalInput === 0 ? 0 : usage.cacheReadTokens / totalInput
 }
 
-const formatDuration = (ms: number): string => {
+export const formatDuration = (ms: number): string => {
   const seconds = Math.round(ms / 1000)
   return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`
 }

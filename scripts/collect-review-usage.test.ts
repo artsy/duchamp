@@ -63,6 +63,28 @@ describe("parseArgs", () => {
   it("requires repos and since", () => {
     expect(() => parseArgs(["--repos", "eigen"])).toThrow("Usage")
   })
+
+  it("rejects a flag with no value", () => {
+    expect(() =>
+      parseArgs(["--repos", "eigen", "--since", "2026-10-14", "--split"])
+    ).toThrow("--split needs a value")
+    expect(() => parseArgs(["--repos", "--since", "2026-10-14"])).toThrow(
+      "--repos needs a value"
+    )
+  })
+
+  it("rejects a split on or before since", () => {
+    expect(() =>
+      parseArgs([
+        "--repos",
+        "eigen",
+        "--since",
+        "2026-10-14",
+        "--split",
+        "2026-10-10",
+      ])
+    ).toThrow("--split 2026-10-10 must come after --since 2026-10-14")
+  })
 })
 
 describe("parseUsageLines", () => {
@@ -107,6 +129,17 @@ describe("windowFor", () => {
     )
   })
 
+  it("splits at a timestamp within the merge day", () => {
+    const splits = ["2026-10-22T14:05:00Z"]
+
+    expect(windowFor("2026-10-22T14:04:59Z", "2026-10-14", splits)).toBe(
+      "2026-10-14 to 2026-10-22T14:05:00Z"
+    )
+    expect(windowFor("2026-10-22T14:05:00Z", "2026-10-14", splits)).toBe(
+      "2026-10-22T14:05:00Z on"
+    )
+  })
+
   it("has one open window without splits", () => {
     expect(windowFor("2026-10-20T00:00:00Z", "2026-10-14", [])).toBe(
       "2026-10-14 on"
@@ -127,7 +160,11 @@ describe("summarize", () => {
     const table = summarize(
       [
         run("2026-10-15T00:00:00Z", { costUsd: 1, turns: 14 }),
-        run("2026-10-16T00:00:00Z", { costUsd: 2, turns: 16 }),
+        run("2026-10-16T00:00:00Z", {
+          costUsd: 2,
+          turns: 16,
+          outcome: "error_max_turns",
+        }),
         run("2026-10-23T00:00:00Z", { costUsd: 0.5, reviewMode: "full" }),
         run("2026-10-24T00:00:00Z", { costUsd: 0.2, reviewMode: "rereview" }),
         run("2026-10-01T00:00:00Z", { costUsd: 99 }),
@@ -138,9 +175,9 @@ describe("summarize", () => {
 
     const rows = table.split("\n").slice(2)
     expect(rows).toEqual([
-      "| 2026-10-14 to 2026-10-22 | all | 2 | $1.50 | 15 | 2m 00s | 90.0% | $3.00 |",
-      "| 2026-10-22 on | full | 1 | $0.50 | 10 | 2m 00s | 90.0% | $0.50 |",
-      "| 2026-10-22 on | rereview | 1 | $0.20 | 10 | 2m 00s | 90.0% | $0.20 |",
+      "| 2026-10-14 to 2026-10-22 | all | 2 | 1 | $1.50 | 15 | 2m 00s | 90.0% | $3.00 |",
+      "| 2026-10-22 on | full | 1 | 0 | $0.50 | 10 | 2m 00s | 90.0% | $0.50 |",
+      "| 2026-10-22 on | rereview | 1 | 0 | $0.20 | 10 | 2m 00s | 90.0% | $0.20 |",
     ])
   })
 })

@@ -82,7 +82,12 @@ It prints median cost, turns, time and cache hit rate per window and review mode
 It finds runs by the caller's workflow file, `run-claude-review.yml` unless you pass
 `--workflow`. GitHub keeps logs for 90 days by default, so older windows are gone.
 This is a before/after comparison, not a controlled test: the mix of PRs changes
-from week to week.
+from week to week. Runs from before re-reviews existed show as mode `all`; after,
+they split into `full` and `rereview`. An `all` row and a `full` row cover different
+PRs, so don't compare those two directly. Add up each window's rows instead.
+"Not success" counts runs that ended early, such as at the turn limit. They are
+cheap, so a rise there can look like a saving. Over 1,000 runs in a repo, GitHub
+drops the oldest and the script warns.
 
 ## Attribution
 
