@@ -18,6 +18,10 @@ import {
 /** Starts the footer the workflow appends, and marks the comment as a review summary. */
 export const FOOTER_SENTINEL = "<!-- ai-review-footer -->"
 
+/** Names the commit this summary reviewed, for the next run's re-review. */
+export const reviewMarker = (sha: string): string =>
+  `<!-- ai-review-sha: ${sha} -->`
+
 interface IssueComment {
   id: number
   user: { login: string; type: string } | null
@@ -44,14 +48,21 @@ export interface CommentInput {
   summary: string
   usage: ReviewUsage | null
   modelArgs: string
+  /** Experiment reviews only: the commit reviewed, and the earlier one on a re-review. */
+  headSha: string
+  reviewedSince: string
 }
 
-/** Summary, then the footer: the sentinel and this run's stats block. */
+/** Summary, then the footer: the sentinel, this run's stats, and the marker. */
 export const buildCommentBody = (input: CommentInput): string => {
-  const stats = input.usage
-    ? `\n${formatStatsDetails(input.usage, input.modelArgs)}`
-    : ""
-  return `${input.summary.trimEnd()}\n\n${FOOTER_SENTINEL}${stats}`
+  const footer = [
+    input.usage &&
+      formatStatsDetails(input.usage, input.modelArgs, input.reviewedSince),
+    input.headSha && reviewMarker(input.headSha),
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+  return `${input.summary.trimEnd()}\n\n${FOOTER_SENTINEL}${footer && `\n${footer}`}`
 }
 
 /**
@@ -125,6 +136,8 @@ const main = (): void => {
     summary,
     usage,
     modelArgs: process.env.MODEL_ARGS ?? "",
+    headSha: process.env.HEAD_SHA ?? "",
+    reviewedSince: process.env.REVIEWED_SINCE ?? "",
   })
 
   const repo = process.env.GITHUB_REPOSITORY ?? ""

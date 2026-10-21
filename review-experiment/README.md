@@ -5,6 +5,8 @@ An opt-in addition to the [AI PR review](../review/README.md). Experiment PRs:
 - can read other Artsy repos alongside the one under review (related repos, below)
 - get the repo's AGENTS.md and the PR diff in the prompt (see
   [Context in the prompt](../review/README.md#context-in-the-prompt))
+- after the first review, re-review only what changed (see
+  [Re-reviews](../review/README.md#re-reviews))
 
 Every review uses the same prompt file and model, in the experiment or not.
 

@@ -152,7 +152,8 @@ const formatCompact = (n: number): string => {
 /** The collapsed stats block appended to the review summary comment. */
 export const formatStatsDetails = (
   usage: ReviewUsage,
-  modelArgs: string
+  modelArgs: string,
+  reviewedSince = ""
 ): string => {
   const cost = `$${usage.costUsd.toFixed(2)}`
   const duration = formatDuration(usage.durationMs)
@@ -168,6 +169,12 @@ export const formatStatsDetails = (
 
   const rows: [string, string][] = [
     ["Model", model],
+    ...(reviewedSince
+      ? ([["Mode", `rereview since \`${reviewedSince}\``]] as [
+          string,
+          string,
+        ][])
+      : []),
     ["Cost", cost],
     ["Turns", String(usage.turns)],
     ["Duration", duration],

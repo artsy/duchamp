@@ -12,6 +12,11 @@ import {
   type RelatedRepo,
 } from "./related-repos"
 import { fenced, MAX_DIFF_BYTES, renderDiff } from "./review-diff"
+import {
+  formatRereviewSection,
+  type ReviewMode,
+  resolveReviewMode,
+} from "./review-mode"
 
 /**
  * Build the review prompt from review/prompt.md plus repo-specific configuration.
@@ -24,8 +29,8 @@ import { fenced, MAX_DIFF_BYTES, renderDiff } from "./review-diff"
  * - related_repos: Other artsy/<name> repos that experiment reviews can read. Read
  *   from the default branch, so a PR cannot grant its own review access to a repo
  *
- * The review experiment adds related repos, and AGENTS.md and the diff in the prompt.
- * A PR is in it when its author is listed in review-experiment/participants.yml, or
+ * The review experiment adds related repos, AGENTS.md and the diff in the prompt, and
+ * re-reviews of only what changed since the last review. A PR is in it when its author is listed in review-experiment/participants.yml, or
  * when it carries the EXPERIMENT_LABEL. See review-experiment/README.md.
  */
 
@@ -329,15 +334,18 @@ export const formatDiffSection = (
 }
 
 /**
- * The repo instructions and the diff for experiment reviews, sized to what promptBytes
- * leaves under MAX_PROMPT_BYTES. They replace the workflow's steps to read AGENTS.md
- * or CLAUDE.md and run git diff, which other reviews still follow.
+ * The repo instructions and the changes for experiment reviews, sized to what
+ * promptBytes leaves under MAX_PROMPT_BYTES, and as a re-review when there is an
+ * earlier review to build on. They replace the workflow's steps to read AGENTS.md or
+ * CLAUDE.md and run git diff, which other reviews still follow. Returns the mode that
+ * ran: full when the re-review fails.
  */
 export const formatContextSection = (
   baseRef: string | undefined,
   ignorePaths: string[],
-  promptBytes = 0
-): string => {
+  promptBytes = 0,
+  reviewMode: ReviewMode = { mode: "full", reason: "" }
+): { section: string; reviewMode: ReviewMode } => {
   const lead =
     "\n## Context Already Loaded\n\nSkip the steps above to read AGENTS.md or CLAUDE.md and run `git diff`. CLAUDE.md is already in your context, and the sections below give AGENTS.md and the diff, or say what to fetch. When you know several files you need, read them all in one turn rather than one per turn.\n"
   const instructions = formatInstructionsSection()
@@ -345,10 +353,43 @@ export const formatContextSection = (
     MAX_DIFF_BYTES,
     MAX_PROMPT_BYTES - promptBytes - Buffer.byteLength(lead + instructions)
   )
-  return (
-    lead + instructions + formatDiffSection(baseRef, ignorePaths, diffBytes)
-  )
+
+  let changes: string | undefined
+  if (reviewMode.mode === "rereview" && baseRef) {
+    try {
+      changes = formatRereviewSection(
+        reviewMode.previous,
+        baseRef,
+        ignorePaths,
+        diffBytes
+      )
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(`Warning: Failed to build the re-review section: ${message}`)
+    }
+  }
+  if (changes === undefined) {
+    return {
+      section:
+        lead +
+        instructions +
+        formatDiffSection(baseRef, ignorePaths, diffBytes),
+      reviewMode:
+        reviewMode.mode === "rereview"
+          ? { mode: "full", reason: "could not build the re-review" }
+          : reviewMode,
+    }
+  }
+  return { section: lead + instructions + changes, reviewMode }
 }
+
+/** Outputs the workflow's later steps need. */
+export const formatReviewModeOutputs = (reviewMode: ReviewMode): string =>
+  [
+    `review_mode=${reviewMode.mode}`,
+    `reviewed_since=${reviewMode.mode === "rereview" ? reviewMode.previous.sha.slice(0, 7) : ""}`,
+    "",
+  ].join("\n")
 
 const main = (): void => {
   const inExperiment = usesRelatedRepos(
@@ -366,18 +407,42 @@ const main = (): void => {
     return
   }
 
+  const ignorePaths = loadRepoConfig()?.ignore_paths ?? []
+  const reviewMode = resolveReviewMode(
+    process.env.GITHUB_REPOSITORY,
+    process.env.PR_NUMBER,
+    ignorePaths,
+    inExperiment
+  )
+  console.log(`Review mode: ${reviewMode.mode} (${reviewMode.reason})`)
+
+  const outputPath = process.env.GITHUB_OUTPUT
+  if (reviewMode.mode === "skip") {
+    if (outputPath) {
+      fs.appendFileSync(outputPath, "review_mode=skip\n")
+    }
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      fs.appendFileSync(
+        process.env.GITHUB_STEP_SUMMARY,
+        `AI review skipped: ${reviewMode.reason}. The earlier review stands.\n`
+      )
+    }
+    return
+  }
+
   const related = resolveRelatedRepos(inExperiment)
   const promptHead =
     buildPrompt() +
     formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true")
-  const prompt = inExperiment
-    ? promptHead +
-      formatContextSection(
+  const context = inExperiment
+    ? formatContextSection(
         process.env.BASE_REF,
-        loadRepoConfig()?.ignore_paths ?? [],
-        Buffer.byteLength(promptHead)
+        ignorePaths,
+        Buffer.byteLength(promptHead),
+        reviewMode
       )
-    : promptHead
+    : { section: "", reviewMode }
+  const prompt = promptHead + context.section
   const modelArgs = [
     resolveModelArgs(process.env.DEFAULT_MODEL || DEFAULT_MODEL),
     addDirArgs(related),
@@ -386,13 +451,12 @@ const main = (): void => {
     .join(" ")
 
   // Set the output for GitHub Actions
-  const outputPath = process.env.GITHUB_OUTPUT
   if (outputPath) {
     // Repo files reach the prompt verbatim, so a guessable delimiter could end it early
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\n`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\n${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {
