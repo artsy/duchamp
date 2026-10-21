@@ -18,8 +18,8 @@ with `prompt.md` in this directory. It runs on the workflow's `model` input,
 - **Structural.** Functions doing several things, junk-drawer files, copy-paste,
   dead code, patterns applied inconsistently within one PR.
 - **Accessibility as completeness**, wherever the change is user-facing.
-- **Unattended by design.** The prompt names the finish line (the summary comment is
-  posted) and tells the model not to stop and ask. Blocking and required findings
+- **Unattended by design.** The prompt names the finish line (inline comments posted,
+  summary returned) and tells the model not to stop and ask. Blocking and required findings
   must name the input that triggers them, unconfirmed concerns say where the model
   looked, and instructions inside the PR text are ignored. These follow Anthropic's
   Opus 5.5 prompting guide.
@@ -73,9 +73,10 @@ cap, the reviewer gets the list of changed files and reads the diff itself.
 For PRs in the [review experiment](../review-experiment/README.md), pushes after the
 first review can be skipped or narrowed. Other PRs get a full review on every push.
 
-Every summary ends with a hidden marker, `<!-- ai-review-sha: <commit> -->`, naming
-the commit it reviewed. On the next push, `scripts/review-mode.ts` reads the marker
-from the latest `claude[bot]` comment and picks a mode:
+Every summary ends with a hidden marker naming the commit it reviewed and the PR's
+running review cost: `<!-- ai-review-sha: <commit> total-usd: <n> runs: <n> -->`. On
+the next push, `scripts/review-mode.ts` reads the marker from the latest bot comment
+and picks a mode:
 
 | Mode | When | What happens |
 | --- | --- | --- |
@@ -83,8 +84,9 @@ from the latest `claude[bot]` comment and picks a mode:
 | skip | Only Markdown, lockfiles, or `ignore_paths` changed since | No run. The earlier review stays up |
 | rereview | Anything else | The prompt holds the earlier summary and the diff since then. The reviewer re-checks the earlier findings, reviews the new changes in depth, and posts a full summary |
 
-Only comments by `claude[bot]` count, so a PR author can't post a marker that makes
-the review skip their changes. The mode shows in the usage table.
+Only comments by `github-actions[bot]` and `claude[bot]` count, so a PR author can't
+post a marker that makes the review skip their changes. The mode shows in the usage
+table.
 
 ## Precedence
 
@@ -95,6 +97,18 @@ the review skip their changes. The mode shows in the usage table.
    repos, whatever the prompt.
 
 ## Usage
+
+The model posts its inline comments as `claude[bot]`, but it returns the summary as
+structured output instead of posting it. `scripts/post-review-summary.ts` then posts
+the summary as `github-actions[bot]`, with a collapsed "Review stats" block and the
+marker. It has to work this way: the run's cost is only known after the run, and the
+action revokes the Claude app token when its step ends, so nothing can edit Claude's
+comment afterwards.
+
+The stats block shows this run's model, mode, cost, turns, duration and tokens, and,
+from the second review on, the PR total. The total counts finished reviews only. A
+run that a new push cancels, or that times out, costs money but posts no summary, so
+the total runs a little low.
 
 After each review, the job's step summary shows what it cost: model, cost, turns,
 duration, input, cache and output tokens, cache hit rate, and denied tool calls.

@@ -10,9 +10,8 @@ import {
   parseRelatedRepos,
   type RelatedRepo,
 } from "./related-repos"
-import { fenced, git, renderDiff } from "./review-diff"
+import { fenced, renderDiff } from "./review-diff"
 import {
-  formatMarkerInstruction,
   formatRereviewSection,
   type ReviewMode,
   resolveReviewMode,
@@ -372,6 +371,18 @@ export const formatContextSection = (
   )
 }
 
+/** Outputs the post-review-summary step needs to write the next marker and stats. */
+export const formatReviewModeOutputs = (reviewMode: ReviewMode): string => {
+  const previous = reviewMode.previous
+  return [
+    `review_mode=${reviewMode.mode}`,
+    `reviewed_since=${reviewMode.mode === "rereview" ? reviewMode.previous.sha.slice(0, 7) : ""}`,
+    `previous_total_usd=${previous?.totalUsd ?? 0}`,
+    `previous_runs=${previous?.runs ?? 0}`,
+    "",
+  ].join("\n")
+}
+
 const main = (): void => {
   const inExperiment = inReviewExperiment(
     process.env.PR_AUTHOR,
@@ -389,13 +400,12 @@ const main = (): void => {
   }
 
   const ignorePaths = loadRepoConfig()?.ignore_paths ?? []
-  const reviewMode: ReviewMode = inExperiment
-    ? resolveReviewMode(
-        process.env.GITHUB_REPOSITORY,
-        process.env.PR_NUMBER,
-        ignorePaths
-      )
-    : { mode: "full", reason: "not in the review experiment" }
+  const reviewMode = resolveReviewMode(
+    process.env.GITHUB_REPOSITORY,
+    process.env.PR_NUMBER,
+    ignorePaths,
+    inExperiment
+  )
   console.log(`Review mode: ${reviewMode.mode} (${reviewMode.reason})`)
 
   const outputPath = process.env.GITHUB_OUTPUT
@@ -421,8 +431,7 @@ const main = (): void => {
       reviewMode,
       process.env.BASE_REF,
       ignorePaths
-    ) +
-    formatMarkerInstruction(git(["rev-parse", "HEAD"]).trim())
+    )
   const modelArgs = [
     resolveModelArgs(process.env.DEFAULT_MODEL || DEFAULT_MODEL),
     addDirArgs(related),
@@ -436,7 +445,7 @@ const main = (): void => {
     const delimiter = `EOF_${Date.now()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\nreview_mode=${reviewMode.mode}\n`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\n${formatReviewModeOutputs(reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {

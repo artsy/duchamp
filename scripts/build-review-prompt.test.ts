@@ -7,6 +7,7 @@ import {
   formatContextSection,
   formatDiffSection,
   formatInstructionsSection,
+  formatReviewModeOutputs,
   inReviewExperiment,
   loadParticipants,
   loadRepoConfig,
@@ -567,7 +568,7 @@ describe("formatDiffSection", () => {
 
 describe("formatContextSection", () => {
   const mockGit = execFileSync as jest.Mock
-  const FULL = { mode: "full", reason: "" } as const
+  const FULL = { mode: "full", reason: "", previous: null } as const
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -606,7 +607,12 @@ describe("formatContextSection", () => {
       {
         mode: "rereview",
         reason: "",
-        previous: { sha: "a".repeat(40), body: "## Code Review" },
+        previous: {
+          sha: "a".repeat(40),
+          body: "## Code Review",
+          totalUsd: 0,
+          runs: 0,
+        },
       },
       "main",
       []
@@ -614,5 +620,34 @@ describe("formatContextSection", () => {
 
     expect(section).toContain("## Re-review")
     expect(section).not.toContain("## The Diff")
+  })
+})
+
+describe("formatReviewModeOutputs", () => {
+  const previous = {
+    sha: "a".repeat(40),
+    body: "Summary",
+    totalUsd: 1.47,
+    runs: 2,
+  }
+
+  it("passes the earlier review's totals and SHA on a re-review", () => {
+    expect(
+      formatReviewModeOutputs({ mode: "rereview", reason: "", previous })
+    ).toBe(
+      "review_mode=rereview\nreviewed_since=aaaaaaa\nprevious_total_usd=1.47\nprevious_runs=2\n"
+    )
+  })
+
+  it("keeps the totals on a full review after a force push", () => {
+    expect(
+      formatReviewModeOutputs({ mode: "full", reason: "", previous })
+    ).toContain("reviewed_since=\nprevious_total_usd=1.47\nprevious_runs=2")
+  })
+
+  it("starts from zero on a first review", () => {
+    expect(
+      formatReviewModeOutputs({ mode: "full", reason: "", previous: null })
+    ).toContain("previous_total_usd=0\nprevious_runs=0")
   })
 })

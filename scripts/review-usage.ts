@@ -122,6 +122,91 @@ export const formatUsageSummary = (
   ].join("\n")
 }
 
+/** 1.2M, 6.1k, 950. */
+const formatCompact = (n: number): string => {
+  if (n >= 1_000_000) {
+    return `${(n / 1_000_000).toFixed(1)}M`
+  }
+  if (n >= 1_000) {
+    return `${(n / 1_000).toFixed(1)}k`
+  }
+  return String(n)
+}
+
+export interface StatsContext {
+  modelArgs: string
+  reviewMode: string
+  /** Short SHA of the earlier review, on a re-review. */
+  reviewedSince: string
+  /** Cost of the PR's finished reviews, this one included. */
+  totalUsd: number
+  runs: number
+}
+
+/** The collapsed stats block appended to the review summary comment. */
+export const formatStatsDetails = (
+  usage: ReviewUsage,
+  context: StatsContext
+): string => {
+  const cost = `$${usage.costUsd.toFixed(2)}`
+  const total = `$${context.totalUsd.toFixed(2)}`
+  const turns = `${usage.turns} turns`
+  const duration = formatDuration(usage.durationMs)
+  const headline =
+    context.runs > 1
+      ? [
+          `${cost} this run`,
+          `${total} across ${context.runs} reviews`,
+          turns,
+          duration,
+        ]
+      : [cost, turns, duration]
+
+  const effort = context.modelArgs.match(/--effort (\S+)/)?.[1]
+  const model = [
+    usage.models.join(", ") || "unknown",
+    effort && `${effort} effort`,
+  ]
+    .filter(Boolean)
+    .join(", ")
+  const mode =
+    context.reviewMode === "rereview" && context.reviewedSince
+      ? `rereview since \`${context.reviewedSince}\``
+      : context.reviewMode || "full"
+  const totalInput =
+    usage.inputTokens + usage.cacheWriteTokens + usage.cacheReadTokens
+
+  const rows: [string, string][] = [
+    ["Model", model],
+    ["Mode", mode],
+    ["Cost", cost],
+    ...(context.runs > 1
+      ? ([["PR total", `${total} across ${context.runs} finished reviews`]] as [
+          string,
+          string,
+        ][])
+      : []),
+    ["Turns", String(usage.turns)],
+    ["Duration", duration],
+    [
+      "Tokens",
+      `${formatCompact(totalInput)} in (${Math.round(cacheHitRate(usage) * 100)}% cached), ${formatCompact(usage.outputTokens)} out`,
+    ],
+    ["Denied tool calls", String(usage.permissionDenials)],
+  ]
+
+  return [
+    "<details>",
+    `<summary>Review stats · ${headline.join(" · ")}</summary>`,
+    "",
+    "| | |",
+    "| --- | --- |",
+    ...rows.map(([label, value]) => `| ${label} | ${value} |`),
+    "",
+    "</details>",
+  ].join("\n")
+}
+
 const main = (): void => {
   const executionFile = process.env.EXECUTION_FILE
   if (!executionFile || !fs.existsSync(executionFile)) {

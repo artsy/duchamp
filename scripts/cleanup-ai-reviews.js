@@ -2,7 +2,8 @@
  * Clean up previous AI review comments before posting a new review.
  *
  * This script:
- * 1. Deletes main review comments (issue comments) posted by the Claude bot
+ * 1. Deletes main review comments (issue comments): the summary, which the workflow
+ *    posts as github-actions[bot] with the review marker, or which Claude posted before
  * 2. Resolves inline review threads started by the Claude bot (preserves conversation history)
  *
  * @param {Object} params - Parameters from actions/github-script
@@ -14,9 +15,21 @@
 // Bot identification - login format differs between REST and GraphQL APIs
 const CLAUDE_BOT_LOGIN_REST = "claude[bot]"
 const CLAUDE_BOT_LOGIN_GRAPHQL = "claude"
+const ACTIONS_BOT_LOGIN_REST = "github-actions[bot]"
+const REVIEW_MARKER = "<!-- ai-review-sha: "
 
 function isClaudeBot(user) {
   return user?.type === "Bot" && user?.login === CLAUDE_BOT_LOGIN_REST
+}
+
+/** github-actions[bot] posts other comments too, so only the ones with the marker. */
+function isReviewSummary(comment) {
+  if (isClaudeBot(comment.user)) return true
+  return (
+    comment.user?.type === "Bot" &&
+    comment.user?.login === ACTIONS_BOT_LOGIN_REST &&
+    comment.body?.includes(REVIEW_MARKER)
+  )
 }
 
 async function cleanupPreviousAIReviews({ github, context, core }) {
@@ -43,7 +56,7 @@ async function cleanupPreviousAIReviews({ github, context, core }) {
 }
 
 /**
- * Delete main review comments (issue comments) posted by the Claude bot.
+ * Delete main review comments (issue comments).
  * These don't have threaded conversations, so they're safe to delete entirely.
  */
 async function deleteMainReviewComments({ github, owner, repo, prNumber }) {
@@ -54,7 +67,7 @@ async function deleteMainReviewComments({ github, owner, repo, prNumber }) {
     per_page: 100,
   })
 
-  const aiComments = comments.filter(comment => isClaudeBot(comment.user))
+  const aiComments = comments.filter(isReviewSummary)
 
   await Promise.all(
     aiComments.map(async comment => {

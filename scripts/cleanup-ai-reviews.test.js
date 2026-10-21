@@ -138,6 +138,41 @@ describe("cleanupPreviousAIReviews", () => {
     expect(mockGithub.rest.issues.deleteComment).not.toHaveBeenCalled()
   })
 
+  it("should delete review summaries posted by github-actions[bot]", async () => {
+    const comments = [
+      {
+        id: 1,
+        user: { type: "Bot", login: "github-actions[bot]" },
+        body: "## Code Review\n\n<!-- ai-review-sha: abc total-usd: 1.0000 runs: 1 -->",
+      },
+      {
+        id: 2,
+        user: { type: "Bot", login: "github-actions[bot]" },
+        body: "🤖 **AI Review skipped**",
+      },
+      {
+        id: 3,
+        user: { type: "User", login: "human-user" },
+        body: "Quoting <!-- ai-review-sha: abc -->",
+      },
+    ]
+
+    const mockGithub = createMockGithub(comments)
+
+    await cleanupPreviousAIReviews({
+      github: mockGithub,
+      context: mockContext,
+      core: mockCore,
+    })
+
+    expect(mockGithub.rest.issues.deleteComment).toHaveBeenCalledTimes(1)
+    expect(mockGithub.rest.issues.deleteComment).toHaveBeenCalledWith({
+      owner: "test-owner",
+      repo: "test-repo",
+      comment_id: 1,
+    })
+  })
+
   it("should not delete comments from users", async () => {
     const comments = [
       {

@@ -3,11 +3,11 @@ import {
   decideReviewMode,
   fetchBotCommentBodies,
   findPreviousReview,
-  formatMarkerInstruction,
   formatRereviewSection,
   MAX_DELTA_DIFF_BYTES,
   resolveReviewMode,
   reviewMarker,
+  stripReviewFooter,
 } from "./review-mode"
 
 jest.mock("child_process")
@@ -18,7 +18,9 @@ const SHA = "a".repeat(40)
 const OTHER_SHA = "b".repeat(40)
 const PREVIOUS = {
   sha: SHA,
-  body: `## Code Review\n\n1. Bug.\n\n${reviewMarker(SHA)}`,
+  body: `## Code Review\n\n1. Bug.\n\n<details>\n<summary>Review stats · $0.50</summary>\n\n| Cost | $0.50 |\n\n</details>\n\n${reviewMarker(SHA, 0.5, 1)}`,
+  totalUsd: 0.5,
+  runs: 1,
 }
 
 type Answer = string | Error
@@ -49,12 +51,20 @@ describe("findPreviousReview", () => {
   })
 
   it("takes the latest comment with a marker", () => {
-    const later = `Later.\n${reviewMarker(OTHER_SHA)}`
+    const later = `Later.\n${reviewMarker(OTHER_SHA, 1.25, 2)}`
 
     expect(findPreviousReview([PREVIOUS.body, later])).toEqual({
       sha: OTHER_SHA,
       body: later,
+      totalUsd: 1.25,
+      runs: 2,
     })
+  })
+
+  it("reads a marker without totals as zero cost so far", () => {
+    expect(
+      findPreviousReview([`<!-- ai-review-sha: ${SHA} -->`])
+    ).toMatchObject({ sha: SHA, totalUsd: 0, runs: 0 })
   })
 
   it("ignores a marker without a full SHA", () => {
@@ -73,8 +83,24 @@ describe("fetchBotCommentBodies", () => {
     const [, args] = mockExec.mock.calls[0]
     expect(args).toContain("repos/artsy/eigen/issues/42/comments")
     expect(args.join(" ")).toContain(
-      'select(.user.login == "claude[bot]" and .user.type == "Bot")'
+      'select(.user.type == "Bot" and (.user.login | IN("github-actions[bot]", "claude[bot]")))'
     )
+  })
+})
+
+describe("stripReviewFooter", () => {
+  it("cuts the stats block and the marker", () => {
+    expect(stripReviewFooter(PREVIOUS.body)).toBe("## Code Review\n\n1. Bug.")
+  })
+
+  it("cuts a marker without a stats block", () => {
+    expect(stripReviewFooter(`Summary.\n\n${reviewMarker(SHA, 1, 1)}`)).toBe(
+      "Summary."
+    )
+  })
+
+  it("leaves a body without a footer alone", () => {
+    expect(stripReviewFooter("Summary.\n")).toBe("Summary.")
   })
 })
 
@@ -116,14 +142,16 @@ describe("decideReviewMode", () => {
 
 describe("resolveReviewMode", () => {
   it("reviews in full without a PR number", () => {
-    expect(resolveReviewMode("artsy/eigen", undefined, []).mode).toBe("full")
+    expect(resolveReviewMode("artsy/eigen", undefined, [], true).mode).toBe(
+      "full"
+    )
     expect(mockExec).not.toHaveBeenCalled()
   })
 
   it("reviews in full when the comment lookup fails", () => {
     mockCommands({}, new Error("HTTP 403"))
 
-    const result = resolveReviewMode("artsy/eigen", "42", [])
+    const result = resolveReviewMode("artsy/eigen", "42", [], true)
 
     expect(result.mode).toBe("full")
     expect(result.reason).toContain("HTTP 403")
@@ -133,13 +161,23 @@ describe("resolveReviewMode", () => {
     // gh filters by author, so a forged marker never reaches findPreviousReview
     mockCommands({ diff: "" }, "")
 
-    expect(resolveReviewMode("artsy/eigen", "42", []).mode).toBe("full")
+    expect(resolveReviewMode("artsy/eigen", "42", [], true).mode).toBe("full")
+  })
+
+  it("reviews in full outside the experiment but keeps the earlier total", () => {
+    mockCommands({ diff: "" }, `${JSON.stringify(PREVIOUS.body)}\n`)
+
+    expect(resolveReviewMode("artsy/eigen", "42", [], false)).toMatchObject({
+      mode: "full",
+      previous: { sha: SHA, totalUsd: 0.5, runs: 1 },
+    })
+    expect(gitCalls("diff")).toHaveLength(0)
   })
 
   it("skips when the bot's marker names the current commit", () => {
     mockCommands({ diff: "" }, `${JSON.stringify(PREVIOUS.body)}\n`)
 
-    expect(resolveReviewMode("artsy/eigen", "42", []).mode).toBe("skip")
+    expect(resolveReviewMode("artsy/eigen", "42", [], true).mode).toBe("skip")
   })
 })
 
@@ -174,13 +212,5 @@ describe("formatRereviewSection", () => {
 
     expect(section).toContain("too large to include")
     expect(section).not.toContain("++++++++")
-  })
-})
-
-describe("formatMarkerInstruction", () => {
-  it("asks for the marker with the head commit", () => {
-    expect(formatMarkerInstruction(SHA)).toContain(
-      `<!-- ai-review-sha: ${SHA} -->`
-    )
   })
 })
