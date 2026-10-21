@@ -240,6 +240,148 @@ export const resolveRelatedRepos = (enabled: boolean): RelatedRepo[] => {
   )
 }
 
+/**
+ * The prompt reaches claude-code-action as an input, which the runner passes as one
+ * environment variable. Linux caps a single one at 128 KB, so these leave headroom
+ * for prompt.md and the repo config.
+ */
+export const MAX_DIFF_BYTES = 60_000
+export const MAX_INSTRUCTIONS_BYTES = 20_000
+
+const INSTRUCTION_FILES = ["AGENTS.md", "CLAUDE.md"]
+
+const LOCKFILES = [
+  "yarn.lock",
+  "package-lock.json",
+  "pnpm-lock.yaml",
+  "Gemfile.lock",
+  "Podfile.lock",
+]
+
+/** A code fence longer than any backtick run in the content, so it can't break out. */
+const fenced = (content: string, lang: string): string => {
+  const longestRun = Math.max(
+    0,
+    ...(content.match(/`+/g) ?? []).map(run => run.length)
+  )
+  const fence = "`".repeat(Math.max(3, longestRun + 1))
+  return `${fence}${lang}\n${content.trimEnd()}\n${fence}`
+}
+
+/**
+ * Inline the repo's root AGENTS.md and CLAUDE.md, which the reviewer would otherwise
+ * spend its first turns reading. A file over the cap is left for it to read.
+ */
+export const formatInstructionsSection = (): string => {
+  const parts: string[] = []
+  const tooLarge: string[] = []
+
+  for (const file of INSTRUCTION_FILES) {
+    const filePath = path.join(process.cwd(), file)
+    if (!fs.existsSync(filePath)) {
+      continue
+    }
+
+    const content = fs.readFileSync(filePath, "utf8")
+    if (Buffer.byteLength(content) > MAX_INSTRUCTIONS_BYTES) {
+      tooLarge.push(file)
+      continue
+    }
+    parts.push(`### ${file}\n\n${fenced(content, "markdown")}`)
+  }
+
+  if (parts.length === 0 && tooLarge.length === 0) {
+    return ""
+  }
+
+  const lines = ["\n## Repository Instructions\n"]
+  if (parts.length > 0) {
+    lines.push(
+      "The repo's root instruction files, already read for you. Do not read them again.\n",
+      parts.join("\n\n"),
+      ""
+    )
+  }
+  if (tooLarge.length > 0) {
+    lines.push(
+      `Too large to include here, so read them yourself: ${tooLarge.map(f => `\`${f}\``).join(", ")}.\n`
+    )
+  }
+  return lines.join("\n")
+}
+
+const diffPathspec = (ignorePaths: string[]): string[] => [
+  ".",
+  ...LOCKFILES.map(file => `:(exclude,glob)**/${file}`),
+  ...ignorePaths.map(pattern => `:(exclude,glob)${pattern}`),
+]
+
+/**
+ * Inline the PR diff, minus lockfiles and the repo's ignore_paths. Over the cap, give
+ * the file list instead and leave the reviewer to read the diff per file.
+ */
+export const formatDiffSection = (
+  baseRef: string | undefined,
+  ignorePaths: string[]
+): string => {
+  if (!baseRef) {
+    return ""
+  }
+
+  const range = `origin/${baseRef}...HEAD`
+  const git = (args: string[]): string =>
+    execFileSync("git", args, {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+      stdio: ["ignore", "pipe", "ignore"],
+    })
+
+  try {
+    const pathspec = diffPathspec(ignorePaths)
+    const diff = git(["diff", range, "--", ...pathspec])
+
+    if (Buffer.byteLength(diff) <= MAX_DIFF_BYTES) {
+      return [
+        "\n## The Diff\n",
+        `The full output of \`git diff ${range}\`, leaving out lockfiles and ignored paths. Do not run git diff for it again; read files for the code around it.\n`,
+        fenced(diff, "diff"),
+        "",
+      ].join("\n")
+    }
+
+    const stat = git(["diff", "--stat", range, "--", ...pathspec])
+    return [
+      "\n## The Diff\n",
+      `The diff is too large to include. These files changed; run \`git diff ${range} -- <path>\` for the ones you need.\n`,
+      fenced(truncateLines(stat, MAX_DIFF_BYTES), ""),
+      "",
+    ].join("\n")
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`Warning: Failed to read the PR diff: ${message}`)
+    return `\n## The Diff\n\nRun \`git diff ${range}\` to see the changes.\n`
+  }
+}
+
+/** Whole lines up to maxBytes, with a note of how many were cut. */
+export const truncateLines = (text: string, maxBytes: number): string => {
+  if (Buffer.byteLength(text) <= maxBytes) {
+    return text
+  }
+
+  const lines = text.split("\n")
+  const kept: string[] = []
+  let bytes = 0
+  for (const line of lines) {
+    bytes += Buffer.byteLength(line) + 1
+    if (bytes > maxBytes) {
+      break
+    }
+    kept.push(line)
+  }
+  return `${kept.join("\n")}\n... ${lines.length - kept.length} more lines`
+}
+
 const main = (): void => {
   const relatedEnabled = usesRelatedRepos(
     process.env.PR_AUTHOR,
@@ -259,7 +401,12 @@ const main = (): void => {
   const related = resolveRelatedRepos(relatedEnabled)
   const prompt =
     buildPrompt() +
-    formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true")
+    formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true") +
+    formatInstructionsSection() +
+    formatDiffSection(
+      process.env.BASE_REF,
+      loadRepoConfig()?.ignore_paths ?? []
+    )
   const modelArgs = [
     resolveModelArgs(process.env.DEFAULT_MODEL || DEFAULT_MODEL),
     addDirArgs(related),

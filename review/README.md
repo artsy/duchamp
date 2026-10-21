@@ -55,6 +55,17 @@ To add another, drop it in `.claude/skills/<name>/SKILL.md` and reference it fro
 prompt. A skill nothing references is dead weight: it costs context on every review
 and never runs.
 
+## Context in the prompt
+
+`build-review-prompt.ts` puts the repo's root `AGENTS.md` and `CLAUDE.md` and the PR
+diff into the prompt, so the reviewer doesn't spend its first turns fetching them.
+Each round trip resends the whole conversation, so fewer turns cost less. The diff
+leaves out lockfiles and the repo's `ignore_paths`.
+
+The prompt reaches the action as one environment variable, which Linux caps at
+128 KB. So each instruction file is capped at 20 KB and the diff at 60 KB. Over the
+cap, the reviewer gets the list of changed files and reads the diff itself.
+
 ## Precedence
 
 1. A repo's `.claude-review.yml` `prompt:` field replaces `prompt.md`.

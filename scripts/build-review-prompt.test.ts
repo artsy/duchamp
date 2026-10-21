@@ -4,13 +4,18 @@ import * as path from "path"
 import {
   buildPrompt,
   EXPERIMENT_LABEL,
+  formatDiffSection,
+  formatInstructionsSection,
   loadParticipants,
   loadRepoConfig,
   loadReviewPrompt,
+  MAX_DIFF_BYTES,
+  MAX_INSTRUCTIONS_BYTES,
   parseLabels,
   REVIEW_EFFORT,
   resolveModelArgs,
   resolveRelatedRepos,
+  truncateLines,
   usesRelatedRepos,
 } from "./build-review-prompt"
 
@@ -435,5 +440,139 @@ describe("loadReviewPrompt", () => {
     expect(prompt).toContain("## Verify Before You Claim")
     expect(prompt).toContain("🔴 **blocking:**")
     expect(prompt).toContain("### Verdict")
+  })
+})
+
+describe("formatInstructionsSection", () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it("is empty when the repo has neither file", () => {
+    mockFiles({})
+
+    expect(formatInstructionsSection()).toBe("")
+  })
+
+  it("inlines AGENTS.md and CLAUDE.md", () => {
+    mockFiles({ "AGENTS.md": "Use yarn.", "CLAUDE.md": "@AGENTS.md" })
+
+    const section = formatInstructionsSection()
+
+    expect(section).toContain("## Repository Instructions")
+    expect(section).toContain("### AGENTS.md\n\n```markdown\nUse yarn.\n```")
+    expect(section).toContain("### CLAUDE.md\n\n```markdown\n@AGENTS.md\n```")
+    expect(section).toContain("Do not read them again")
+  })
+
+  it("uses a fence longer than any backtick run in the file", () => {
+    mockFiles({ "AGENTS.md": "Example:\n```ts\nconst a = 1\n```" })
+
+    expect(formatInstructionsSection()).toContain("````markdown\nExample:")
+  })
+
+  it("leaves a file over the cap for the reviewer to read", () => {
+    mockFiles({
+      "AGENTS.md": "x".repeat(MAX_INSTRUCTIONS_BYTES + 1),
+      "CLAUDE.md": "@AGENTS.md",
+    })
+
+    const section = formatInstructionsSection()
+
+    expect(section).not.toContain("xxxx")
+    expect(section).toContain("read them yourself: `AGENTS.md`")
+    expect(section).toContain("### CLAUDE.md")
+  })
+})
+
+describe("formatDiffSection", () => {
+  const mockGit = execFileSync as jest.Mock
+
+  const gitCalls = (): string[][] =>
+    mockGit.mock.calls.map(([, args]) => args as string[])
+
+  beforeEach(() => {
+    jest.clearAllMocks()
+    mockGit.mockReset()
+  })
+
+  it("is empty without a base ref", () => {
+    expect(formatDiffSection(undefined, [])).toBe("")
+    expect(mockGit).not.toHaveBeenCalled()
+  })
+
+  it("inlines the diff and tells the reviewer not to fetch it again", () => {
+    mockGit.mockReturnValue("diff --git a/x.ts b/x.ts\n+const x = 1\n")
+
+    const section = formatDiffSection("main", [])
+
+    expect(section).toContain("```diff\ndiff --git a/x.ts b/x.ts")
+    expect(section).toContain("Do not run git diff for it again")
+    expect(gitCalls()[0].slice(0, 3)).toEqual([
+      "diff",
+      "origin/main...HEAD",
+      "--",
+    ])
+  })
+
+  it("leaves out lockfiles and the repo's ignore_paths", () => {
+    mockGit.mockReturnValue("")
+
+    formatDiffSection("main", ["**/*.generated.ts"])
+
+    const args = gitCalls()[0]
+    expect(args).toContain(":(exclude,glob)**/yarn.lock")
+    expect(args).toContain(":(exclude,glob)**/*.generated.ts")
+  })
+
+  it("lists the changed files when the diff is over the cap", () => {
+    mockGit.mockImplementation((_cmd: string, args: string[]) =>
+      args.includes("--stat")
+        ? " x.ts | 2 +-\n"
+        : "+".repeat(MAX_DIFF_BYTES + 1)
+    )
+
+    const section = formatDiffSection("main", [])
+
+    expect(section).toContain("too large to include")
+    expect(section).toContain(" x.ts | 2 +-")
+    expect(section).not.toContain("++++")
+  })
+
+  it("cuts the file list when it is over the cap too", () => {
+    const line = " some/long/path/to/a/file.ts | 2 +-"
+    mockGit.mockImplementation((_cmd: string, args: string[]) =>
+      args.includes("--stat")
+        ? Array(5_000).fill(line).join("\n")
+        : "+".repeat(MAX_DIFF_BYTES + 1)
+    )
+
+    const section = formatDiffSection("main", [])
+
+    expect(Buffer.byteLength(section)).toBeLessThan(MAX_DIFF_BYTES + 1_000)
+    expect(section).toMatch(/\.\.\. \d+ more lines/)
+  })
+
+  it("falls back to asking the reviewer to run git diff when git fails", () => {
+    jest.spyOn(console, "error").mockImplementation()
+    mockGit.mockImplementation(() => {
+      throw new Error("fatal: bad revision")
+    })
+
+    expect(formatDiffSection("main", [])).toContain(
+      "Run `git diff origin/main...HEAD` to see the changes."
+    )
+  })
+})
+
+describe("truncateLines", () => {
+  it("returns text under the cap unchanged", () => {
+    expect(truncateLines("a\nb", 10)).toBe("a\nb")
+  })
+
+  it("keeps whole lines and counts the rest", () => {
+    expect(truncateLines("aaaa\nbbbb\ncccc", 10)).toBe(
+      "aaaa\nbbbb\n... 1 more lines"
+    )
   })
 })
