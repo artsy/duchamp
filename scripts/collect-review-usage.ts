@@ -32,6 +32,8 @@ const USAGE =
 export interface UsageRecord extends ReviewUsage {
   modelArgs: string
   reviewMode: string | null
+  /** Whether the review was in the review experiment; null in older log lines. */
+  experiment?: boolean | null
 }
 
 export interface RunUsage {
@@ -141,7 +143,14 @@ export const median = (values: number[]): number => {
     : sorted[mid]
 }
 
-/** A markdown table with one row per window and review mode. */
+const groupName = (usage: UsageRecord): string => {
+  if (usage.experiment === true) {
+    return "experiment"
+  }
+  return usage.experiment === false ? "standard" : "unknown"
+}
+
+/** A markdown table with one row per window, group and review mode. */
 export const summarize = (
   runs: RunUsage[],
   since: string,
@@ -153,16 +162,17 @@ export const summarize = (
     if (!window) {
       continue
     }
-    const key = `${window}|${run.usage.reviewMode ?? "all"}`
+    const key = `${window}|${groupName(run.usage)}|${run.usage.reviewMode ?? "all"}`
     groups.set(key, [...(groups.get(key) ?? []), run.usage])
   }
 
   const rows = [...groups.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, usages]) => {
-      const [window, mode] = key.split("|")
+      const [window, group, mode] = key.split("|")
       const cells = [
         window,
+        group,
         mode,
         String(usages.length),
         String(usages.filter(u => u.outcome !== "success").length),
@@ -176,8 +186,8 @@ export const summarize = (
     })
 
   return [
-    "| Window | Mode | Reviews | Not success | Median cost | Median turns | Median time | Median cache hit | Total cost |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    "| Window | Group | Mode | Reviews | Not success | Median cost | Median turns | Median time | Median cache hit | Total cost |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ...rows,
   ].join("\n")
 }

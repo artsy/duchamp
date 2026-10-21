@@ -124,7 +124,7 @@ describe("formatUsageLogLine", () => {
   const usage = parseReviewUsage(executionFile(RESULT)) as ReviewUsage
 
   it("is the prefix and one line of JSON", () => {
-    const line = formatUsageLogLine(usage, "--effort high", "full")
+    const line = formatUsageLogLine(usage, "--effort high", "full", "true")
 
     expect(line).not.toContain("\n")
     expect(line.startsWith("REVIEW_USAGE {")).toBe(true)
@@ -133,16 +133,26 @@ describe("formatUsageLogLine", () => {
       turns: 9,
       modelArgs: "--effort high",
       reviewMode: "full",
+      experiment: true,
     })
   })
 
-  it("records a missing review mode as null", () => {
-    const line = formatUsageLogLine(usage, "", "")
+  it("records a missing review mode and group as null", () => {
+    const line = formatUsageLogLine(usage, "", "", "")
 
     expect(line).toContain('"reviewMode":null')
+    expect(line).toContain('"experiment":null')
+  })
+
+  it("records a review outside the experiment as false", () => {
+    expect(formatUsageLogLine(usage, "", "", "false")).toContain(
+      '"experiment":false'
+    )
   })
 
   it("leaves out the conversation", () => {
-    expect(formatUsageLogLine(usage, "", "")).not.toContain("Secret PR text")
+    expect(formatUsageLogLine(usage, "", "", "")).not.toContain(
+      "Secret PR text"
+    )
   })
 })

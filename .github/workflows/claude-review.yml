@@ -269,3 +269,4 @@ jobs:
         env:
           EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
           MODEL_ARGS: ${{ steps.prompt.outputs.model_args }}
+          EXPERIMENT: ${{ steps.experiment.outputs.related_repos }}
