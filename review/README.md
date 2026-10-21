@@ -63,6 +63,13 @@ and never runs.
 3. PRs in the [review experiment](../review-experiment/README.md) also get related
    repos, whatever the prompt.
 
+## Usage
+
+After each review, the job's step summary shows what it cost: model, cost, turns,
+duration, input, cache and output tokens, cache hit rate, and denied tool calls.
+`scripts/review-usage.ts` reads these from the action's execution file. It writes
+numbers only, never the conversation, because that holds PR content.
+
 ## Attribution
 
 `prompt.md` is adapted from two MIT-licensed skills:
