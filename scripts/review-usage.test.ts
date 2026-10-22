@@ -28,9 +28,13 @@ const RESULT = {
 const executionFile = (...messages: unknown[]): string =>
   JSON.stringify(messages)
 
-const toolCall = (id: string, name: string) => ({
+const toolCall = (
+  id: string,
+  name: string,
+  input: Record<string, unknown> = { path: "a.ts", line: 1, body: id }
+) => ({
   type: "assistant",
-  message: { content: [{ type: "tool_use", id, name, input: {} }] },
+  message: { content: [{ type: "tool_use", id, name, input }] },
 })
 
 const toolResult = (id: string, isError = false) => ({
@@ -79,6 +83,35 @@ describe("parseReviewUsage", () => {
     )
 
     expect(usage?.inlineComments).toBe(2)
+  })
+
+  it("leaves out inline comments sent with confirmed false", () => {
+    const usage = parseReviewUsage(
+      executionFile(
+        toolCall("a", INLINE, { path: "a.ts", line: 1, confirmed: false }),
+        toolResult("a"),
+        toolCall("b", INLINE, { path: "a.ts", line: 2, confirmed: true }),
+        toolResult("b"),
+        RESULT
+      )
+    )
+
+    expect(usage?.inlineComments).toBe(1)
+  })
+
+  it("counts a buffered comment sent again confirmed once", () => {
+    const comment = { path: "a.ts", line: 3, body: "Bug." }
+    const usage = parseReviewUsage(
+      executionFile(
+        toolCall("a", INLINE, comment),
+        toolResult("a"),
+        toolCall("b", INLINE, { ...comment, confirmed: true }),
+        toolResult("b"),
+        RESULT
+      )
+    )
+
+    expect(usage?.inlineComments).toBe(1)
   })
 
   it("uses the last result entry when there are several", () => {

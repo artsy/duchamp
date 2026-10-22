@@ -14,13 +14,14 @@ using the shared workflow reports.
 | `cost_usd` | histogram | Cost per review |
 | `turns` | histogram | Turns per review |
 | `duration_ms` | histogram | Run time per review |
-| `inline_comments` | histogram | Inline comments posted, leaving out failed or denied calls |
+| `inline_comments` | histogram | Inline comments the review asked to post, leaving out failed calls, `confirmed: false` calls and repeats. The action drops probe comments after the session, so this can run slightly high |
 | `cache_hit_rate` | histogram | Share of input tokens read from the prompt cache |
 
 All of them carry the tags `repo`, `pr`, `group` (experiment, standard or unknown), `mode`
 (full, rereview or unknown), `outcome`, `model` and `effort`. Datadog bills custom
 metrics by the series seen each hour, and reviews rarely share every tag in the same
-hour, so the `pr` tag adds few series.
+hour, so the `pr` tag adds few series. The `pr` tag holds the number alone, so filter
+by `repo` too when looking at one PR.
 
 Use counters for totals and averages: spend is `cost_cents / 100`, average cost is
 `cost_cents / reviews / 100`, both `.as_count()`. Histograms reach Datadog as `.avg`,

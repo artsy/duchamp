@@ -53,6 +53,13 @@ interface ContentBlock {
   name?: string
   tool_use_id?: string
   is_error?: boolean
+  input?: {
+    path?: string
+    line?: number
+    startLine?: number
+    body?: string
+    confirmed?: boolean
+  }
 }
 
 const contentBlocks = (message: unknown): ContentBlock[] => {
@@ -61,7 +68,11 @@ const contentBlocks = (message: unknown): ContentBlock[] => {
   return Array.isArray(content) ? content : []
 }
 
-/** Inline comment tool calls that did not come back as errors, such as a denial. */
+/**
+ * Inline comments the review asked to post. Leaves out failed calls, `confirmed: false`
+ * calls, which never post, and repeats, such as a buffered call sent again confirmed.
+ * The action drops probe comments after the session, so this can run slightly high.
+ */
 const countInlineComments = (messages: unknown[]): number => {
   const blocks = messages.flatMap(contentBlocks)
   const failed = new Set(
@@ -69,12 +80,18 @@ const countInlineComments = (messages: unknown[]): number => {
       .filter(block => block.type === "tool_result" && block.is_error)
       .map(block => block.tool_use_id)
   )
-  return blocks.filter(
-    block =>
-      block.type === "tool_use" &&
-      block.name === INLINE_COMMENT_TOOL &&
-      !failed.has(block.id)
-  ).length
+  const comments = blocks
+    .filter(
+      block =>
+        block.type === "tool_use" &&
+        block.name === INLINE_COMMENT_TOOL &&
+        block.input?.confirmed !== false &&
+        !failed.has(block.id)
+    )
+    .map(({ input }) =>
+      JSON.stringify([input?.path, input?.line, input?.startLine, input?.body])
+    )
+  return new Set(comments).size
 }
 
 /** The final result entry of an execution file, or null if there is none. */
