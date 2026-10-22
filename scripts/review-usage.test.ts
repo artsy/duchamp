@@ -2,8 +2,10 @@ import {
   cacheHitRate,
   formatUsageLogLine,
   formatUsageSummary,
+  formatVolleyPayload,
   parseReviewUsage,
   type ReviewUsage,
+  sendToVolley,
 } from "./review-usage"
 
 const RESULT = {
@@ -153,6 +155,140 @@ describe("formatUsageLogLine", () => {
   it("leaves out the conversation", () => {
     expect(formatUsageLogLine(usage, "", "", "")).not.toContain(
       "Secret PR text"
+    )
+  })
+})
+
+describe("formatVolleyPayload", () => {
+  const usage = parseReviewUsage(executionFile(RESULT)) as ReviewUsage
+  const context = {
+    repo: "artsy/eigen",
+    modelArgs: "--model claude-opus-5-5 --effort high",
+    reviewMode: "rereview",
+    experiment: "true",
+  }
+  const TAGS = [
+    "repo:artsy/eigen",
+    "group:experiment",
+    "mode:rereview",
+    "outcome:success",
+    "model:claude-opus-5-5",
+    "effort:high",
+  ]
+
+  it("sends counters and histograms under ai_pr_review, all with the same tags", () => {
+    expect(formatVolleyPayload(usage, context)).toEqual({
+      serviceName: "ai_pr_review",
+      metrics: [
+        { type: "increment", name: "reviews", tags: TAGS },
+        { type: "incrementBy", name: "cost_cents", value: 77, tags: TAGS },
+        {
+          type: "incrementBy",
+          name: "denied_tool_calls",
+          value: 2,
+          tags: TAGS,
+        },
+        { type: "histogram", name: "cost_usd", value: 0.7712, tags: TAGS },
+        { type: "histogram", name: "turns", value: 9, tags: TAGS },
+        { type: "histogram", name: "duration_ms", value: 92_400, tags: TAGS },
+        { type: "histogram", name: "cache_hit_rate", value: 0.895, tags: TAGS },
+      ],
+    })
+  })
+
+  it("tags only the requested model, not background ones", () => {
+    const withHaiku = {
+      ...usage,
+      models: ["claude-haiku-5-5", "claude-opus-5-5"],
+    }
+
+    expect(
+      formatVolleyPayload(withHaiku, context).metrics[0].tags.filter(tag =>
+        tag.startsWith("model:")
+      )
+    ).toEqual(["model:claude-opus-5-5"])
+    expect(
+      formatVolleyPayload(withHaiku, { ...context, modelArgs: "" }).metrics[0]
+        .tags
+    ).toContain("model:claude-haiku-5-5")
+  })
+
+  it("leaves out the cache hit rate when the run read no input", () => {
+    const noInput = {
+      ...usage,
+      inputTokens: 0,
+      cacheWriteTokens: 0,
+      cacheReadTokens: 0,
+    }
+
+    expect(
+      formatVolleyPayload(noInput, context).metrics.map(metric => metric.name)
+    ).not.toContain("cache_hit_rate")
+  })
+
+  it("marks standard and unrecorded reviews", () => {
+    const tagsFor = (overrides: Partial<typeof context>) =>
+      formatVolleyPayload(usage, { ...context, ...overrides }).metrics[0].tags
+
+    expect(tagsFor({ experiment: "false" })).toContain("group:standard")
+    expect(tagsFor({ experiment: "", reviewMode: "" })).toEqual(
+      expect.arrayContaining(["group:unknown", "mode:unknown"])
+    )
+  })
+
+  it("leaves out the conversation", () => {
+    expect(JSON.stringify(formatVolleyPayload(usage, context))).not.toContain(
+      "Secret PR text"
+    )
+  })
+})
+
+describe("sendToVolley", () => {
+  const fetchMock = jest.fn()
+  const log = jest.spyOn(console, "log").mockImplementation(() => {})
+  const payload = { serviceName: "ai_pr_review", metrics: [] }
+
+  beforeEach(() => {
+    fetchMock.mockReset()
+    log.mockClear()
+    global.fetch = fetchMock
+  })
+
+  it("does nothing without a URL", async () => {
+    await sendToVolley(payload, undefined)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("posts the payload as JSON", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 202 })
+
+    await sendToVolley(payload, "https://volley.artsy.net/report")
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://volley.artsy.net/report",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(payload),
+        signal: expect.any(AbortSignal),
+      })
+    )
+  })
+
+  it("warns instead of failing when the send fails", async () => {
+    fetchMock.mockRejectedValue(new Error("network down"))
+    await expect(
+      sendToVolley(payload, "https://volley.artsy.net/report")
+    ).resolves.toBeUndefined()
+
+    fetchMock.mockResolvedValue({ ok: false, status: 502 })
+    await sendToVolley(payload, "https://volley.artsy.net/report")
+
+    expect(log).toHaveBeenCalledWith(
+      "::warning::Could not send review metrics to volley: network down"
+    )
+    expect(log).toHaveBeenCalledWith(
+      "::warning::Volley rejected the review metrics: HTTP 502"
     )
   })
 })

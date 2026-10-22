@@ -1,0 +1,412 @@
+{
+  "title": "AI PR review",
+  "description": "Cost, turns, speed and cache use of the Claude PR review, by repo, group (experiment or standard) and mode. Metrics come through volley. Source: artsy/duchamp review/datadog/dashboard.json; edit there, not in the UI.",
+  "layout_type": "ordered",
+  "template_variables": [
+    {
+      "name": "repo",
+      "prefix": "repo",
+      "available_values": [],
+      "default": "*"
+    },
+    {
+      "name": "group",
+      "prefix": "group",
+      "available_values": [],
+      "default": "*"
+    },
+    {
+      "name": "mode",
+      "prefix": "mode",
+      "available_values": [],
+      "default": "*"
+    },
+    {
+      "name": "model",
+      "prefix": "model",
+      "available_values": [],
+      "default": "*"
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Reviews",
+        "precision": 0,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "r",
+                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "r"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Spend (USD)",
+        "precision": 2,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "c",
+                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "c / 100"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Average cost per review (USD)",
+        "precision": 2,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "c",
+                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "r",
+                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "c / r / 100"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Median turns",
+        "precision": 0,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "t",
+                "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model}",
+                "aggregator": "avg"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "t"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Reviews per day, by group",
+        "show_legend": true,
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "r",
+                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model} by {group}.as_count().rollup(sum, 86400)"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "r"
+              }
+            ],
+            "display_type": "bars"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Spend per day (USD), by repo",
+        "show_legend": true,
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "c",
+                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model} by {repo}.as_count().rollup(sum, 86400)"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "c / 100"
+              }
+            ],
+            "display_type": "bars"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Average cost per review (USD), by group and mode",
+        "show_legend": true,
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "c",
+                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model} by {group,mode}.as_count().rollup(sum, 86400)"
+              },
+              {
+                "data_source": "metrics",
+                "name": "r",
+                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model} by {group,mode}.as_count().rollup(sum, 86400)"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "c / r / 100"
+              }
+            ],
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Cost per review (USD), median and p95 by group",
+        "show_legend": true,
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "p50",
+                "query": "avg:ai_pr_review.cost_usd.median{$repo,$group,$mode,$model} by {group}"
+              },
+              {
+                "data_source": "metrics",
+                "name": "p95",
+                "query": "avg:ai_pr_review.cost_usd.95percentile{$repo,$group,$mode,$model} by {group}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "p50",
+                "alias": "median"
+              },
+              {
+                "formula": "p95",
+                "alias": "p95"
+              }
+            ],
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Turns per review, median by group and mode",
+        "show_legend": true,
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "t",
+                "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model} by {group,mode}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "t"
+              }
+            ],
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Duration per review (minutes), median by group and mode",
+        "show_legend": true,
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "d",
+                "query": "avg:ai_pr_review.duration_ms.median{$repo,$group,$mode,$model} by {group,mode}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "d / 60000"
+              }
+            ],
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Cache hit rate (%), median by group",
+        "show_legend": true,
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "h",
+                "query": "avg:ai_pr_review.cache_hit_rate.median{$repo,$group,$mode,$model} by {group}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "h * 100"
+              }
+            ],
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Success rate (%), by group",
+        "show_legend": true,
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "ok",
+                "query": "sum:ai_pr_review.reviews{outcome:success,$repo,$group,$mode,$model} by {group}.as_count().rollup(sum, 86400)"
+              },
+              {
+                "data_source": "metrics",
+                "name": "all",
+                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model} by {group}.as_count().rollup(sum, 86400)"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "ok / all * 100"
+              }
+            ],
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Denied tool calls per day, by repo",
+        "show_legend": true,
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "d",
+                "query": "sum:ai_pr_review.denied_tool_calls{$repo,$group,$mode,$model} by {repo}.as_count().rollup(sum, 86400)"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "d"
+              }
+            ],
+            "display_type": "bars"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "toplist",
+        "title": "Spend by repo (USD)",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "c",
+                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model} by {repo}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "c / 100",
+                "limit": {
+                  "count": 20,
+                  "order": "desc"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

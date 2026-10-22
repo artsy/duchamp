@@ -77,10 +77,12 @@ export const parseReviewUsage = (content: string): ReviewUsage | null => {
   }
 }
 
+const totalInputTokens = (usage: ReviewUsage): number =>
+  usage.inputTokens + usage.cacheWriteTokens + usage.cacheReadTokens
+
 /** Share of input tokens served from the prompt cache. */
 export const cacheHitRate = (usage: ReviewUsage): number => {
-  const totalInput =
-    usage.inputTokens + usage.cacheWriteTokens + usage.cacheReadTokens
+  const totalInput = totalInputTokens(usage)
   return totalInput === 0 ? 0 : usage.cacheReadTokens / totalInput
 }
 
@@ -137,6 +139,124 @@ export const formatUsageLogLine = (
     experiment:
       experiment === "true" ? true : experiment === "false" ? false : null,
   })
+
+export interface MetricsContext {
+  repo: string
+  modelArgs: string
+  reviewMode: string
+  experiment: string
+}
+
+type VolleyMetric =
+  | { type: "increment"; name: string; tags: string[] }
+  | {
+      type: "incrementBy" | "histogram"
+      name: string
+      value: number
+      tags: string[]
+    }
+
+const reviewGroup = (experiment: string): string =>
+  experiment === "true"
+    ? "experiment"
+    : experiment === "false"
+      ? "standard"
+      : "unknown"
+
+/**
+ * The review's numbers as metrics for volley, which forwards them to Datadog as
+ * `ai_pr_review.<name>`. Counters give exact totals; histograms give the spread per
+ * review. Tags are what the dashboard splits by. Numbers only, no PR text.
+ */
+export const formatVolleyPayload = (
+  usage: ReviewUsage,
+  context: MetricsContext
+): { serviceName: string; metrics: VolleyMetric[] } => {
+  const effort = context.modelArgs.match(/--effort (\S+)/)?.[1]
+  // modelUsage also lists background models, such as Haiku, so tag the one asked for.
+  const model =
+    context.modelArgs.match(/--model (\S+)/)?.[1] ??
+    usage.models[0] ??
+    "unknown"
+  const tags = [
+    `repo:${context.repo}`,
+    `group:${reviewGroup(context.experiment)}`,
+    `mode:${context.reviewMode || "unknown"}`,
+    `outcome:${usage.outcome}`,
+    `model:${model}`,
+    ...(effort ? [`effort:${effort}`] : []),
+  ]
+  const histogram = (name: string, value: number): VolleyMetric => ({
+    type: "histogram",
+    name,
+    value,
+    tags,
+  })
+
+  return {
+    serviceName: "ai_pr_review",
+    metrics: [
+      { type: "increment", name: "reviews", tags },
+      // Counters take whole numbers.
+      {
+        type: "incrementBy",
+        name: "cost_cents",
+        value: Math.round(usage.costUsd * 100),
+        tags,
+      },
+      {
+        type: "incrementBy",
+        name: "denied_tool_calls",
+        value: usage.permissionDenials,
+        tags,
+      },
+      histogram("cost_usd", usage.costUsd),
+      histogram("turns", usage.turns),
+      histogram("duration_ms", usage.durationMs),
+      // A run that failed before its first turn has no rate, not a rate of 0.
+      ...(totalInputTokens(usage) > 0
+        ? [histogram("cache_hit_rate", cacheHitRate(usage))]
+        : []),
+    ],
+  }
+}
+
+/** The step runs on every review, so a stalled volley must not hold the runner. */
+const VOLLEY_TIMEOUT_MS = 10_000
+
+/**
+ * Post the metrics when the workflow sets a volley URL. Volley answers 202 even when
+ * it drops a metric, so only a failed request is reported, as a warning.
+ */
+export const sendToVolley = async (
+  payload: ReturnType<typeof formatVolleyPayload>,
+  url: string | undefined
+): Promise<void> => {
+  if (!url) {
+    return
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(VOLLEY_TIMEOUT_MS),
+    })
+    if (!response.ok) {
+      console.log(
+        `::warning::Volley rejected the review metrics: HTTP ${response.status}`
+      )
+      return
+    }
+    console.log("Review metrics sent to volley")
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.log(
+      `::warning::Could not send review metrics to volley: ${message}`
+    )
+  }
+}
 
 /** 1.2M, 6.1k, 950. */
 const formatCompact = (n: number): string => {
@@ -197,7 +317,7 @@ export const formatStatsDetails = (
   ].join("\n")
 }
 
-const main = (): void => {
+const main = async (): Promise<void> => {
   const executionFile = process.env.EXECUTION_FILE
   if (!executionFile || !fs.existsSync(executionFile)) {
     console.log("No execution file, so no usage to report")
@@ -210,23 +330,33 @@ const main = (): void => {
     return
   }
 
-  const summary = formatUsageSummary(usage, process.env.MODEL_ARGS ?? "")
+  const modelArgs = process.env.MODEL_ARGS ?? ""
+  const reviewMode = process.env.REVIEW_MODE ?? ""
+  const experiment = process.env.EXPERIMENT ?? ""
+
+  const summary = formatUsageSummary(usage, modelArgs)
   console.log(summary)
-  console.log(
-    formatUsageLogLine(
-      usage,
-      process.env.MODEL_ARGS ?? "",
-      process.env.REVIEW_MODE ?? "",
-      process.env.EXPERIMENT ?? ""
-    )
-  )
+  console.log(formatUsageLogLine(usage, modelArgs, reviewMode, experiment))
 
   const summaryPath = process.env.GITHUB_STEP_SUMMARY
   if (summaryPath) {
     fs.appendFileSync(summaryPath, summary)
   }
+
+  await sendToVolley(
+    formatVolleyPayload(usage, {
+      repo: process.env.GITHUB_REPOSITORY ?? "",
+      modelArgs,
+      reviewMode,
+      experiment,
+    }),
+    process.env.VOLLEY_URL
+  )
 }
 
 if (require.main === module) {
-  main()
+  main().catch(error => {
+    console.error(error instanceof Error ? error.message : error)
+    process.exit(1)
+  })
 }

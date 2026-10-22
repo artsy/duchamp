@@ -1,0 +1,50 @@
+# AI review in Datadog
+
+Each review posts its numbers to [volley](https://github.com/artsy/volley), which
+forwards them to Datadog as `ai_pr_review.*` metrics. No key is needed: the
+"Report review usage" step in `claude-review.yml` sets `VOLLEY_URL`, and every repo
+using the shared workflow reports.
+
+| Metric | Type | What |
+| --- | --- | --- |
+| `reviews` | counter | One per review |
+| `cost_cents` | counter | Cost, in cents, because counters take whole numbers |
+| `denied_tool_calls` | counter | Tool calls the review was not allowed |
+| `cost_usd` | histogram | Cost per review |
+| `turns` | histogram | Turns per review |
+| `duration_ms` | histogram | Run time per review |
+| `cache_hit_rate` | histogram | Share of input tokens read from the prompt cache |
+
+All of them carry the tags `repo`, `group` (experiment, standard or unknown), `mode`
+(full, rereview or unknown), `outcome`, `model` and `effort`.
+
+Use counters for totals and averages: spend is `cost_cents / 100`, average cost is
+`cost_cents / reviews / 100`, both `.as_count()`. Histograms reach Datadog as `.avg`,
+`.median`, `.95percentile`, `.max` and `.count`, combined per volley host every 10
+seconds. Reviews are rare, so each interval usually holds one review, but read median
+and p95 over a period as close, not exact.
+
+Volley answers 202 even when it drops a metric. If its `METRIC_NAME_ALLOWLIST` or
+`METRIC_TAG_ALLOWLIST` is set in production, the names and tags above need adding to
+it, or the metrics never arrive.
+
+## The dashboard
+
+`dashboard.json` is the "AI PR review" dashboard: reviews, spend, cost per review,
+turns, duration, cache hit rate, success rate and denied tool calls, split by group and
+mode, with filters for repo, group, mode and model. Edit the file rather than the
+dashboard in the UI, then apply it again.
+
+To create it, use Dashboards → New Dashboard → the gear menu → Import dashboard JSON,
+or the API with an application key that can write dashboards:
+
+```bash
+curl -sS -X POST "https://api.datadoghq.com/api/v1/dashboard" \
+  -H "DD-API-KEY: $DD_API_KEY" -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
+  -H "Content-Type: application/json" -d @review/datadog/dashboard.json
+```
+
+To update it, `PUT` the same file to `/api/v1/dashboard/<id>`.
+
+Metrics start with the first review after this ships. Earlier reviews stay in the job
+logs, where `scripts/collect-review-usage.ts` can still read them.
