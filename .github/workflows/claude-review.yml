@@ -287,5 +287,6 @@ jobs:
           MODEL_ARGS: ${{ steps.prompt.outputs.model_args }}
           EXPERIMENT: ${{ steps.experiment.outputs.related_repos }}
           REVIEW_MODE: ${{ steps.prompt.outputs.review_mode }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report

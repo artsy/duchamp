@@ -26,6 +26,12 @@
       "prefix": "model",
       "available_values": [],
       "default": "*"
+    },
+    {
+      "name": "pr",
+      "prefix": "pr",
+      "available_values": [],
+      "default": "*"
     }
   ],
   "widgets": [
@@ -41,7 +47,7 @@
               {
                 "data_source": "metrics",
                 "name": "r",
-                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model}.as_count()",
+                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr}.as_count()",
                 "aggregator": "sum"
               }
             ],
@@ -66,7 +72,7 @@
               {
                 "data_source": "metrics",
                 "name": "c",
-                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model}.as_count()",
+                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr}.as_count()",
                 "aggregator": "sum"
               }
             ],
@@ -91,13 +97,13 @@
               {
                 "data_source": "metrics",
                 "name": "c",
-                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model}.as_count()",
+                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr}.as_count()",
                 "aggregator": "sum"
               },
               {
                 "data_source": "metrics",
                 "name": "r",
-                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model}.as_count()",
+                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr}.as_count()",
                 "aggregator": "sum"
               }
             ],
@@ -122,7 +128,7 @@
               {
                 "data_source": "metrics",
                 "name": "t",
-                "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model}",
+                "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model,$pr}",
                 "aggregator": "avg"
               }
             ],
@@ -147,7 +153,7 @@
               {
                 "data_source": "metrics",
                 "name": "r",
-                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model} by {group}.as_count().rollup(sum, 86400)"
+                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {group}.as_count().rollup(sum, 86400)"
               }
             ],
             "formulas": [
@@ -172,7 +178,7 @@
               {
                 "data_source": "metrics",
                 "name": "c",
-                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model} by {repo}.as_count().rollup(sum, 86400)"
+                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {repo}.as_count().rollup(sum, 86400)"
               }
             ],
             "formulas": [
@@ -197,12 +203,12 @@
               {
                 "data_source": "metrics",
                 "name": "c",
-                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model} by {group,mode}.as_count().rollup(sum, 86400)"
+                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {group,mode}.as_count().rollup(sum, 86400)"
               },
               {
                 "data_source": "metrics",
                 "name": "r",
-                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model} by {group,mode}.as_count().rollup(sum, 86400)"
+                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {group,mode}.as_count().rollup(sum, 86400)"
               }
             ],
             "formulas": [
@@ -227,12 +233,12 @@
               {
                 "data_source": "metrics",
                 "name": "p50",
-                "query": "avg:ai_pr_review.cost_usd.median{$repo,$group,$mode,$model} by {group}"
+                "query": "avg:ai_pr_review.cost_usd.median{$repo,$group,$mode,$model,$pr} by {group}"
               },
               {
                 "data_source": "metrics",
                 "name": "p95",
-                "query": "avg:ai_pr_review.cost_usd.95percentile{$repo,$group,$mode,$model} by {group}"
+                "query": "avg:ai_pr_review.cost_usd.95percentile{$repo,$group,$mode,$model,$pr} by {group}"
               }
             ],
             "formulas": [
@@ -262,7 +268,7 @@
               {
                 "data_source": "metrics",
                 "name": "t",
-                "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model} by {group,mode}"
+                "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model,$pr} by {group,mode}"
               }
             ],
             "formulas": [
@@ -287,7 +293,7 @@
               {
                 "data_source": "metrics",
                 "name": "d",
-                "query": "avg:ai_pr_review.duration_ms.median{$repo,$group,$mode,$model} by {group,mode}"
+                "query": "avg:ai_pr_review.duration_ms.median{$repo,$group,$mode,$model,$pr} by {group,mode}"
               }
             ],
             "formulas": [
@@ -312,7 +318,7 @@
               {
                 "data_source": "metrics",
                 "name": "h",
-                "query": "avg:ai_pr_review.cache_hit_rate.median{$repo,$group,$mode,$model} by {group}"
+                "query": "avg:ai_pr_review.cache_hit_rate.median{$repo,$group,$mode,$model,$pr} by {group}"
               }
             ],
             "formulas": [
@@ -342,7 +348,7 @@
               {
                 "data_source": "metrics",
                 "name": "all",
-                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model} by {group}.as_count().rollup(sum, 86400)"
+                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {group}.as_count().rollup(sum, 86400)"
               }
             ],
             "formulas": [
@@ -367,7 +373,7 @@
               {
                 "data_source": "metrics",
                 "name": "d",
-                "query": "sum:ai_pr_review.denied_tool_calls{$repo,$group,$mode,$model} by {repo}.as_count().rollup(sum, 86400)"
+                "query": "sum:ai_pr_review.denied_tool_calls{$repo,$group,$mode,$model,$pr} by {repo}.as_count().rollup(sum, 86400)"
               }
             ],
             "formulas": [
@@ -391,7 +397,85 @@
               {
                 "data_source": "metrics",
                 "name": "c",
-                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model} by {repo}.as_count()",
+                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {repo}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "c / 100",
+                "limit": {
+                  "count": 20,
+                  "order": "desc"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Tokens per day, by kind",
+        "show_legend": true,
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "t",
+                "query": "sum:ai_pr_review.tokens{$repo,$group,$mode,$model,$pr} by {kind}.as_count().rollup(sum, 86400)"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "t"
+              }
+            ],
+            "display_type": "bars"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Inline comments per review, average by group and mode",
+        "show_legend": true,
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "i",
+                "query": "avg:ai_pr_review.inline_comments.avg{$repo,$group,$mode,$model,$pr} by {group,mode}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "i"
+              }
+            ],
+            "display_type": "line"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "toplist",
+        "title": "Spend by PR (USD)",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "c",
+                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {repo,pr}.as_count()",
                 "aggregator": "sum"
               }
             ],

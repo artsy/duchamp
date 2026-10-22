@@ -37,12 +37,45 @@ export interface ReviewUsage {
   cacheReadTokens: number
   outputTokens: number
   permissionDenials: number
+  inlineComments: number
 }
 
 const isResultMessage = (message: unknown): message is ResultMessage =>
   typeof message === "object" &&
   message !== null &&
   (message as { type?: unknown }).type === "result"
+
+const INLINE_COMMENT_TOOL = "mcp__github_inline_comment__create_inline_comment"
+
+interface ContentBlock {
+  type?: string
+  id?: string
+  name?: string
+  tool_use_id?: string
+  is_error?: boolean
+}
+
+const contentBlocks = (message: unknown): ContentBlock[] => {
+  const content = (message as { message?: { content?: unknown } })?.message
+    ?.content
+  return Array.isArray(content) ? content : []
+}
+
+/** Inline comment tool calls that did not come back as errors, such as a denial. */
+const countInlineComments = (messages: unknown[]): number => {
+  const blocks = messages.flatMap(contentBlocks)
+  const failed = new Set(
+    blocks
+      .filter(block => block.type === "tool_result" && block.is_error)
+      .map(block => block.tool_use_id)
+  )
+  return blocks.filter(
+    block =>
+      block.type === "tool_use" &&
+      block.name === INLINE_COMMENT_TOOL &&
+      !failed.has(block.id)
+  ).length
+}
 
 /** The final result entry of an execution file, or null if there is none. */
 export const parseReviewUsage = (content: string): ReviewUsage | null => {
@@ -74,6 +107,7 @@ export const parseReviewUsage = (content: string): ReviewUsage | null => {
     cacheReadTokens: usage.cache_read_input_tokens ?? 0,
     outputTokens: usage.output_tokens ?? 0,
     permissionDenials: result.permission_denials?.length ?? 0,
+    inlineComments: countInlineComments(messages),
   }
 }
 
@@ -110,6 +144,7 @@ export const formatUsageSummary = (
     ["Output tokens", formatCount(usage.outputTokens)],
     ["Cache hit rate", `${(cacheHitRate(usage) * 100).toFixed(1)}%`],
     ["Denied tool calls", String(usage.permissionDenials)],
+    ["Inline comments", String(usage.inlineComments)],
   ]
 
   return [
@@ -142,6 +177,7 @@ export const formatUsageLogLine = (
 
 export interface MetricsContext {
   repo: string
+  prNumber: string
   modelArgs: string
   reviewMode: string
   experiment: string
@@ -180,6 +216,7 @@ export const formatVolleyPayload = (
     "unknown"
   const tags = [
     `repo:${context.repo}`,
+    ...(context.prNumber ? [`pr:${context.prNumber}`] : []),
     `group:${reviewGroup(context.experiment)}`,
     `mode:${context.reviewMode || "unknown"}`,
     `outcome:${usage.outcome}`,
@@ -210,9 +247,25 @@ export const formatVolleyPayload = (
         value: usage.permissionDenials,
         tags,
       },
+      ...(
+        [
+          ["input", usage.inputTokens],
+          ["cache_write", usage.cacheWriteTokens],
+          ["cache_read", usage.cacheReadTokens],
+          ["output", usage.outputTokens],
+        ] as const
+      ).map(
+        ([kind, value]): VolleyMetric => ({
+          type: "incrementBy",
+          name: "tokens",
+          value,
+          tags: [...tags, `kind:${kind}`],
+        })
+      ),
       histogram("cost_usd", usage.costUsd),
       histogram("turns", usage.turns),
       histogram("duration_ms", usage.durationMs),
+      histogram("inline_comments", usage.inlineComments),
       // A run that failed before its first turn has no rate, not a rate of 0.
       ...(totalInputTokens(usage) > 0
         ? [histogram("cache_hit_rate", cacheHitRate(usage))]
@@ -346,6 +399,7 @@ const main = async (): Promise<void> => {
   await sendToVolley(
     formatVolleyPayload(usage, {
       repo: process.env.GITHUB_REPOSITORY ?? "",
+      prNumber: process.env.PR_NUMBER ?? "",
       modelArgs,
       reviewMode,
       experiment,

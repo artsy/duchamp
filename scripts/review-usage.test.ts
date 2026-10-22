@@ -28,6 +28,20 @@ const RESULT = {
 const executionFile = (...messages: unknown[]): string =>
   JSON.stringify(messages)
 
+const toolCall = (id: string, name: string) => ({
+  type: "assistant",
+  message: { content: [{ type: "tool_use", id, name, input: {} }] },
+})
+
+const toolResult = (id: string, isError = false) => ({
+  type: "user",
+  message: {
+    content: [{ type: "tool_result", tool_use_id: id, is_error: isError }],
+  },
+})
+
+const INLINE = "mcp__github_inline_comment__create_inline_comment"
+
 describe("parseReviewUsage", () => {
   it("reads the result entry", () => {
     const usage = parseReviewUsage(
@@ -45,7 +59,26 @@ describe("parseReviewUsage", () => {
       cacheReadTokens: 179_000,
       outputTokens: 4_321,
       permissionDenials: 2,
+      inlineComments: 0,
     })
+  })
+
+  it("counts inline comments that went through", () => {
+    const usage = parseReviewUsage(
+      executionFile(
+        toolCall("a", INLINE),
+        toolResult("a"),
+        toolCall("b", INLINE),
+        toolResult("b", true),
+        toolCall("c", "Read"),
+        toolResult("c"),
+        toolCall("d", INLINE),
+        toolResult("d"),
+        RESULT
+      )
+    )
+
+    expect(usage?.inlineComments).toBe(2)
   })
 
   it("uses the last result entry when there are several", () => {
@@ -114,6 +147,7 @@ describe("formatUsageSummary", () => {
     expect(summary).toContain("| Cache read tokens | 179,000 |")
     expect(summary).toContain("| Cache hit rate | 89.5% |")
     expect(summary).toContain("| Denied tool calls | 2 |")
+    expect(summary).toContain("| Inline comments | 0 |")
     expect(summary).toContain("`--model claude-opus-5-5 --effort high`")
   })
 
@@ -163,12 +197,14 @@ describe("formatVolleyPayload", () => {
   const usage = parseReviewUsage(executionFile(RESULT)) as ReviewUsage
   const context = {
     repo: "artsy/eigen",
+    prNumber: "42",
     modelArgs: "--model claude-opus-5-5 --effort high",
     reviewMode: "rereview",
     experiment: "true",
   }
   const TAGS = [
     "repo:artsy/eigen",
+    "pr:42",
     "group:experiment",
     "mode:rereview",
     "outcome:success",
@@ -188,9 +224,21 @@ describe("formatVolleyPayload", () => {
           value: 2,
           tags: TAGS,
         },
+        ...[
+          ["input", 1_000],
+          ["cache_write", 20_000],
+          ["cache_read", 179_000],
+          ["output", 4_321],
+        ].map(([kind, value]) => ({
+          type: "incrementBy",
+          name: "tokens",
+          value,
+          tags: [...TAGS, `kind:${kind}`],
+        })),
         { type: "histogram", name: "cost_usd", value: 0.7712, tags: TAGS },
         { type: "histogram", name: "turns", value: 9, tags: TAGS },
         { type: "histogram", name: "duration_ms", value: 92_400, tags: TAGS },
+        { type: "histogram", name: "inline_comments", value: 0, tags: TAGS },
         { type: "histogram", name: "cache_hit_rate", value: 0.895, tags: TAGS },
       ],
     })
@@ -231,6 +279,9 @@ describe("formatVolleyPayload", () => {
       formatVolleyPayload(usage, { ...context, ...overrides }).metrics[0].tags
 
     expect(tagsFor({ experiment: "false" })).toContain("group:standard")
+    expect(tagsFor({ prNumber: "" }).some(tag => tag.startsWith("pr:"))).toBe(
+      false
+    )
     expect(tagsFor({ experiment: "", reviewMode: "" })).toEqual(
       expect.arrayContaining(["group:unknown", "mode:unknown"])
     )
