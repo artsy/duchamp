@@ -171,12 +171,17 @@ export const formatVolleyPayload = (
   context: MetricsContext
 ): { serviceName: string; metrics: VolleyMetric[] } => {
   const effort = context.modelArgs.match(/--effort (\S+)/)?.[1]
+  // modelUsage also lists background models, such as Haiku, so tag the one asked for.
+  const model =
+    context.modelArgs.match(/--model (\S+)/)?.[1] ??
+    usage.models[0] ??
+    "unknown"
   const tags = [
     `repo:${context.repo}`,
     `group:${reviewGroup(context.experiment)}`,
     `mode:${context.reviewMode || "unknown"}`,
     `outcome:${usage.outcome}`,
-    ...usage.models.map(model => `model:${model}`),
+    `model:${model}`,
     ...(effort ? [`effort:${effort}`] : []),
   ]
   const histogram = (name: string, value: number): VolleyMetric => ({
@@ -211,6 +216,9 @@ export const formatVolleyPayload = (
   }
 }
 
+/** The step runs on every review, so a stalled volley must not hold the runner. */
+const VOLLEY_TIMEOUT_MS = 10_000
+
 /**
  * Post the metrics when the workflow sets a volley URL. Volley answers 202 even when
  * it drops a metric, so only a failed request is reported, as a warning.
@@ -228,6 +236,7 @@ export const sendToVolley = async (
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(VOLLEY_TIMEOUT_MS),
     })
     if (!response.ok) {
       console.log(

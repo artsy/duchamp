@@ -196,6 +196,23 @@ describe("formatVolleyPayload", () => {
     })
   })
 
+  it("tags only the requested model, not background ones", () => {
+    const withHaiku = {
+      ...usage,
+      models: ["claude-haiku-5-5", "claude-opus-5-5"],
+    }
+
+    expect(
+      formatVolleyPayload(withHaiku, context).metrics[0].tags.filter(tag =>
+        tag.startsWith("model:")
+      )
+    ).toEqual(["model:claude-opus-5-5"])
+    expect(
+      formatVolleyPayload(withHaiku, { ...context, modelArgs: "" }).metrics[0]
+        .tags
+    ).toContain("model:claude-haiku-5-5")
+  })
+
   it("marks standard and unrecorded reviews", () => {
     const tagsFor = (overrides: Partial<typeof context>) =>
       formatVolleyPayload(usage, { ...context, ...overrides }).metrics[0].tags
@@ -240,6 +257,7 @@ describe("sendToVolley", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify(payload),
+        signal: expect.any(AbortSignal),
       })
     )
   })
