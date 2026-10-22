@@ -19,6 +19,7 @@ const usage = (overrides: Partial<UsageRecord> = {}): UsageRecord => ({
   cacheReadTokens: 90_000,
   outputTokens: 1_000,
   permissionDenials: 0,
+  inlineComments: 0,
   modelArgs: "--effort high",
   reviewMode: null,
   ...overrides,

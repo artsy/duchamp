@@ -10,13 +10,18 @@ using the shared workflow reports.
 | `reviews` | counter | One per review |
 | `cost_cents` | counter | Cost, in cents, because counters take whole numbers |
 | `denied_tool_calls` | counter | Tool calls the review was not allowed |
+| `tokens` | counter | Tokens, with a `kind` tag: input, cache_write, cache_read or output |
 | `cost_usd` | histogram | Cost per review |
 | `turns` | histogram | Turns per review |
 | `duration_ms` | histogram | Run time per review |
+| `inline_comments` | histogram | Inline comments the review asked to post, leaving out failed calls, `confirmed: false` calls and repeats. The action drops probe comments after the session, so this can run slightly high |
 | `cache_hit_rate` | histogram | Share of input tokens read from the prompt cache |
 
-All of them carry the tags `repo`, `group` (experiment, standard or unknown), `mode`
-(full, rereview or unknown), `outcome`, `model` and `effort`.
+All of them carry the tags `repo`, `pr`, `group` (experiment, standard or unknown), `mode`
+(full, rereview or unknown), `outcome`, `model` and `effort`. Datadog bills custom
+metrics by the series seen each hour, and reviews rarely share every tag in the same
+hour, so the `pr` tag adds few series. The `pr` tag holds the number alone, so filter
+by `repo` too when looking at one PR.
 
 Use counters for totals and averages: spend is `cost_cents / 100`, average cost is
 `cost_cents / reviews / 100`, both `.as_count()`. Histograms reach Datadog as `.avg`,
@@ -31,8 +36,9 @@ it, or the metrics never arrive.
 ## The dashboard
 
 `dashboard.json` is the "AI PR review" dashboard: reviews, spend, cost per review,
-turns, duration, cache hit rate, success rate and denied tool calls, split by group and
-mode, with filters for repo, group, mode and model. Edit the file rather than the
+turns, duration, cache hit rate, success rate, denied tool calls, tokens, inline
+comments and the most expensive PRs, split by group and mode, with filters for repo,
+group, mode, model and PR. Edit the file rather than the
 dashboard in the UI, then apply it again.
 
 To create it, use Dashboards → New Dashboard → the gear menu → Import dashboard JSON,

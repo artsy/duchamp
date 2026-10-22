@@ -19,6 +19,7 @@ const USAGE: ReviewUsage = {
   cacheReadTokens: 1_092_000,
   outputTokens: 6_100,
   permissionDenials: 0,
+  inlineComments: 0,
 }
 
 const input = {
