@@ -77,10 +77,12 @@ export const parseReviewUsage = (content: string): ReviewUsage | null => {
   }
 }
 
+const totalInputTokens = (usage: ReviewUsage): number =>
+  usage.inputTokens + usage.cacheWriteTokens + usage.cacheReadTokens
+
 /** Share of input tokens served from the prompt cache. */
 export const cacheHitRate = (usage: ReviewUsage): number => {
-  const totalInput =
-    usage.inputTokens + usage.cacheWriteTokens + usage.cacheReadTokens
+  const totalInput = totalInputTokens(usage)
   return totalInput === 0 ? 0 : usage.cacheReadTokens / totalInput
 }
 
@@ -211,7 +213,10 @@ export const formatVolleyPayload = (
       histogram("cost_usd", usage.costUsd),
       histogram("turns", usage.turns),
       histogram("duration_ms", usage.durationMs),
-      histogram("cache_hit_rate", cacheHitRate(usage)),
+      // A run that failed before its first turn has no rate, not a rate of 0.
+      ...(totalInputTokens(usage) > 0
+        ? [histogram("cache_hit_rate", cacheHitRate(usage))]
+        : []),
     ],
   }
 }

@@ -213,6 +213,19 @@ describe("formatVolleyPayload", () => {
     ).toContain("model:claude-haiku-5-5")
   })
 
+  it("leaves out the cache hit rate when the run read no input", () => {
+    const noInput = {
+      ...usage,
+      inputTokens: 0,
+      cacheWriteTokens: 0,
+      cacheReadTokens: 0,
+    }
+
+    expect(
+      formatVolleyPayload(noInput, context).metrics.map(metric => metric.name)
+    ).not.toContain("cache_hit_rate")
+  })
+
   it("marks standard and unrecorded reviews", () => {
     const tagsFor = (overrides: Partial<typeof context>) =>
       formatVolleyPayload(usage, { ...context, ...overrides }).metrics[0].tags
