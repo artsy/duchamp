@@ -138,6 +138,92 @@ export const formatUsageLogLine = (
       experiment === "true" ? true : experiment === "false" ? false : null,
   })
 
+export interface DatadogContext {
+  repo: string
+  prNumber: string
+  runUrl: string
+  modelArgs: string
+  reviewMode: string
+  experiment: string
+}
+
+const reviewGroup = (experiment: string): string =>
+  experiment === "true"
+    ? "experiment"
+    : experiment === "false"
+      ? "standard"
+      : "unknown"
+
+/**
+ * One log event for Datadog's log intake. Tags are what the dashboard splits by; the
+ * numbers go under `review` so they can become measures. Like the log line, no
+ * conversation and no PR text.
+ */
+export const formatDatadogLog = (
+  usage: ReviewUsage,
+  context: DatadogContext
+): Record<string, unknown> => {
+  const effort = context.modelArgs.match(/--effort (\S+)/)?.[1]
+  const tags = [
+    `repo:${context.repo}`,
+    `group:${reviewGroup(context.experiment)}`,
+    `mode:${context.reviewMode || "unknown"}`,
+    `outcome:${usage.outcome}`,
+    ...usage.models.map(model => `model:${model}`),
+    ...(effort ? [`effort:${effort}`] : []),
+  ]
+
+  return {
+    ddsource: "github-actions",
+    service: "ai-pr-review",
+    ddtags: tags.join(","),
+    message: USAGE_LOG_PREFIX.trim(),
+    review: {
+      ...usage,
+      cacheHitRate: cacheHitRate(usage),
+      totalInputTokens:
+        usage.inputTokens + usage.cacheWriteTokens + usage.cacheReadTokens,
+      pr: Number(context.prNumber) || null,
+      runUrl: context.runUrl,
+    },
+  }
+}
+
+/**
+ * Send the event when the workflow passes a Datadog key. A failed send is a warning:
+ * the numbers are still in the job log.
+ */
+export const sendToDatadog = async (
+  event: Record<string, unknown>,
+  apiKey: string | undefined,
+  site = "datadoghq.com"
+): Promise<void> => {
+  if (!apiKey) {
+    return
+  }
+
+  try {
+    const response = await fetch(
+      `https://http-intake.logs.${site}/api/v2/logs`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "DD-API-KEY": apiKey },
+        body: JSON.stringify([event]),
+      }
+    )
+    if (!response.ok) {
+      console.log(
+        `::warning::Datadog rejected the review usage: HTTP ${response.status}`
+      )
+      return
+    }
+    console.log("Review usage sent to Datadog")
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.log(`::warning::Could not send review usage to Datadog: ${message}`)
+  }
+}
+
 /** 1.2M, 6.1k, 950. */
 const formatCompact = (n: number): string => {
   if (n >= 1_000_000) {
@@ -197,7 +283,7 @@ export const formatStatsDetails = (
   ].join("\n")
 }
 
-const main = (): void => {
+const main = async (): Promise<void> => {
   const executionFile = process.env.EXECUTION_FILE
   if (!executionFile || !fs.existsSync(executionFile)) {
     console.log("No execution file, so no usage to report")
@@ -210,23 +296,37 @@ const main = (): void => {
     return
   }
 
-  const summary = formatUsageSummary(usage, process.env.MODEL_ARGS ?? "")
+  const modelArgs = process.env.MODEL_ARGS ?? ""
+  const reviewMode = process.env.REVIEW_MODE ?? ""
+  const experiment = process.env.EXPERIMENT ?? ""
+
+  const summary = formatUsageSummary(usage, modelArgs)
   console.log(summary)
-  console.log(
-    formatUsageLogLine(
-      usage,
-      process.env.MODEL_ARGS ?? "",
-      process.env.REVIEW_MODE ?? "",
-      process.env.EXPERIMENT ?? ""
-    )
-  )
+  console.log(formatUsageLogLine(usage, modelArgs, reviewMode, experiment))
 
   const summaryPath = process.env.GITHUB_STEP_SUMMARY
   if (summaryPath) {
     fs.appendFileSync(summaryPath, summary)
   }
+
+  const repo = process.env.GITHUB_REPOSITORY ?? ""
+  await sendToDatadog(
+    formatDatadogLog(usage, {
+      repo,
+      prNumber: process.env.PR_NUMBER ?? "",
+      runUrl: `${process.env.GITHUB_SERVER_URL ?? "https://github.com"}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID ?? ""}`,
+      modelArgs,
+      reviewMode,
+      experiment,
+    }),
+    process.env.DD_API_KEY,
+    process.env.DD_SITE || undefined
+  )
 }
 
 if (require.main === module) {
-  main()
+  main().catch(error => {
+    console.error(error instanceof Error ? error.message : error)
+    process.exit(1)
+  })
 }

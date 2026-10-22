@@ -206,6 +206,7 @@ with:
   timeout-minutes: 30 # Maximum review time (default: 30)
 secrets:
   anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }} # Required
+  datadog-api-key: ${{ secrets.DD_REVIEW_API_KEY }} # Optional: usage to Datadog
 ```
 
 **Features:**
@@ -228,6 +229,7 @@ secrets:
 
 - `model` (optional): Claude model to use for the review (default `claude-opus-5-5`)
 - `timeout-minutes` (optional): Maximum time for the review job
+- `datadog-site` (optional): Datadog site for `datadog-api-key` (default `datadoghq.com`)
 
 **Secrets:**
 
@@ -236,6 +238,9 @@ secrets:
   App (org secret `REVIEW_APP_PRIVATE_KEY`). The workflow mints a read-only token from
   it for private repos listed in `related_repos`. Without it, private related repos are
   skipped
+- `datadog-api-key` (optional): Datadog API key (org secret `DD_REVIEW_API_KEY`). Each
+  review then sends its cost, turns and tokens to Datadog logs, for the dashboard in
+  `review/datadog/`. Without it, usage stays in the job log
 
 **Setting Up the API Key:**
 

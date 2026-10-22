@@ -1,9 +1,11 @@
 import {
   cacheHitRate,
+  formatDatadogLog,
   formatUsageLogLine,
   formatUsageSummary,
   parseReviewUsage,
   type ReviewUsage,
+  sendToDatadog,
 } from "./review-usage"
 
 const RESULT = {
@@ -153,6 +155,102 @@ describe("formatUsageLogLine", () => {
   it("leaves out the conversation", () => {
     expect(formatUsageLogLine(usage, "", "", "")).not.toContain(
       "Secret PR text"
+    )
+  })
+})
+
+describe("formatDatadogLog", () => {
+  const usage = parseReviewUsage(executionFile(RESULT)) as ReviewUsage
+  const context = {
+    repo: "artsy/eigen",
+    prNumber: "42",
+    runUrl: "https://github.com/artsy/eigen/actions/runs/7",
+    modelArgs: "--model claude-opus-5-5 --effort high",
+    reviewMode: "rereview",
+    experiment: "true",
+  }
+
+  it("tags the event with what the dashboard splits by", () => {
+    expect(formatDatadogLog(usage, context)).toMatchObject({
+      service: "ai-pr-review",
+      ddsource: "github-actions",
+      message: "REVIEW_USAGE",
+      ddtags:
+        "repo:artsy/eigen,group:experiment,mode:rereview,outcome:success,model:claude-opus-5-5,effort:high",
+    })
+  })
+
+  it("puts the numbers under review", () => {
+    expect(formatDatadogLog(usage, context).review).toMatchObject({
+      costUsd: 0.7712,
+      turns: 9,
+      totalInputTokens: 200_000,
+      cacheHitRate: 0.895,
+      pr: 42,
+      runUrl: "https://github.com/artsy/eigen/actions/runs/7",
+    })
+  })
+
+  it("marks standard and unrecorded reviews", () => {
+    expect(
+      formatDatadogLog(usage, { ...context, experiment: "false" }).ddtags
+    ).toContain("group:standard")
+    expect(
+      formatDatadogLog(usage, { ...context, experiment: "", reviewMode: "" })
+        .ddtags
+    ).toContain("group:unknown,mode:unknown")
+  })
+
+  it("leaves out the conversation", () => {
+    expect(JSON.stringify(formatDatadogLog(usage, context))).not.toContain(
+      "Secret PR text"
+    )
+  })
+})
+
+describe("sendToDatadog", () => {
+  const fetchMock = jest.fn()
+  const log = jest.spyOn(console, "log").mockImplementation(() => {})
+
+  beforeEach(() => {
+    fetchMock.mockReset()
+    log.mockClear()
+    global.fetch = fetchMock
+  })
+
+  it("does nothing without a key", async () => {
+    await sendToDatadog({ message: "x" }, undefined)
+
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("posts the event to the site's log intake", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 202 })
+
+    await sendToDatadog({ message: "x" }, "key", "datadoghq.eu")
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://http-intake.logs.datadoghq.eu/api/v2/logs",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "DD-API-KEY": "key" }),
+        body: '[{"message":"x"}]',
+      })
+    )
+  })
+
+  it("warns instead of failing when the send fails", async () => {
+    fetchMock.mockRejectedValue(new Error("network down"))
+    await expect(sendToDatadog({}, "key")).resolves.toBeUndefined()
+
+    fetchMock.mockResolvedValue({ ok: false, status: 403 })
+    await sendToDatadog({}, "key")
+
+    expect(log).toHaveBeenCalledWith(
+      "::warning::Could not send review usage to Datadog: network down"
+    )
+    expect(log).toHaveBeenCalledWith(
+      "::warning::Datadog rejected the review usage: HTTP 403"
     )
   })
 })
