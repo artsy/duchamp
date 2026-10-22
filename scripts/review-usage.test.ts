@@ -1,11 +1,11 @@
 import {
   cacheHitRate,
-  formatDatadogLog,
   formatUsageLogLine,
   formatUsageSummary,
+  formatVolleyPayload,
   parseReviewUsage,
   type ReviewUsage,
-  sendToDatadog,
+  sendToVolley,
 } from "./review-usage"
 
 const RESULT = {
@@ -159,58 +159,64 @@ describe("formatUsageLogLine", () => {
   })
 })
 
-describe("formatDatadogLog", () => {
+describe("formatVolleyPayload", () => {
   const usage = parseReviewUsage(executionFile(RESULT)) as ReviewUsage
   const context = {
     repo: "artsy/eigen",
-    prNumber: "42",
-    runUrl: "https://github.com/artsy/eigen/actions/runs/7",
     modelArgs: "--model claude-opus-5-5 --effort high",
     reviewMode: "rereview",
     experiment: "true",
   }
+  const TAGS = [
+    "repo:artsy/eigen",
+    "group:experiment",
+    "mode:rereview",
+    "outcome:success",
+    "model:claude-opus-5-5",
+    "effort:high",
+  ]
 
-  it("tags the event with what the dashboard splits by", () => {
-    expect(formatDatadogLog(usage, context)).toMatchObject({
-      service: "ai-pr-review",
-      ddsource: "github-actions",
-      message: "REVIEW_USAGE",
-      ddtags:
-        "repo:artsy/eigen,group:experiment,mode:rereview,outcome:success,model:claude-opus-5-5,effort:high",
-    })
-  })
-
-  it("puts the numbers under review", () => {
-    expect(formatDatadogLog(usage, context).review).toMatchObject({
-      costUsd: 0.7712,
-      turns: 9,
-      totalInputTokens: 200_000,
-      cacheHitRate: 0.895,
-      pr: 42,
-      runUrl: "https://github.com/artsy/eigen/actions/runs/7",
+  it("sends counters and histograms under ai_pr_review, all with the same tags", () => {
+    expect(formatVolleyPayload(usage, context)).toEqual({
+      serviceName: "ai_pr_review",
+      metrics: [
+        { type: "increment", name: "reviews", tags: TAGS },
+        { type: "incrementBy", name: "cost_cents", value: 77, tags: TAGS },
+        {
+          type: "incrementBy",
+          name: "denied_tool_calls",
+          value: 2,
+          tags: TAGS,
+        },
+        { type: "histogram", name: "cost_usd", value: 0.7712, tags: TAGS },
+        { type: "histogram", name: "turns", value: 9, tags: TAGS },
+        { type: "histogram", name: "duration_ms", value: 92_400, tags: TAGS },
+        { type: "histogram", name: "cache_hit_rate", value: 0.895, tags: TAGS },
+      ],
     })
   })
 
   it("marks standard and unrecorded reviews", () => {
-    expect(
-      formatDatadogLog(usage, { ...context, experiment: "false" }).ddtags
-    ).toContain("group:standard")
-    expect(
-      formatDatadogLog(usage, { ...context, experiment: "", reviewMode: "" })
-        .ddtags
-    ).toContain("group:unknown,mode:unknown")
+    const tagsFor = (overrides: Partial<typeof context>) =>
+      formatVolleyPayload(usage, { ...context, ...overrides }).metrics[0].tags
+
+    expect(tagsFor({ experiment: "false" })).toContain("group:standard")
+    expect(tagsFor({ experiment: "", reviewMode: "" })).toEqual(
+      expect.arrayContaining(["group:unknown", "mode:unknown"])
+    )
   })
 
   it("leaves out the conversation", () => {
-    expect(JSON.stringify(formatDatadogLog(usage, context))).not.toContain(
+    expect(JSON.stringify(formatVolleyPayload(usage, context))).not.toContain(
       "Secret PR text"
     )
   })
 })
 
-describe("sendToDatadog", () => {
+describe("sendToVolley", () => {
   const fetchMock = jest.fn()
   const log = jest.spyOn(console, "log").mockImplementation(() => {})
+  const payload = { serviceName: "ai_pr_review", metrics: [] }
 
   beforeEach(() => {
     fetchMock.mockReset()
@@ -218,39 +224,40 @@ describe("sendToDatadog", () => {
     global.fetch = fetchMock
   })
 
-  it("does nothing without a key", async () => {
-    await sendToDatadog({ message: "x" }, undefined)
+  it("does nothing without a URL", async () => {
+    await sendToVolley(payload, undefined)
 
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it("posts the event to the site's log intake", async () => {
+  it("posts the payload as JSON", async () => {
     fetchMock.mockResolvedValue({ ok: true, status: 202 })
 
-    await sendToDatadog({ message: "x" }, "key", "datadoghq.eu")
+    await sendToVolley(payload, "https://volley.artsy.net/report")
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://http-intake.logs.datadoghq.eu/api/v2/logs",
+      "https://volley.artsy.net/report",
       expect.objectContaining({
         method: "POST",
-        headers: expect.objectContaining({ "DD-API-KEY": "key" }),
-        body: '[{"message":"x"}]',
+        body: JSON.stringify(payload),
       })
     )
   })
 
   it("warns instead of failing when the send fails", async () => {
     fetchMock.mockRejectedValue(new Error("network down"))
-    await expect(sendToDatadog({}, "key")).resolves.toBeUndefined()
+    await expect(
+      sendToVolley(payload, "https://volley.artsy.net/report")
+    ).resolves.toBeUndefined()
 
-    fetchMock.mockResolvedValue({ ok: false, status: 403 })
-    await sendToDatadog({}, "key")
+    fetchMock.mockResolvedValue({ ok: false, status: 502 })
+    await sendToVolley(payload, "https://volley.artsy.net/report")
 
     expect(log).toHaveBeenCalledWith(
-      "::warning::Could not send review usage to Datadog: network down"
+      "::warning::Could not send review metrics to volley: network down"
     )
     expect(log).toHaveBeenCalledWith(
-      "::warning::Datadog rejected the review usage: HTTP 403"
+      "::warning::Volley rejected the review metrics: HTTP 502"
     )
   })
 })

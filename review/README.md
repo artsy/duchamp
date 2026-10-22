@@ -127,11 +127,10 @@ duration, input, cache and output tokens, cache hit rate, and denied tool calls.
 `scripts/review-usage.ts` reads these from the action's execution file. It writes
 numbers only, never the conversation, because that holds PR content.
 
-When the caller passes `datadog-api-key`, the same step also sends the numbers to
-Datadog as one log event (`service:ai-pr-review`), tagged by repo, group, mode,
-outcome, model and effort, with the PR number and run URL. Again numbers only. A
-failed send is a warning and doesn't fail the job. `datadog/` holds the dashboard and
-the log-based metrics behind it; see [its README](datadog/README.md).
+The same step also posts the numbers to volley, which forwards them to Datadog as
+`ai_pr_review.*` metrics tagged by repo, group, mode, outcome, model and effort. Again
+numbers only. A failed send is a warning and doesn't fail the job. `datadog/` holds
+the dashboard; see [its README](datadog/README.md).
 
 The same numbers go to the job log as one `REVIEW_USAGE {...}` JSON line. To compare
 reviews before and after a change, collect them across repos and split by date:

@@ -8,9 +8,6 @@ on:
       review-app-private-key:
         description: "Private key of the Artsy Review Context GitHub App, which reads private repos listed in related_repos. Without it, private repos are skipped"
         required: false
-      datadog-api-key:
-        description: "Datadog API key that sends each review's usage to Datadog logs. Without it, usage stays in the job log only"
-        required: false
     inputs:
       model:
         description: "Claude model to use for the review"
@@ -22,11 +19,6 @@ on:
         default: 30
         required: false
         type: number
-      datadog-site:
-        description: "Datadog site for datadog-api-key"
-        default: "datadoghq.com"
-        required: false
-        type: string
 
 jobs:
   # Adding the in-progress label joins the shared concurrency group, which
@@ -295,6 +287,5 @@ jobs:
           MODEL_ARGS: ${{ steps.prompt.outputs.model_args }}
           EXPERIMENT: ${{ steps.experiment.outputs.related_repos }}
           REVIEW_MODE: ${{ steps.prompt.outputs.review_mode }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          DD_API_KEY: ${{ secrets.datadog-api-key }}
-          DD_SITE: ${{ inputs.datadog-site }}
+          # Forwards the metrics to Datadog; see review/datadog/README.md.
+          VOLLEY_URL: https://volley.artsy.net/report

@@ -138,14 +138,21 @@ export const formatUsageLogLine = (
       experiment === "true" ? true : experiment === "false" ? false : null,
   })
 
-export interface DatadogContext {
+export interface MetricsContext {
   repo: string
-  prNumber: string
-  runUrl: string
   modelArgs: string
   reviewMode: string
   experiment: string
 }
+
+type VolleyMetric =
+  | { type: "increment"; name: string; tags: string[] }
+  | {
+      type: "incrementBy" | "histogram"
+      name: string
+      value: number
+      tags: string[]
+    }
 
 const reviewGroup = (experiment: string): string =>
   experiment === "true"
@@ -155,14 +162,14 @@ const reviewGroup = (experiment: string): string =>
       : "unknown"
 
 /**
- * One log event for Datadog's log intake. Tags are what the dashboard splits by; the
- * numbers go under `review` so they can become measures. Like the log line, no
- * conversation and no PR text.
+ * The review's numbers as metrics for volley, which forwards them to Datadog as
+ * `ai_pr_review.<name>`. Counters give exact totals; histograms give the spread per
+ * review. Tags are what the dashboard splits by. Numbers only, no PR text.
  */
-export const formatDatadogLog = (
+export const formatVolleyPayload = (
   usage: ReviewUsage,
-  context: DatadogContext
-): Record<string, unknown> => {
+  context: MetricsContext
+): { serviceName: string; metrics: VolleyMetric[] } => {
   const effort = context.modelArgs.match(/--effort (\S+)/)?.[1]
   const tags = [
     `repo:${context.repo}`,
@@ -172,55 +179,68 @@ export const formatDatadogLog = (
     ...usage.models.map(model => `model:${model}`),
     ...(effort ? [`effort:${effort}`] : []),
   ]
+  const histogram = (name: string, value: number): VolleyMetric => ({
+    type: "histogram",
+    name,
+    value,
+    tags,
+  })
 
   return {
-    ddsource: "github-actions",
-    service: "ai-pr-review",
-    ddtags: tags.join(","),
-    message: USAGE_LOG_PREFIX.trim(),
-    review: {
-      ...usage,
-      cacheHitRate: cacheHitRate(usage),
-      totalInputTokens:
-        usage.inputTokens + usage.cacheWriteTokens + usage.cacheReadTokens,
-      pr: Number(context.prNumber) || null,
-      runUrl: context.runUrl,
-    },
+    serviceName: "ai_pr_review",
+    metrics: [
+      { type: "increment", name: "reviews", tags },
+      // Counters take whole numbers.
+      {
+        type: "incrementBy",
+        name: "cost_cents",
+        value: Math.round(usage.costUsd * 100),
+        tags,
+      },
+      {
+        type: "incrementBy",
+        name: "denied_tool_calls",
+        value: usage.permissionDenials,
+        tags,
+      },
+      histogram("cost_usd", usage.costUsd),
+      histogram("turns", usage.turns),
+      histogram("duration_ms", usage.durationMs),
+      histogram("cache_hit_rate", cacheHitRate(usage)),
+    ],
   }
 }
 
 /**
- * Send the event when the workflow passes a Datadog key. A failed send is a warning:
- * the numbers are still in the job log.
+ * Post the metrics when the workflow sets a volley URL. Volley answers 202 even when
+ * it drops a metric, so only a failed request is reported, as a warning.
  */
-export const sendToDatadog = async (
-  event: Record<string, unknown>,
-  apiKey: string | undefined,
-  site = "datadoghq.com"
+export const sendToVolley = async (
+  payload: ReturnType<typeof formatVolleyPayload>,
+  url: string | undefined
 ): Promise<void> => {
-  if (!apiKey) {
+  if (!url) {
     return
   }
 
   try {
-    const response = await fetch(
-      `https://http-intake.logs.${site}/api/v2/logs`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "DD-API-KEY": apiKey },
-        body: JSON.stringify([event]),
-      }
-    )
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
     if (!response.ok) {
       console.log(
-        `::warning::Datadog rejected the review usage: HTTP ${response.status}`
+        `::warning::Volley rejected the review metrics: HTTP ${response.status}`
       )
       return
     }
-    console.log("Review usage sent to Datadog")
+    console.log("Review metrics sent to volley")
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.log(`::warning::Could not send review usage to Datadog: ${message}`)
+    console.log(
+      `::warning::Could not send review metrics to volley: ${message}`
+    )
   }
 }
 
@@ -309,18 +329,14 @@ const main = async (): Promise<void> => {
     fs.appendFileSync(summaryPath, summary)
   }
 
-  const repo = process.env.GITHUB_REPOSITORY ?? ""
-  await sendToDatadog(
-    formatDatadogLog(usage, {
-      repo,
-      prNumber: process.env.PR_NUMBER ?? "",
-      runUrl: `${process.env.GITHUB_SERVER_URL ?? "https://github.com"}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID ?? ""}`,
+  await sendToVolley(
+    formatVolleyPayload(usage, {
+      repo: process.env.GITHUB_REPOSITORY ?? "",
       modelArgs,
       reviewMode,
       experiment,
     }),
-    process.env.DD_API_KEY,
-    process.env.DD_SITE || undefined
+    process.env.VOLLEY_URL
   )
 }
 
