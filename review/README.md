@@ -156,6 +156,10 @@ PRs, so don't compare those two directly. Add up each window's rows instead.
 cheap, so a rise there can look like a saving. Over 1,000 runs in a repo, GitHub
 drops the oldest and the script warns.
 
+For time alone, going back to the workflow's start, `scripts/review-duration-history.ts`
+reads job timings from the Actions API instead of logs. [history.md](history.md) has
+its results since January.
+
 ## Attribution
 
 `prompt.md` is adapted from two MIT-licensed skills:

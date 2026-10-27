@@ -223,7 +223,7 @@ const listRuns = async (
 }
 
 /** Runs fn over items with at most `limit` in flight. */
-const mapLimit = async <T, R>(
+export const mapLimit = async <T, R>(
   items: T[],
   limit: number,
   fn: (item: T) => Promise<R>
