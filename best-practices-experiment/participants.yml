@@ -2,7 +2,7 @@
 #
 # Reviews of PRs by anyone on this list run the stack skills that review/skills.yml
 # lists for the repo, such as react-native-best-practices on eigen, when the diff
-# touches app code. This is separate from the review experiment: a PR can be in one,
+# touches app code. This is separate from the lean reviews experiment: a PR can be in one,
 # both or neither.
 #
 # To join or leave, add or remove your login and open a PR. Case does not matter.

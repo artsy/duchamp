@@ -2,7 +2,7 @@
 #
 # Reviews of PRs by anyone on this list can read the other Artsy repos listed in
 # their repo's `.claude-review.yml` `related_repos`, such as metaphysics when
-# reviewing eigen. This is separate from the review experiment: a PR can be in
+# reviewing eigen. This is separate from the lean reviews experiment: a PR can be in
 # either, both or neither.
 #
 # To join or leave, add or remove your login and open a PR. Case does not matter.

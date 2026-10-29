@@ -3,7 +3,7 @@
 An opt-in addition to the [AI PR review](../review/README.md). Reviews of PRs in it can
 read the other Artsy repos listed in the repo's `.claude-review.yml` `related_repos`,
 such as metaphysics when reviewing eigen. It is separate from the
-[review experiment](../review-experiment/README.md), which it used to be part of: a PR
+[lean reviews experiment](../lean-reviews-experiment/README.md), which it used to be part of: a PR
 can be in either, both or neither.
 
 ## Joining

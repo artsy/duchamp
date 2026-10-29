@@ -32,7 +32,7 @@ const USAGE =
 export interface UsageRecord extends ReviewUsage {
   modelArgs: string
   reviewMode: string | null
-  /** Whether the review was in the review experiment; null in older log lines. */
+  /** Whether the review was in the lean reviews experiment; null in older log lines. */
   experiment?: boolean | null
 }
 

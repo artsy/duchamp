@@ -5,8 +5,6 @@ import {
   assemblePrompt,
   assessChanges,
   buildPrompt,
-  EXPERIMENT_INLINE_SECTION,
-  EXPERIMENT_LABEL,
   formatContextSection,
   formatDelivery,
   formatDiffSection,
@@ -15,9 +13,12 @@ import {
   formatSecuritySection,
   hasSecurityLabel,
   inBestPractices,
+  inLeanReviews,
   inRelatedReposExperiment,
-  inReviewExperiment,
   inSecurityExperiment,
+  LEAN_INLINE_SECTION,
+  LEAN_LABEL,
+  LEAN_LEGACY_LABEL,
   LIGHT_EFFORT,
   LIGHT_MODEL,
   loadParticipants,
@@ -335,7 +336,7 @@ describe("assessChanges", () => {
       )
     ).toEqual({
       tier: "standard",
-      reason: "not in the review experiment",
+      reason: "not in the lean reviews experiment",
       sensitive: ["src/auth.ts"],
     })
   })
@@ -576,7 +577,7 @@ describe("formatSecuritySection", () => {
   })
 })
 
-describe("inReviewExperiment", () => {
+describe("inLeanReviews", () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
@@ -584,26 +585,27 @@ describe("inReviewExperiment", () => {
   it("is true for an enrolled author, case-insensitively", () => {
     mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
 
-    expect(inReviewExperiment("mounirdhahri", [])).toBe(true)
+    expect(inLeanReviews("mounirdhahri", [])).toBe(true)
   })
 
   it("is true for a labelled PR without reading participants", () => {
     mockFs.existsSync.mockReturnValue(false)
 
-    expect(inReviewExperiment("someone-else", [EXPERIMENT_LABEL])).toBe(true)
+    expect(inLeanReviews("someone-else", [LEAN_LABEL])).toBe(true)
+    expect(inLeanReviews("someone-else", [LEAN_LEGACY_LABEL])).toBe(true)
     expect(mockFs.existsSync).not.toHaveBeenCalled()
   })
 
   it("is false for an author outside the experiment", () => {
     mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
 
-    expect(inReviewExperiment("someone-else", ["in-progress"])).toBe(false)
+    expect(inLeanReviews("someone-else", ["in-progress"])).toBe(false)
   })
 
   it("is false with no author and no label", () => {
     mockFs.existsSync.mockReturnValue(false)
 
-    expect(inReviewExperiment(undefined, [])).toBe(false)
+    expect(inLeanReviews(undefined, [])).toBe(false)
   })
 })
 
@@ -633,12 +635,10 @@ describe("inRelatedReposExperiment", () => {
     ).toBe(true)
   })
 
-  it("is false for the review experiment's label alone", () => {
+  it("is false for the lean reviews experiment's label alone", () => {
     mockFs.existsSync.mockReturnValue(false)
 
-    expect(inRelatedReposExperiment("someone-else", [EXPERIMENT_LABEL])).toBe(
-      false
-    )
+    expect(inRelatedReposExperiment("someone-else", [LEAN_LABEL])).toBe(false)
   })
 
   it("is false with no author and no label", () => {
@@ -1153,23 +1153,21 @@ describe("formatDelivery", () => {
   })
 })
 
-describe("EXPERIMENT_INLINE_SECTION", () => {
+describe("LEAN_INLINE_SECTION", () => {
   it("keeps nits and most questions out of inline comments", () => {
-    expect(EXPERIMENT_INLINE_SECTION).toContain("Nits never go inline")
-    expect(EXPERIMENT_INLINE_SECTION).toContain("at most three")
-    expect(EXPERIMENT_INLINE_SECTION).toContain(
+    expect(LEAN_INLINE_SECTION).toContain("Nits never go inline")
+    expect(LEAN_INLINE_SECTION).toContain("at most three")
+    expect(LEAN_INLINE_SECTION).toContain(
       "Questions go inline only when the answer decides"
     )
   })
 
   it("moves required findings scoring below 6 to Suggestions", () => {
-    expect(EXPERIMENT_INLINE_SECTION).toContain("from 1 (rare edge case) to 5")
-    expect(EXPERIMENT_INLINE_SECTION).toContain(
+    expect(LEAN_INLINE_SECTION).toContain("from 1 (rare edge case) to 5")
+    expect(LEAN_INLINE_SECTION).toContain(
       "If the product is below 6, the finding is not required"
     )
-    expect(EXPERIMENT_INLINE_SECTION).toContain(
-      "Blocking findings are not scored"
-    )
+    expect(LEAN_INLINE_SECTION).toContain("Blocking findings are not scored")
   })
 })
 
@@ -1178,7 +1176,7 @@ describe("assemblePrompt", () => {
 
   it("puts the inline rules before delivery for experiment reviews", () => {
     expect(assemblePrompt(parts, true)).toBe(
-      `HEADCONTEXT${EXPERIMENT_INLINE_SECTION}DELIVERY`
+      `HEADCONTEXT${LEAN_INLINE_SECTION}DELIVERY`
     )
   })
 

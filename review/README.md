@@ -3,9 +3,12 @@
 The [Claude AI PR review](../docs/actions.md#run-claude-reviewyml) reviews every PR
 with `prompt.md` in this directory. It runs on the workflow's `model` input,
 `claude-opus-5-5` by default, at `high` effort (`REVIEW_EFFORT` in
-`scripts/build-review-prompt.ts`). Small experiment PRs run on a lighter model; see
+`scripts/build-review-prompt.ts`). Small lean-reviews PRs run on a lighter model; see
 [Model routing](#model-routing). The Claude Code version is whatever
 `anthropics/claude-code-action@v1` installs.
+
+Opt-in experiments change parts of the review for some PRs. See
+[experiments.md](experiments.md) for the active ones and the history.
 
 ## How the review works
 
@@ -65,7 +68,7 @@ See that README for when they run and how we count their use.
 
 ## Context in the prompt
 
-For PRs in the [review experiment](../review-experiment/README.md),
+For PRs in the [lean reviews experiment](../lean-reviews-experiment/README.md),
 `build-review-prompt.ts` puts the repo's root `AGENTS.md` and the PR diff into the
 prompt, so the reviewer doesn't spend its first turns fetching them. Every turn resends
 the whole conversation, so fewer turns cost less. Other reviews get the same prompt as
@@ -84,7 +87,7 @@ before.
 
 ## Model routing
 
-For PRs in the [review experiment](../review-experiment/README.md),
+For PRs in the [lean reviews experiment](../lean-reviews-experiment/README.md),
 `scripts/review-risk.ts` sorts the changes into a tier before the run:
 
 | Tier | When | Model and effort |
@@ -135,7 +138,7 @@ second agent reads only for security:
   a `file:line`, the input that triggers it and what an attacker gets. Its tools are
   Read, Grep and Glob, so it can't post comments on any path. It gets no Bash because
   a subagent's Bash runs under the main reviewer's allowlist, which on reviews outside
-  the review experiment includes `gh pr comment`. Narrowing Bash in the agent's
+  the lean reviews experiment includes `gh pr comment`. Narrowing Bash in the agent's
   frontmatter doesn't work in CLI 2.1.312: `Bash(git diff:*)` in `tools` allows every
   command the main reviewer can run, and the same pattern in `disallowedTools` removes
   Bash entirely.
@@ -151,7 +154,7 @@ Datadog tags each review `security:true` or `security:false`.
 
 ## Re-reviews
 
-For PRs in the [review experiment](../review-experiment/README.md), the posted summary
+For PRs in the [lean reviews experiment](../lean-reviews-experiment/README.md), the posted summary
 ends with a hidden marker naming the commit it reviewed:
 `<!-- ai-review-sha: <commit> -->`. On the next push, `scripts/review-mode.ts` reads
 the marker from the latest `github-actions[bot]` comment and picks a mode:
@@ -184,7 +187,7 @@ the group (`formatDelivery` in `scripts/build-review-prompt.ts`):
 
 - **Standard PRs.** The model posts the summary itself with `gh pr comment`, so it
   shows as `claude[bot]`, with no stats.
-- **[Experiment](../review-experiment/README.md) PRs.** The model returns the summary
+- **[Lean reviews](../lean-reviews-experiment/README.md) PRs.** The model returns the summary
   as structured output, and `scripts/post-review-summary.ts` posts it as
   `github-actions[bot]` with a collapsed "Review stats" block: model and effort, cost,
   turns, duration, tokens, and denied tool calls. It has to work this way: the run's
@@ -216,11 +219,11 @@ yarn ts-node scripts/collect-review-usage.ts --repos eigen,force,metaphysics \
 ```
 
 It prints median cost, turns, time and cache hit rate per window, group and review
-mode. The group is `experiment` for PRs in the
-[review experiment](../review-experiment/README.md), `standard` for the rest, and
-`unknown` for log lines from before the group was recorded. The two groups differ in
-more than one way (experiment PRs also re-review and route models), so compare each group
-with itself before and after a change.
+mode. The group is `experiment` for PRs in
+[lean reviews](../lean-reviews-experiment/README.md) (the value predates the rename),
+`standard` for the rest, and `unknown` for log lines from before the group was
+recorded. The two groups differ in more than one way (lean PRs also re-review and
+route models), so compare each group with itself before and after a change.
 It finds runs by the caller's workflow file, `run-claude-review.yml` unless you pass
 `--workflow`. GitHub keeps logs for 90 days by default, so older windows are gone.
 This is a before/after comparison, not a controlled test: the mix of PRs changes
