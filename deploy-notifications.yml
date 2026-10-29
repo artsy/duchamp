@@ -1,0 +1,25 @@
+# Deploy Slack notification subscriptions
+#
+# Slack channels can subscribe to Artsy repos here to get an AI-generated
+# digest whenever a Deploy PR is merged in that repo.
+#
+# To subscribe a channel, open a PR against this file. The Slack bot must be
+# invited to the channel (`/invite @<bot-name>`) for posting to work.
+#
+# Per repo:
+#   channels: List of Slack channel names to notify.
+#   context:  Optional free-text hints for Claude when writing the digest
+#             (domain glossary, how to group things, naming conventions, ...).
+#
+# See docs/deploy-notifications.md for full setup instructions.
+
+subscriptions:
+  artsy/volt:
+    channels:
+      - "#product-amber"
+    context: |
+      Volt is Artsy's CMS for gallery partners (also called Artsy CMS).
+      ArtOS is the partner CMS experience within Volt: catalog, lists,
+      settings, and the Instagram/Mailchimp/Tearsheet/Checklist Studio
+      editors. Prefix changes touching those areas with "ArtOS:" even if
+      the PR title doesn't literally say "ArtOS".
