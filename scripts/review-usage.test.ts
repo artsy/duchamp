@@ -3,6 +3,7 @@ import {
   formatUsageLogLine,
   formatUsageSummary,
   formatVolleyPayload,
+  type MetricsContext,
   parseReviewUsage,
   type ReviewUsage,
   sendToVolley,
@@ -318,6 +319,15 @@ describe("formatVolleyPayload", () => {
     expect(tagsFor({ experiment: "", reviewMode: "" })).toEqual(
       expect.arrayContaining(["group:unknown", "mode:unknown"])
     )
+  })
+
+  it("tags whether the security pass ran, when recorded", () => {
+    const tagsFor = (overrides: Partial<MetricsContext>) =>
+      formatVolleyPayload(usage, { ...context, ...overrides }).metrics[0].tags
+
+    expect(tagsFor({ securityPass: "true" })).toContain("security:true")
+    expect(tagsFor({ securityPass: "false" })).toContain("security:false")
+    expect(tagsFor({}).some(tag => tag.startsWith("security:"))).toBe(false)
   })
 
   it("leaves out the conversation", () => {

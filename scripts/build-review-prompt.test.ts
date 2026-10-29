@@ -3,6 +3,7 @@ import * as fs from "fs"
 import * as path from "path"
 import {
   assemblePrompt,
+  assessChanges,
   buildPrompt,
   EXPERIMENT_INLINE_SECTION,
   EXPERIMENT_LABEL,
@@ -11,6 +12,9 @@ import {
   formatDiffSection,
   formatInstructionsSection,
   formatReviewModeOutputs,
+  formatSecuritySection,
+  hasSecurityLabel,
+  inSecurityExperiment,
   LIGHT_EFFORT,
   LIGHT_MODEL,
   loadParticipants,
@@ -19,11 +23,15 @@ import {
   MAX_INSTRUCTIONS_BYTES,
   MAX_PROMPT_BYTES,
   parseLabels,
+  pickReviewMode,
   REVIEW_EFFORT,
   resolveModelArgs,
   resolveRelatedRepos,
-  resolveTier,
+  reviewRange,
+  SECURITY_LABEL,
+  securityLabelJustAdded,
   usesRelatedRepos,
+  writeSecurityDiff,
 } from "./build-review-prompt"
 import { MAX_DIFF_BYTES } from "./review-diff"
 
@@ -238,9 +246,32 @@ describe("resolveModelArgs", () => {
   })
 })
 
-describe("resolveTier", () => {
+describe("reviewRange", () => {
+  it("is the whole PR on a full review", () => {
+    expect(reviewRange("main", { mode: "full", reason: "" })).toBe(
+      "origin/main...HEAD"
+    )
+  })
+
+  it("is the changes since the earlier review on a re-review", () => {
+    const sha = "a".repeat(40)
+    expect(
+      reviewRange("main", {
+        mode: "rereview",
+        reason: "",
+        previous: { sha, body: "" },
+      })
+    ).toBe(`${sha}..HEAD`)
+  })
+
+  it("is undefined with no base branch", () => {
+    expect(reviewRange(undefined, { mode: "full", reason: "" })).toBeUndefined()
+  })
+})
+
+describe("assessChanges", () => {
   const mockGit = execFileSync as jest.Mock
-  const full = { mode: "full" as const, reason: "" }
+  const range = "origin/main...HEAD"
 
   beforeEach(() => {
     mockGit.mockReset()
@@ -248,53 +279,273 @@ describe("resolveTier", () => {
   })
 
   it("is standard outside the experiment, without reading the diff", () => {
-    expect(resolveTier(false, "claude-opus-5-5", "main", full, []).tier).toBe(
-      "standard"
-    )
-    expect(mockGit).not.toHaveBeenCalled()
-  })
-
-  it("keeps a model the caller set", () => {
-    expect(resolveTier(true, "claude-fable-5-1", "main", full, [])).toEqual({
+    expect(
+      assessChanges(
+        { review: false, security: false },
+        "claude-opus-5-5",
+        range,
+        []
+      )
+    ).toEqual({
       tier: "standard",
-      reason: "caller set model claude-fable-5-1",
+      reason: "not in the review or security experiment",
+      sensitive: [],
     })
     expect(mockGit).not.toHaveBeenCalled()
   })
 
-  it("classifies the whole PR on a full review", () => {
-    expect(resolveTier(true, "claude-opus-5-5", "main", full, []).tier).toBe(
-      "light"
-    )
-    expect(mockGit.mock.calls[0][1]).toContain("origin/main...HEAD")
+  it("classifies the range", () => {
+    expect(
+      assessChanges(
+        { review: true, security: false },
+        "claude-opus-5-5",
+        range,
+        []
+      ).tier
+    ).toBe("light")
+    expect(mockGit.mock.calls[0][1]).toContain(range)
   })
 
-  it("classifies the changes since the earlier review on a re-review", () => {
-    const sha = "a".repeat(40)
-    resolveTier(
-      true,
-      "claude-opus-5-5",
-      "main",
-      { mode: "rereview", reason: "", previous: { sha, body: "" } },
-      []
-    )
-    expect(mockGit.mock.calls[0][1]).toContain(`${sha}..HEAD`)
+  it("keeps a model the caller set, and still lists sensitive files", () => {
+    mockGit.mockReturnValue("1\t0\t.github/workflows/ci.yml\n")
+    expect(
+      assessChanges(
+        { review: true, security: false },
+        "claude-fable-5-1",
+        range,
+        []
+      )
+    ).toEqual({
+      tier: "standard",
+      reason: "caller set model claude-fable-5-1",
+      sensitive: [".github/workflows/ci.yml"],
+    })
+  })
+
+  it("lists sensitive files for the security experiment alone, on the standard tier", () => {
+    mockGit.mockReturnValue("1\t0\tsrc/auth.ts\n")
+    expect(
+      assessChanges(
+        { review: false, security: true },
+        "claude-opus-5-5",
+        range,
+        []
+      )
+    ).toEqual({
+      tier: "standard",
+      reason: "not in the review experiment",
+      sensitive: ["src/auth.ts"],
+    })
   })
 
   it("is standard when git fails", () => {
     mockGit.mockImplementation(() => {
       throw new Error("bad revision")
     })
-    expect(resolveTier(true, "claude-opus-5-5", "main", full, [])).toEqual({
+    expect(
+      assessChanges(
+        { review: true, security: false },
+        "claude-opus-5-5",
+        range,
+        []
+      )
+    ).toEqual({
       tier: "standard",
       reason: "could not read the diff: bad revision",
+      sensitive: [],
     })
   })
 
-  it("is standard with no base branch", () => {
-    expect(resolveTier(true, "claude-opus-5-5", undefined, full, []).tier).toBe(
-      "standard"
+  it("is standard with no range", () => {
+    expect(
+      assessChanges(
+        { review: true, security: false },
+        "claude-opus-5-5",
+        undefined,
+        []
+      ).tier
+    ).toBe("standard")
+    expect(mockGit).not.toHaveBeenCalled()
+  })
+})
+
+describe("hasSecurityLabel", () => {
+  it("matches the label in any case", () => {
+    expect(hasSecurityLabel(["bug", "Security-Review"])).toBe(true)
+    expect(hasSecurityLabel(["bug"])).toBe(false)
+  })
+})
+
+describe("securityLabelJustAdded", () => {
+  it("is true only when the run was started by adding the label", () => {
+    expect(securityLabelJustAdded("security-review")).toBe(true)
+    expect(securityLabelJustAdded("Security-Review")).toBe(true)
+    expect(securityLabelJustAdded("in-progress")).toBe(false)
+    expect(securityLabelJustAdded("")).toBe(false)
+    expect(securityLabelJustAdded(undefined)).toBe(false)
+  })
+})
+
+describe("pickReviewMode", () => {
+  const mockExec = execFileSync as jest.Mock
+
+  beforeEach(() => {
+    mockExec.mockReset()
+  })
+
+  it("forces a full review when the security label was just added, without looking up the earlier review", () => {
+    expect(
+      pickReviewMode("security-review", "artsy/eigen", "42", [], true)
+    ).toEqual({ mode: "full", reason: "security-review label just added" })
+    expect(mockExec).not.toHaveBeenCalled()
+  })
+
+  it("looks up the earlier review otherwise", () => {
+    mockExec.mockImplementation(() => {
+      throw new Error("gh failed")
+    })
+    expect(pickReviewMode(undefined, "artsy/eigen", "42", [], true)).toEqual({
+      mode: "full",
+      reason: "could not check the earlier review: gh failed",
+    })
+    expect(mockExec).toHaveBeenCalled()
+  })
+})
+
+describe("inSecurityExperiment", () => {
+  it("includes listed authors, in any case", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+    expect(inSecurityExperiment("mounirdhahri", [])).toBe(true)
+    expect(
+      mockFs.readFileSync.mock.calls.map(([p]) => String(p))
+    ).toContainEqual(
+      expect.stringContaining(
+        path.join("security-experiment", "participants.yml")
+      )
     )
+  })
+
+  it("includes any PR with the label", () => {
+    mockFiles({})
+    expect(inSecurityExperiment("someone", ["Security-Review"])).toBe(true)
+  })
+
+  it("leaves out everyone else", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+    expect(inSecurityExperiment("someone", ["bug"])).toBe(false)
+    expect(inSecurityExperiment(undefined, [])).toBe(false)
+  })
+})
+
+describe("writeSecurityDiff", () => {
+  const mockGit = execFileSync as jest.Mock
+  const range = "origin/main...HEAD"
+
+  beforeEach(() => {
+    mockGit.mockReset()
+    mockGit.mockReturnValue("diff --git a/src/auth.ts b/src/auth.ts\n")
+    mockFs.writeFileSync.mockReset()
+  })
+
+  it("writes the diff of the given files, taken literally", () => {
+    expect(
+      writeSecurityDiff(range, ["src/auth.ts", "a*b.ts"], [], "/tmp/r")
+    ).toBe(path.join("/tmp/r", "security.diff"))
+    expect(mockGit.mock.calls[0][1]).toEqual([
+      "diff",
+      range,
+      "--",
+      ":(literal)src/auth.ts",
+      ":(literal)a*b.ts",
+    ])
+    expect(mockFs.writeFileSync).toHaveBeenCalledWith(
+      path.join("/tmp/r", "security.diff"),
+      "diff --git a/src/auth.ts b/src/auth.ts\n"
+    )
+  })
+
+  it("writes every file, minus lockfiles and ignored paths, for the label", () => {
+    writeSecurityDiff(range, null, ["vendor/"], "/tmp/r")
+    expect(mockGit.mock.calls[0][1]).toEqual(
+      expect.arrayContaining([":(exclude,glob)**/vendor/**"])
+    )
+  })
+
+  it("returns undefined when git fails", () => {
+    jest.spyOn(console, "error").mockImplementation(() => {})
+    mockGit.mockImplementation(() => {
+      throw new Error("bad revision")
+    })
+    expect(
+      writeSecurityDiff(range, ["src/auth.ts"], [], "/tmp/r")
+    ).toBeUndefined()
+    expect(mockFs.writeFileSync).not.toHaveBeenCalled()
+  })
+})
+
+describe("formatSecuritySection", () => {
+  const range = "origin/main...HEAD"
+
+  it("is empty with no sensitive files and no label", () => {
+    expect(formatSecuritySection([], false, range)).toBe("")
+  })
+
+  it("is empty with no range", () => {
+    expect(formatSecuritySection(["src/auth.ts"], true, undefined)).toBe("")
+  })
+
+  it("lists the sensitive files and hands them to the subagent", () => {
+    const section = formatSecuritySection(
+      ["src/auth.ts", ".github/workflows/ci.yml"],
+      false,
+      range
+    )
+    expect(section).toContain("## Security Pass")
+    expect(section).toContain("- `src/auth.ts`")
+    expect(section).toContain("- `.github/workflows/ci.yml`")
+    expect(section).toContain('`subagent_type: "duchamp-security-reviewer"`')
+    expect(section).toContain("the list of the files above")
+    expect(section).toContain(`\`git diff ${range}\``)
+    expect(section).toContain("cannot run git")
+    expect(section).toContain("Verify Before You Claim")
+  })
+
+  it("points the subagent at the diff file when there is one", () => {
+    const section = formatSecuritySection(
+      ["src/auth.ts"],
+      false,
+      range,
+      "/tmp/runner/security.diff"
+    )
+    expect(section).toContain(
+      `the path \`/tmp/runner/security.diff\`, which holds \`git diff ${range}\``
+    )
+    expect(section).toContain("do not copy the diff into the call")
+    expect(section).not.toContain("diff hunks")
+  })
+
+  it("falls back to a security read by the reviewer when the agent is missing", () => {
+    expect(formatSecuritySection(["src/auth.ts"], false, range)).toContain(
+      "If the Agent tool says `duchamp-security-reviewer` does not exist, do this security read yourself"
+    )
+  })
+
+  it("covers every changed file when the label asks for it, sensitive files or not", () => {
+    for (const sensitive of [[], ["src/auth.ts"]]) {
+      const section = formatSecuritySection(sensitive, true, range)
+      expect(section).toContain(`\`${SECURITY_LABEL}\` label`)
+      expect(section).toContain(`whole change, \`${range}\``)
+      expect(section).toContain("every changed file")
+      expect(section).not.toContain("- `src/auth.ts`")
+    }
+  })
+
+  it("caps the file list", () => {
+    const files = Array.from({ length: 35 }, (_, i) => `src/auth${i}.ts`)
+    const section = formatSecuritySection(files, false, range)
+    expect(section).toContain("`src/auth29.ts`")
+    expect(section).not.toContain("`src/auth30.ts`")
+    expect(section).toContain("- and 5 more")
   })
 })
 
@@ -825,6 +1076,12 @@ describe("formatDelivery", () => {
     expect(toolArgs).toMatch(/^--allowedTools "Bash\(gh pr comment:\*\),Read,/)
     expect(toolArgs).not.toContain("--json-schema")
     expect(section).toContain("`gh pr comment 42`")
+  })
+
+  it("allows the Agent tool only for the security pass", () => {
+    expect(formatDelivery(true, "42").toolArgs).not.toContain("Agent")
+    expect(formatDelivery(true, "42", true).toolArgs).toMatch(/,Agent"/)
+    expect(formatDelivery(false, "42", true).toolArgs).toMatch(/,Agent"$/)
   })
 })
 

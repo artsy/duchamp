@@ -18,7 +18,9 @@ using the shared workflow reports.
 | `cache_hit_rate` | histogram | Share of input tokens read from the prompt cache |
 
 All of them carry the tags `repo`, `pr`, `group` (experiment, standard or unknown), `mode`
-(full, rereview or unknown), `outcome`, `model` and `effort`. Datadog bills custom
+(full, rereview or unknown), `outcome`, `model` and `effort`. Reviews from after the
+security experiment also carry `security` (true when the
+[security pass](../README.md#security-pass) ran). Datadog bills custom
 metrics by the series seen each hour, and reviews rarely share every tag in the same
 hour, so the `pr` tag adds few series. The `pr` tag holds the number alone, so filter
 by `repo` too when looking at one PR.

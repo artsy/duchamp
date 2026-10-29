@@ -11,13 +11,19 @@ import {
   parseRelatedRepos,
   type RelatedRepo,
 } from "./related-repos"
-import { fenced, MAX_DIFF_BYTES, renderDiff } from "./review-diff"
+import {
+  diffPathspec,
+  fenced,
+  git,
+  MAX_DIFF_BYTES,
+  renderDiff,
+} from "./review-diff"
 import {
   formatRereviewSection,
   type ReviewMode,
   resolveReviewMode,
 } from "./review-mode"
-import { classifyDiff, type ReviewTier } from "./review-risk"
+import { classifyDiff, type DiffRisk, type ReviewTier } from "./review-risk"
 
 /**
  * Build the review prompt from review/prompt.md plus repo-specific configuration.
@@ -52,6 +58,9 @@ interface RepoConfig {
 /** Label that opts a single PR into the experiment without enrolling its author. */
 export const EXPERIMENT_LABEL = "ai-review-experiment"
 
+/** Label that opts a single PR into the security experiment. */
+export const SECURITY_LABEL = "security-review"
+
 export const DEFAULT_MODEL = "claude-opus-5-5"
 
 export const REVIEW_EFFORT = "high"
@@ -71,8 +80,11 @@ const toolingPath = (...parts: string[]): string =>
 export const loadReviewPrompt = (): string =>
   fs.readFileSync(toolingPath("review", "prompt.md"), "utf8")
 
-export const loadParticipants = (): string[] => {
-  const participantsPath = toolingPath("review-experiment", "participants.yml")
+/** Logins in an experiment's participants.yml, lowercased. */
+export const loadParticipants = (
+  experiment = "review-experiment"
+): string[] => {
+  const participantsPath = toolingPath(experiment, "participants.yml")
 
   if (!fs.existsSync(participantsPath)) {
     return []
@@ -140,6 +152,38 @@ export const usesRelatedRepos = (
   return loadParticipants().includes(author.toLowerCase())
 }
 
+export const hasSecurityLabel = (labels: string[]): boolean =>
+  labels.some(label => label.toLowerCase() === SECURITY_LABEL)
+
+/**
+ * Adding the label asks for a security read now. The PR has usually been reviewed at
+ * its current commit already, so a re-review would skip and the pass would never run.
+ */
+export const securityLabelJustAdded = (
+  triggerLabel: string | undefined
+): boolean => triggerLabel?.toLowerCase() === SECURITY_LABEL
+
+/** A full review when the security label was just added, else the usual choice. */
+export const pickReviewMode = (
+  triggerLabel: string | undefined,
+  repo: string | undefined,
+  prNumber: string | undefined,
+  ignorePaths: string[],
+  inExperiment: boolean
+): ReviewMode =>
+  securityLabelJustAdded(triggerLabel)
+    ? { mode: "full", reason: `${SECURITY_LABEL} label just added` }
+    : resolveReviewMode(repo, prNumber, ignorePaths, inExperiment)
+
+/** Whether this review is in the security experiment: listed authors and labelled PRs. */
+export const inSecurityExperiment = (
+  author: string | undefined,
+  labels: string[]
+): boolean =>
+  hasSecurityLabel(labels) ||
+  (!!author &&
+    loadParticipants("security-experiment").includes(author.toLowerCase()))
+
 /** Claude Code CLI flags that select the model for this review. */
 export const resolveModelArgs = (
   model: string,
@@ -149,38 +193,131 @@ export const resolveModelArgs = (
     ? `--model ${LIGHT_MODEL} --effort ${LIGHT_EFFORT}`
     : `--model ${model} --effort ${REVIEW_EFFORT}`
 
-/**
- * Experiment reviews of light diffs get LIGHT_MODEL. A caller that sets its own model
- * keeps it. Any failure to read the diff means standard.
- */
-export const resolveTier = (
-  inExperiment: boolean,
-  model: string,
+const FULL_REVIEW: ReviewMode = { mode: "full", reason: "" }
+
+/** What this run reviews: the whole PR, or on a re-review the changes since the last one. */
+export const reviewRange = (
   baseRef: string | undefined,
-  reviewMode: ReviewMode,
+  reviewMode: ReviewMode
+): string | undefined =>
+  reviewMode.mode === "rereview"
+    ? `${reviewMode.previous.sha}..HEAD`
+    : baseRef && `origin/${baseRef}...HEAD`
+
+/**
+ * Reads the diff once for the experiments that need it. Review-experiment reviews of
+ * light diffs get LIGHT_MODEL, unless the caller set its own model. Security-experiment
+ * reviews use the sensitive files. Any failure to read the diff means standard, with no
+ * sensitive files.
+ */
+export const assessChanges = (
+  groups: { review: boolean; security: boolean },
+  model: string,
+  range: string | undefined,
   ignorePaths: string[]
-): { tier: ReviewTier; reason: string } => {
-  if (!inExperiment) {
-    return { tier: "standard", reason: "not in the review experiment" }
+): { tier: ReviewTier; reason: string; sensitive: string[] } => {
+  if (!groups.review && !groups.security) {
+    return {
+      tier: "standard",
+      reason: "not in the review or security experiment",
+      sensitive: [],
+    }
   }
-  if (model !== DEFAULT_MODEL) {
-    return { tier: "standard", reason: `caller set model ${model}` }
-  }
-  const range =
-    reviewMode.mode === "rereview"
-      ? `${reviewMode.previous.sha}..HEAD`
-      : baseRef && `origin/${baseRef}...HEAD`
   if (!range) {
-    return { tier: "standard", reason: "no base branch" }
+    return { tier: "standard", reason: "no base branch", sensitive: [] }
   }
 
+  let risk: DiffRisk
   try {
-    const { tier, reason } = classifyDiff(range, ignorePaths)
-    return { tier, reason }
+    risk = classifyDiff(range, ignorePaths)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return { tier: "standard", reason: `could not read the diff: ${message}` }
+    return {
+      tier: "standard",
+      reason: `could not read the diff: ${message}`,
+      sensitive: [],
+    }
   }
+  if (!groups.review) {
+    return {
+      tier: "standard",
+      reason: "not in the review experiment",
+      sensitive: risk.sensitive,
+    }
+  }
+  if (model !== DEFAULT_MODEL) {
+    return {
+      tier: "standard",
+      reason: `caller set model ${model}`,
+      sensitive: risk.sensitive,
+    }
+  }
+  return risk
+}
+
+const MAX_SECURITY_FILES = 30
+
+/**
+ * The subagent in .claude/agents. Namespaced, because Claude Code prefers an agent of
+ * the same name in the repo under review, which a PR could add.
+ */
+export const SECURITY_AGENT = "duchamp-security-reviewer"
+
+/**
+ * Writes the diff the subagent reads, so the reviewer doesn't copy it into the Agent
+ * call. The labelled pass covers every file. Undefined when git or the write fails.
+ */
+export const writeSecurityDiff = (
+  range: string,
+  files: string[] | null,
+  ignorePaths: string[],
+  dir: string = process.env.RUNNER_TEMP || os.tmpdir()
+): string | undefined => {
+  try {
+    const pathspec = files
+      ? files.map(file => `:(literal)${file}`)
+      : diffPathspec(ignorePaths)
+    const diffPath = path.join(dir, "security.diff")
+    fs.writeFileSync(diffPath, git(["diff", range, "--", ...pathspec]))
+    return diffPath
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`Warning: Failed to write the security diff: ${message}`)
+    return undefined
+  }
+}
+
+/**
+ * Hands the security read to the SECURITY_AGENT subagent, for security-experiment PRs
+ * that touch sensitive files or carry SECURITY_LABEL.
+ */
+export const formatSecuritySection = (
+  sensitive: string[],
+  labelled: boolean,
+  range: string | undefined,
+  diffPath?: string
+): string => {
+  if (!range || (sensitive.length === 0 && !labelled)) {
+    return ""
+  }
+
+  const listed = sensitive.slice(0, MAX_SECURITY_FILES)
+  const more = sensitive.length - listed.length
+  const why = labelled
+    ? `The PR carries the \`${SECURITY_LABEL}\` label, so the author asked for a security read of the whole change, \`${range}\`.\n`
+    : `This PR touches files where a small change can open a security hole:\n\n${listed.map(f => `- \`${f}\``).join("\n")}${more > 0 ? `\n- and ${more} more` : ""}\n`
+  const scope = labelled ? "every changed file" : "the files above"
+  const handoff = diffPath
+    ? `give it the list of ${scope} and the path \`${diffPath}\`, which holds \`git diff ${range}\` for them. It reads the diff from there; do not copy the diff into the call.`
+    : `give it the list of ${scope} and the diff hunks for them from \`git diff ${range}\`.`
+
+  return [
+    "\n## Security Pass\n",
+    why,
+    `This step is required. As soon as you have the diff, start the security subagent: call the Agent tool (it may be listed as Task) with \`subagent_type: "${SECURITY_AGENT}"\`. It can read files but cannot run git, so ${handoff} A review that ends without it has not been delivered. If the Agent tool says \`${SECURITY_AGENT}\` does not exist, do this security read yourself and say so in the summary.\n`,
+    'Its leads are claims to check, like the PR description. Verify each one against the code as "Verify Before You Claim" says. Post the ones that hold up as security findings, in the full-paragraph format. Drop the rest; do not post a lead you could not confirm.\n',
+    "In the summary, say in one line that the security pass ran and how many of its leads you posted.\n",
+  ].join("\n")
 }
 
 export const loadRepoConfig = (): RepoConfig | null => {
@@ -389,7 +526,7 @@ export const formatContextSection = (
   baseRef: string | undefined,
   ignorePaths: string[],
   promptBytes = 0,
-  reviewMode: ReviewMode = { mode: "full", reason: "" }
+  reviewMode: ReviewMode = FULL_REVIEW
 ): { section: string; reviewMode: ReviewMode } => {
   const lead =
     "\n## Context Already Loaded\n\nSkip the steps above to read AGENTS.md or CLAUDE.md and run `git diff`. CLAUDE.md is already in your context, and the sections below give AGENTS.md and the diff, or say what to fetch. When you know several files you need, read them all in one turn rather than one per turn.\n"
@@ -472,27 +609,29 @@ const SUMMARY_SCHEMA =
  */
 export const formatDelivery = (
   inExperiment: boolean,
-  prNumber = ""
+  prNumber = "",
+  securityPass = false
 ): { toolArgs: string; section: string } => {
+  const tools = securityPass ? `${REVIEW_TOOLS},Agent` : REVIEW_TOOLS
   const inline =
     "Use `mcp__github_inline_comment__create_inline_comment` for inline code comments."
   if (inExperiment) {
     return {
-      toolArgs: `--allowedTools "${REVIEW_TOOLS}" --json-schema '${SUMMARY_SCHEMA}'`,
+      toolArgs: `--allowedTools "${tools}" --json-schema '${SUMMARY_SCHEMA}'`,
       section: `\n## How to Deliver Your Review\n\n${inline}\nReturn the summary comment as the \`summary\` field of your structured output. The workflow posts it on the PR; do not post it yourself.\n`,
     }
   }
   return {
-    toolArgs: `--allowedTools "Bash(gh pr comment:*),${REVIEW_TOOLS}"`,
+    toolArgs: `--allowedTools "Bash(gh pr comment:*),${tools}"`,
     section: `\n## How to Deliver Your Review\n\n${inline}\nPost the summary comment with \`gh pr comment ${prNumber}\`, once. Only post GitHub comments; do not submit review text as messages.\n`,
   }
 }
 
 const main = (): void => {
-  const inExperiment = usesRelatedRepos(
-    process.env.PR_AUTHOR,
-    parseLabels(process.env.PR_LABELS)
-  )
+  const labels = parseLabels(process.env.PR_LABELS)
+  const inExperiment = usesRelatedRepos(process.env.PR_AUTHOR, labels)
+  const inSecurity = inSecurityExperiment(process.env.PR_AUTHOR, labels)
+  const labelled = hasSecurityLabel(labels)
 
   // Lets the workflow skip minting the related repos token for reviews that don't use it.
   if (process.argv.includes("--check-experiment")) {
@@ -505,7 +644,8 @@ const main = (): void => {
   }
 
   const ignorePaths = loadRepoConfig()?.ignore_paths ?? []
-  const reviewMode = resolveReviewMode(
+  const reviewMode = pickReviewMode(
+    process.env.TRIGGER_LABEL,
     process.env.GITHUB_REPOSITORY,
     process.env.PR_NUMBER,
     ignorePaths,
@@ -527,10 +667,40 @@ const main = (): void => {
     return
   }
 
+  const model = process.env.DEFAULT_MODEL || DEFAULT_MODEL
+  const range = reviewRange(process.env.BASE_REF, reviewMode)
+  const changes = assessChanges(
+    { review: inExperiment, security: inSecurity },
+    model,
+    range,
+    ignorePaths
+  )
+  console.log(`Review tier: ${changes.tier} (${changes.reason})`)
+  // The label asks for the whole change, even on a re-review of a few commits.
+  const securityRange = labelled
+    ? reviewRange(process.env.BASE_REF, FULL_REVIEW)
+    : range
+  const security =
+    inSecurity && securityRange && (labelled || changes.sensitive.length > 0)
+      ? formatSecuritySection(
+          changes.sensitive,
+          labelled,
+          securityRange,
+          writeSecurityDiff(
+            securityRange,
+            labelled ? null : changes.sensitive,
+            ignorePaths
+          )
+        )
+      : ""
+  console.log(`Security pass: ${security !== ""}`)
+
   const related = resolveRelatedRepos(inExperiment)
+  // The security section goes in the head so the diff's budget leaves room for it.
   const promptHead =
     buildPrompt() +
-    formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true")
+    formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true") +
+    security
   const context = inExperiment
     ? formatContextSection(
         process.env.BASE_REF,
@@ -539,7 +709,11 @@ const main = (): void => {
         reviewMode
       )
     : { section: "", reviewMode }
-  const delivery = formatDelivery(inExperiment, process.env.PR_NUMBER)
+  const delivery = formatDelivery(
+    inExperiment,
+    process.env.PR_NUMBER,
+    security !== ""
+  )
   const prompt = assemblePrompt(
     {
       head: promptHead,
@@ -548,16 +722,7 @@ const main = (): void => {
     },
     inExperiment
   )
-  const model = process.env.DEFAULT_MODEL || DEFAULT_MODEL
-  const tier = resolveTier(
-    inExperiment,
-    model,
-    process.env.BASE_REF,
-    context.reviewMode,
-    ignorePaths
-  )
-  console.log(`Review tier: ${tier.tier} (${tier.reason})`)
-  const modelArgs = [resolveModelArgs(model, tier.tier), addDirArgs(related)]
+  const modelArgs = [resolveModelArgs(model, changes.tier), addDirArgs(related)]
     .filter(Boolean)
     .join(" ")
 
@@ -567,7 +732,7 @@ const main = (): void => {
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\n${formatReviewModeOutputs(context.reviewMode)}`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\n${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {
