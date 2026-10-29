@@ -395,6 +395,14 @@ describe("formatVolleyPayload", () => {
     expect(tags).toContain("best_practices:true")
   })
 
+  it("tags whether the review read related repos", () => {
+    const tags = formatVolleyPayload(usage, {
+      ...context,
+      relatedRepos: "false",
+    }).metrics[0].tags
+    expect(tags).toContain("related_repos:false")
+  })
+
   it("tags whether the security pass ran, when recorded", () => {
     const tagsFor = (overrides: Partial<MetricsContext>) =>
       formatVolleyPayload(usage, { ...context, ...overrides }).metrics[0].tags

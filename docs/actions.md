@@ -277,9 +277,9 @@ context: |
 - `ignore_paths`: Glob patterns for files Claude should skip reviewing
 - `context`: Additional context about your codebase architecture
 - `exclude`: PR exclusion rules (see below)
-- `related_repos`: other `artsy/<name>` repos that experiment reviews can read, such as
-  `artsy/metaphysics`. Read from the default branch, so changes apply once merged (see
-  `review-experiment/README.md`)
+- `related_repos`: other `artsy/<name>` repos that related-repos experiment reviews can
+  read, such as `artsy/metaphysics`. Read from the default branch, so changes apply
+  once merged (see `related-repos-experiment/README.md`)
 
 **PR Exclusions:**
 
@@ -318,12 +318,19 @@ prompt: |
   Ignore style and formatting issues entirely.
 ```
 
-**Review Experiment:**
+**Experiments:**
 
-An opt-in addition that lets a review read the other Artsy repos in the repo's
-`related_repos`, such as metaphysics when reviewing eigen. Opt in by adding your
-GitHub login to `review-experiment/participants.yml`, or by adding the
-`ai-review-experiment` label to a single PR. See `review-experiment/README.md`.
+Opt-in groups, each with a `participants.yml` and a label for single PRs:
+
+- Review experiment (`ai-review-experiment`): AGENTS.md and the diff in the prompt,
+  re-reviews, model routing, fewer inline comments. See `review-experiment/README.md`.
+- Related-repos experiment (`ai-review-related-repos`): reads the other Artsy repos in
+  the repo's `related_repos`, such as metaphysics when reviewing eigen. See
+  `related-repos-experiment/README.md`.
+- Security experiment (`security-review`): a security pass by a subagent. See
+  `security-experiment/README.md`.
+- Best-practices experiment (`ai-review-best-practices`): stack skills such as
+  React Native best practices. See `best-practices-experiment/README.md`.
 
 **Security Notes:**
 

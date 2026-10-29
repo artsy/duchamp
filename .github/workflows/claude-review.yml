@@ -284,7 +284,7 @@ jobs:
           EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           MODEL_ARGS: ${{ steps.prompt.outputs.model_args }}
-          EXPERIMENT: ${{ steps.experiment.outputs.related_repos }}
+          EXPERIMENT: ${{ steps.experiment.outputs.experiment }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REVIEWED_SINCE: ${{ steps.prompt.outputs.reviewed_since }}
           GH_TOKEN: ${{ github.token }}
@@ -295,10 +295,11 @@ jobs:
         env:
           EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
           MODEL_ARGS: ${{ steps.prompt.outputs.model_args }}
-          EXPERIMENT: ${{ steps.experiment.outputs.related_repos }}
+          EXPERIMENT: ${{ steps.experiment.outputs.experiment }}
           REVIEW_MODE: ${{ steps.prompt.outputs.review_mode }}
           SECURITY_PASS: ${{ steps.prompt.outputs.security_pass }}
           BEST_PRACTICES: ${{ steps.prompt.outputs.best_practices }}
+          RELATED_REPOS: ${{ steps.prompt.outputs.related_repos_read }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report

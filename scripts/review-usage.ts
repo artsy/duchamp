@@ -244,6 +244,7 @@ export interface MetricsContext {
   experiment: string
   securityPass?: string
   bestPractices?: string
+  relatedRepos?: string
 }
 
 type VolleyMetric =
@@ -289,6 +290,7 @@ export const formatVolleyPayload = (
     ...(context.bestPractices
       ? [`best_practices:${context.bestPractices}`]
       : []),
+    ...(context.relatedRepos ? [`related_repos:${context.relatedRepos}`] : []),
   ]
   const histogram = (name: string, value: number): VolleyMetric => ({
     type: "histogram",
@@ -491,6 +493,7 @@ const main = async (): Promise<void> => {
       experiment,
       securityPass: process.env.SECURITY_PASS,
       bestPractices: process.env.BEST_PRACTICES,
+      relatedRepos: process.env.RELATED_REPOS,
     }),
     process.env.VOLLEY_URL
   )
