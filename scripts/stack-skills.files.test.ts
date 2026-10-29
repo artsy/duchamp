@@ -19,6 +19,24 @@ describe("review/skills.yml against .claude/stack-skills", () => {
     expect(skillMd.match(/^name: (.+)$/m)?.[1].trim()).toBe(skill)
   })
 
+  it("gives every artsy-react-native rule a Severity: line", () => {
+    const skillMd = fs.readFileSync(
+      path.join(
+        root,
+        ".claude",
+        "stack-skills",
+        "artsy-react-native",
+        "SKILL.md"
+      ),
+      "utf8"
+    )
+    const rules = skillMd.split(/^## /m).slice(1)
+    expect(rules.length).toBeGreaterThan(0)
+    for (const rule of rules) {
+      expect(rule).toMatch(/^Severity: (blocking|required|suggestion)$/m)
+    }
+  })
+
   it("has no stack skill named like a review skill", () => {
     const reviewSkills = fs.readdirSync(path.join(root, ".claude", "skills"))
     expect(skills.filter(skill => reviewSkills.includes(skill))).toEqual([])

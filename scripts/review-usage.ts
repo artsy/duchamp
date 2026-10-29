@@ -40,7 +40,7 @@ export interface ReviewUsage {
   inlineComments: number
   /** Skill tool calls, by skill name. Absent in log lines from before they were counted. */
   skillCalls?: Record<string, number>
-  /** Reads of a skill's reference files, by `<skill>/<file>`. */
+  /** Reads of a skill's reference files, by `<skill>/<file>` or `<skill>/<folder>/<file>`. */
   skillReferenceReads?: Record<string, number>
 }
 

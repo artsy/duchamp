@@ -48,8 +48,11 @@ prompt. It tells the reviewer to:
   code, and not run the skill's profiling or build commands, since nothing can be
   measured in CI
 - name the rule in each finding it leads to, as `(rule: js-lists-flatlist-flashlist)`
-- put these findings under Suggestions unless the diff itself proves the problem, or
-  the rule states its own severity, as `artsy-react-native` rules do
+- put these findings under Suggestions unless the diff itself proves the problem. An
+  `artsy-react-native` rule's `Severity:` overrides that and goes inline unscored;
+  the `impact:` labels in the general skills don't
+- skip steps the skills wrote for interactive sessions, such as asking the user or
+  fetching outside pages
 
 ## Vendored skills
 
@@ -62,7 +65,9 @@ since the prompt calls them by name.
 
 Each folder name must match the skill's frontmatter `name`, and no two skills may
 share a name, or Claude Code loads only one. `scripts/stack-skills.files.test.ts`
-checks this.
+checks this. Only the top-level `SKILL.md` registers: Software Mansion's sub-guides
+have their own `SKILL.md` with names like `animations`, but CLI 2.1.312 doesn't load
+a `SKILL.md` nested under `references/`, so those names can't clash.
 
 `react-native-best-practices` holds `SKILL.md`, `references/*.md` and the LICENSE,
 from upstream commit `59e9d17`. Upstream's `POWER.md` (a packaging file for Kiro),

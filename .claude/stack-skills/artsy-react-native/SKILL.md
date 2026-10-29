@@ -6,12 +6,15 @@ description: Artsy's own React Native review rules, learned from incidents in ei
 # Artsy React Native rules
 
 Rules that come from things that broke in Artsy's apps. The general skills don't
-state them, or state them too softly. Each rule says what severity a finding gets;
-that overrides the default in the review prompt.
+state them, or state them too softly. Each rule gives a `Severity:`. That overrides
+the review prompt's default: a finding from a required rule goes inline, without a
+likelihood-times-impact score.
 
 ## artsy-fast-path-animations
 
-**Continuous animations must stay on the fast path.** Severity: **required**.
+**Continuous animations must stay on the fast path.**
+
+Severity: required
 
 On the New Architecture (Fabric), Reanimated 4 updates only `transform`, `opacity` and
 colours (`backgroundColor`, `color`) without committing the shadow tree. Animating any

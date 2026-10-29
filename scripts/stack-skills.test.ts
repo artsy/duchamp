@@ -163,8 +163,12 @@ describe("formatStackSkillsSection", () => {
     expect(section).toContain("(rule: js-lists-flatlist-flashlist)")
     expect(section).toContain("under Suggestions")
     expect(section).toContain(
-      "When a rule states its own severity, use that instead"
+      "when an `artsy-react-native` rule gives a `Severity:`, use it, post the finding inline"
     )
+    expect(section).toContain(
+      "The `impact:` labels in other skills (CRITICAL, HIGH) rank their own advice; they don't change where a finding goes."
+    )
+    expect(section).toContain("Skip any step that asks the user something")
     expect(section).toContain("Do not run its profiling or build commands")
   })
 
