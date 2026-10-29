@@ -13,6 +13,7 @@ import {
   formatInstructionsSection,
   formatReviewModeOutputs,
   formatSecuritySection,
+  hasSecurityLabel,
   inSecurityExperiment,
   LIGHT_EFFORT,
   LIGHT_MODEL,
@@ -22,11 +23,13 @@ import {
   MAX_INSTRUCTIONS_BYTES,
   MAX_PROMPT_BYTES,
   parseLabels,
+  pickReviewMode,
   REVIEW_EFFORT,
   resolveModelArgs,
   resolveRelatedRepos,
   reviewRange,
   SECURITY_LABEL,
+  securityLabelJustAdded,
   usesRelatedRepos,
 } from "./build-review-prompt"
 import { MAX_DIFF_BYTES } from "./review-diff"
@@ -277,7 +280,7 @@ describe("assessChanges", () => {
   it("is standard outside the experiment, without reading the diff", () => {
     expect(
       assessChanges(
-        { experiment: false, security: false },
+        { review: false, security: false },
         "claude-opus-5-5",
         range,
         []
@@ -293,7 +296,7 @@ describe("assessChanges", () => {
   it("classifies the range", () => {
     expect(
       assessChanges(
-        { experiment: true, security: false },
+        { review: true, security: false },
         "claude-opus-5-5",
         range,
         []
@@ -306,7 +309,7 @@ describe("assessChanges", () => {
     mockGit.mockReturnValue("1\t0\t.github/workflows/ci.yml\n")
     expect(
       assessChanges(
-        { experiment: true, security: false },
+        { review: true, security: false },
         "claude-fable-5-1",
         range,
         []
@@ -322,7 +325,7 @@ describe("assessChanges", () => {
     mockGit.mockReturnValue("1\t0\tsrc/auth.ts\n")
     expect(
       assessChanges(
-        { experiment: false, security: true },
+        { review: false, security: true },
         "claude-opus-5-5",
         range,
         []
@@ -340,7 +343,7 @@ describe("assessChanges", () => {
     })
     expect(
       assessChanges(
-        { experiment: true, security: false },
+        { review: true, security: false },
         "claude-opus-5-5",
         range,
         []
@@ -355,13 +358,56 @@ describe("assessChanges", () => {
   it("is standard with no range", () => {
     expect(
       assessChanges(
-        { experiment: true, security: false },
+        { review: true, security: false },
         "claude-opus-5-5",
         undefined,
         []
       ).tier
     ).toBe("standard")
     expect(mockGit).not.toHaveBeenCalled()
+  })
+})
+
+describe("hasSecurityLabel", () => {
+  it("matches the label in any case", () => {
+    expect(hasSecurityLabel(["bug", "Security-Review"])).toBe(true)
+    expect(hasSecurityLabel(["bug"])).toBe(false)
+  })
+})
+
+describe("securityLabelJustAdded", () => {
+  it("is true only when the run was started by adding the label", () => {
+    expect(securityLabelJustAdded("security-review")).toBe(true)
+    expect(securityLabelJustAdded("Security-Review")).toBe(true)
+    expect(securityLabelJustAdded("in-progress")).toBe(false)
+    expect(securityLabelJustAdded("")).toBe(false)
+    expect(securityLabelJustAdded(undefined)).toBe(false)
+  })
+})
+
+describe("pickReviewMode", () => {
+  const mockExec = execFileSync as jest.Mock
+
+  beforeEach(() => {
+    mockExec.mockReset()
+  })
+
+  it("forces a full review when the security label was just added, without looking up the earlier review", () => {
+    expect(
+      pickReviewMode("security-review", "artsy/eigen", "42", [], true)
+    ).toEqual({ mode: "full", reason: "security-review label just added" })
+    expect(mockExec).not.toHaveBeenCalled()
+  })
+
+  it("looks up the earlier review otherwise", () => {
+    mockExec.mockImplementation(() => {
+      throw new Error("gh failed")
+    })
+    expect(pickReviewMode(undefined, "artsy/eigen", "42", [], true)).toEqual({
+      mode: "full",
+      reason: "could not check the earlier review: gh failed",
+    })
+    expect(mockExec).toHaveBeenCalled()
   })
 })
 
@@ -411,14 +457,26 @@ describe("formatSecuritySection", () => {
     expect(section).toContain("- `src/auth.ts`")
     expect(section).toContain("- `.github/workflows/ci.yml`")
     expect(section).toContain('`subagent_type: "security-reviewer"`')
-    expect(section).toContain(`\`${range}\` and the files above`)
+    expect(section).toContain("the list of the files above")
+    expect(section).toContain(`\`git diff ${range}\``)
+    expect(section).toContain("cannot run git")
     expect(section).toContain("Verify Before You Claim")
   })
 
-  it("covers every changed file when only the label asks for it", () => {
-    const section = formatSecuritySection([], true, range)
-    expect(section).toContain(`\`${SECURITY_LABEL}\` label`)
-    expect(section).toContain("every changed file")
+  it("falls back to a security read by the reviewer when the agent is missing", () => {
+    expect(formatSecuritySection(["src/auth.ts"], false, range)).toContain(
+      "If the Agent tool says `security-reviewer` does not exist, do this security read yourself"
+    )
+  })
+
+  it("covers every changed file when the label asks for it, sensitive files or not", () => {
+    for (const sensitive of [[], ["src/auth.ts"]]) {
+      const section = formatSecuritySection(sensitive, true, range)
+      expect(section).toContain(`\`${SECURITY_LABEL}\` label`)
+      expect(section).toContain(`whole change, \`${range}\``)
+      expect(section).toContain("every changed file")
+      expect(section).not.toContain("- `src/auth.ts`")
+    }
   })
 
   it("caps the file list", () => {

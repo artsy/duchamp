@@ -146,12 +146,35 @@ export const usesRelatedRepos = (
   return loadParticipants().includes(author.toLowerCase())
 }
 
+export const hasSecurityLabel = (labels: string[]): boolean =>
+  labels.some(label => label.toLowerCase() === SECURITY_LABEL)
+
+/**
+ * Adding the label asks for a security read now. The PR has usually been reviewed at
+ * its current commit already, so a re-review would skip and the pass would never run.
+ */
+export const securityLabelJustAdded = (
+  triggerLabel: string | undefined
+): boolean => triggerLabel?.toLowerCase() === SECURITY_LABEL
+
+/** A full review when the security label was just added, else the usual choice. */
+export const pickReviewMode = (
+  triggerLabel: string | undefined,
+  repo: string | undefined,
+  prNumber: string | undefined,
+  ignorePaths: string[],
+  inExperiment: boolean
+): ReviewMode =>
+  securityLabelJustAdded(triggerLabel)
+    ? { mode: "full", reason: `${SECURITY_LABEL} label just added` }
+    : resolveReviewMode(repo, prNumber, ignorePaths, inExperiment)
+
 /** Whether this review is in the security experiment: listed authors and labelled PRs. */
 export const inSecurityExperiment = (
   author: string | undefined,
   labels: string[]
 ): boolean =>
-  labels.some(label => label.toLowerCase() === SECURITY_LABEL) ||
+  hasSecurityLabel(labels) ||
   (!!author &&
     loadParticipants("security-experiment").includes(author.toLowerCase()))
 
@@ -163,6 +186,8 @@ export const resolveModelArgs = (
   tier === "light"
     ? `--model ${LIGHT_MODEL} --effort ${LIGHT_EFFORT}`
     : `--model ${model} --effort ${REVIEW_EFFORT}`
+
+const FULL_REVIEW: ReviewMode = { mode: "full", reason: "" }
 
 /** What this run reviews: the whole PR, or on a re-review the changes since the last one. */
 export const reviewRange = (
@@ -180,12 +205,12 @@ export const reviewRange = (
  * sensitive files.
  */
 export const assessChanges = (
-  groups: { experiment: boolean; security: boolean },
+  groups: { review: boolean; security: boolean },
   model: string,
   range: string | undefined,
   ignorePaths: string[]
 ): { tier: ReviewTier; reason: string; sensitive: string[] } => {
-  if (!groups.experiment && !groups.security) {
+  if (!groups.review && !groups.security) {
     return {
       tier: "standard",
       reason: "not in the review or security experiment",
@@ -207,7 +232,7 @@ export const assessChanges = (
       sensitive: [],
     }
   }
-  if (!groups.experiment) {
+  if (!groups.review) {
     return {
       tier: "standard",
       reason: "not in the review experiment",
@@ -241,16 +266,15 @@ export const formatSecuritySection = (
 
   const listed = sensitive.slice(0, MAX_SECURITY_FILES)
   const more = sensitive.length - listed.length
-  const why =
-    sensitive.length > 0
-      ? `This PR touches files where a small change can open a security hole:\n\n${listed.map(f => `- \`${f}\``).join("\n")}${more > 0 ? `\n- and ${more} more` : ""}\n`
-      : `The PR carries the \`${SECURITY_LABEL}\` label, so the author asked for a security read of the whole change.\n`
-  const scope = sensitive.length > 0 ? "the files above" : "every changed file"
+  const why = labelled
+    ? `The PR carries the \`${SECURITY_LABEL}\` label, so the author asked for a security read of the whole change, \`${range}\`.\n`
+    : `This PR touches files where a small change can open a security hole:\n\n${listed.map(f => `- \`${f}\``).join("\n")}${more > 0 ? `\n- and ${more} more` : ""}\n`
+  const scope = labelled ? "every changed file" : "the files above"
 
   return [
     "\n## Security Pass\n",
     why,
-    `This step is required. In your first turn, before you read anything else, start the security subagent: call the Agent tool (it may be listed as Task) with \`subagent_type: "security-reviewer"\`, and give it the range \`${range}\` and ${scope}. A review that ends without it has not been delivered.\n`,
+    `This step is required. As soon as you have the diff, start the security subagent: call the Agent tool (it may be listed as Task) with \`subagent_type: "security-reviewer"\`. It can read files but cannot run git, so give it the list of ${scope} and the diff hunks for them from \`git diff ${range}\`. A review that ends without it has not been delivered. If the Agent tool says \`security-reviewer\` does not exist, do this security read yourself and say so in the summary.\n`,
     'Its leads are claims to check, like the PR description. Verify each one against the code as "Verify Before You Claim" says. Post the ones that hold up as security findings, in the full-paragraph format. Drop the rest; do not post a lead you could not confirm.\n',
     "In the summary, say in one line that the security pass ran and how many of its leads you posted.\n",
   ].join("\n")
@@ -567,6 +591,7 @@ const main = (): void => {
   const labels = parseLabels(process.env.PR_LABELS)
   const inExperiment = usesRelatedRepos(process.env.PR_AUTHOR, labels)
   const inSecurity = inSecurityExperiment(process.env.PR_AUTHOR, labels)
+  const labelled = hasSecurityLabel(labels)
 
   // Lets the workflow skip minting the related repos token for reviews that don't use it.
   if (process.argv.includes("--check-experiment")) {
@@ -579,7 +604,8 @@ const main = (): void => {
   }
 
   const ignorePaths = loadRepoConfig()?.ignore_paths ?? []
-  const reviewMode = resolveReviewMode(
+  const reviewMode = pickReviewMode(
+    process.env.TRIGGER_LABEL,
     process.env.GITHUB_REPOSITORY,
     process.env.PR_NUMBER,
     ignorePaths,
@@ -604,17 +630,18 @@ const main = (): void => {
   const model = process.env.DEFAULT_MODEL || DEFAULT_MODEL
   const range = reviewRange(process.env.BASE_REF, reviewMode)
   const changes = assessChanges(
-    { experiment: inExperiment, security: inSecurity },
+    { review: inExperiment, security: inSecurity },
     model,
     range,
     ignorePaths
   )
   console.log(`Review tier: ${changes.tier} (${changes.reason})`)
+  // The label asks for the whole change, even on a re-review of a few commits.
   const security = inSecurity
     ? formatSecuritySection(
         changes.sensitive,
-        labels.some(label => label.toLowerCase() === SECURITY_LABEL),
-        range
+        labelled,
+        labelled ? reviewRange(process.env.BASE_REF, FULL_REVIEW) : range
       )
     : ""
   console.log(`Security pass: ${security !== ""}`)

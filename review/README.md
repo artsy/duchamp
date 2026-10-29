@@ -110,23 +110,35 @@ second agent reads only for security:
 - **When.** PRs in the [security experiment](../security-experiment/README.md) that
   touch a sensitive file (the same `SENSITIVE_PATTERNS` as
   [Model routing](#model-routing)), and any PR with the `security-review` label, which
-  also puts the PR in that experiment. Adding the label starts a review straight away.
+  also puts the PR in that experiment.
+- **The label.** Adding it starts a full review straight away, even when the PR was
+  already reviewed at its current commit, where a re-review would otherwise skip
+  (`pickReviewMode`). The workflow passes the label that started the run as
+  `TRIGGER_LABEL`. With the label, the pass covers every file in the whole PR, not only
+  sensitive files and not only the commits since the last review.
 - **How.** `formatSecuritySection` in `scripts/build-review-prompt.ts` adds a
-  "Security Pass" section listing the sensitive files and allows the `Agent` tool. The
-  reviewer starts the `security-reviewer` subagent, defined in
-  `.claude/agents/security-reviewer.md`, with the range under review. On a label with
-  no sensitive files, the subagent reads every changed file.
+  "Security Pass" section listing the files to check and allows the `Agent` tool. Once
+  the reviewer has the diff, it starts the `security-reviewer` subagent, defined in
+  `.claude/agents/security-reviewer.md`, and passes it those files and their diff
+  hunks.
 - **The subagent** has checks for Artsy's stacks: Actions injection and permissions,
   GraphQL loaders and IDOR, Rails params and authorization, React HTML injection and
   redirects, React Native secrets, deep links and WebViews. It returns leads, each with
   a `file:line`, the input that triggers it and what an attacker gets. Its tools are
-  Read, Grep, Glob and Bash, so it has no tool that posts comments. Bash runs under the
-  review's allowlist, as the main reviewer's does.
+  Read, Grep and Glob, so it can't post comments on any path. It gets no Bash because
+  a subagent's Bash runs under the main reviewer's allowlist, which on reviews outside
+  the review experiment includes `gh pr comment`. Narrowing Bash in the agent's
+  frontmatter doesn't work in CLI 2.1.312: `Bash(git diff:*)` in `tools` allows every
+  command the main reviewer can run, and the same pattern in `disallowedTools` removes
+  Bash entirely.
 - **The main reviewer** checks each lead against the code before posting it, as it
   would any other claim, and says in the summary how many it posted.
 
 Agents in `.claude/agents/` are copied to `~/.claude/agents/` on the runner, like
-skills and for the same reason. Datadog tags each review `security:true` or
+skills and for the same reason. A caller pinned to a workflow from before this change
+runs the current tooling without that copy step, so the agent is missing. The prompt
+tells the reviewer to do the security read itself in that case and say so.
+presentation-main-ui pins `2aa350a`; every other caller uses `@main`. Datadog tags each review `security:true` or
 `security:false`.
 
 ## Re-reviews

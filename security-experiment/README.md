@@ -10,9 +10,9 @@ neither.
 1. **Enrol.** Add your GitHub login to `participants.yml` and open a PR. Every PR you
    author then gets the pass when it touches a sensitive file, in any repo using the
    shared workflow. Case does not matter.
-2. **Per PR.** Add the `security-review` label to a single PR. The pass then covers
-   every changed file, not only sensitive ones, and adding the label starts a review
-   straight away.
+2. **Per PR.** Add the `security-review` label to a single PR. Adding it starts a full
+   review straight away, and the pass covers every file the PR changes, not only
+   sensitive ones.
 
 Leaving is the same in reverse: remove your login, or drop the label.
 
