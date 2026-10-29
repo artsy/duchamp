@@ -3,7 +3,8 @@
 The [Claude AI PR review](../docs/actions.md#run-claude-reviewyml) reviews every PR
 with `prompt.md` in this directory. It runs on the workflow's `model` input,
 `claude-opus-5-5` by default, at `high` effort (`REVIEW_EFFORT` in
-`scripts/build-review-prompt.ts`). The Claude Code version is whatever
+`scripts/build-review-prompt.ts`). Small experiment PRs run on a lighter model; see
+[Model routing](#model-routing). The Claude Code version is whatever
 `anthropics/claude-code-action@v1` installs.
 
 ## How the review works
@@ -73,6 +74,31 @@ before.
   128 KB. `AGENTS.md` is capped at 20 KB, and the diff at 60 KB or whatever the rest of
   the prompt leaves under 120 KB. Over its cap, the reviewer gets the list of changed
   files and reads the diff itself.
+
+## Model routing
+
+For PRs in the [review experiment](../review-experiment/README.md),
+`scripts/review-risk.ts` sorts the changes into a tier before the run:
+
+| Tier | When | Model and effort |
+| --- | --- | --- |
+| light | Every changed file is docs (`*.md`, `*.mdx`, `*.txt`, images, `docs/`, `LICENSE`), or at most 40 changed lines and no sensitive file | `claude-sonnet-5-5`, `medium` |
+| standard | Anything else | the workflow's `model` input, `high` |
+
+- A sensitive file keeps a PR on standard however small the change. `SENSITIVE_PATTERNS`
+  lists them: workflows and actions, paths naming auth, sessions, tokens, secrets,
+  permissions, policies, payments, checkout, billing or orders, migrations,
+  `Dockerfile`, `.tf` and `.sql` files. The list leans broad, because a false match
+  only costs a standard review.
+- Lockfiles and `ignore_paths` don't count, as in the diff.
+- A full review counts the whole PR. A [re-review](#re-reviews) counts the changes
+  since the earlier review.
+- A caller that sets `model` to anything but the default keeps that model on every PR.
+- If git fails, the review is standard.
+
+The job log prints the tier and why. Datadog already tags each review with `model:`
+and `effort:`, so the dashboard splits by tier without a new tag. Other PRs stay on
+standard until those numbers show light reviews hold up.
 
 ## Re-reviews
 

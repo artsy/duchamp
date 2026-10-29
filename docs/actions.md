@@ -226,7 +226,9 @@ secrets:
 
 **Inputs:**
 
-- `model` (optional): Claude model to use for the review (default `claude-opus-5-5`)
+- `model` (optional): Claude model to use for the review (default `claude-opus-5-5`).
+  Small experiment PRs run on a lighter model unless you set this; see
+  [Model routing](../review/README.md#model-routing)
 - `timeout-minutes` (optional): Maximum time for the review job
 
 **Secrets:**

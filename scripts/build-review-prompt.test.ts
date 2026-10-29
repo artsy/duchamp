@@ -11,6 +11,8 @@ import {
   formatDiffSection,
   formatInstructionsSection,
   formatReviewModeOutputs,
+  LIGHT_EFFORT,
+  LIGHT_MODEL,
   loadParticipants,
   loadRepoConfig,
   loadReviewPrompt,
@@ -20,6 +22,7 @@ import {
   REVIEW_EFFORT,
   resolveModelArgs,
   resolveRelatedRepos,
+  resolveTier,
   usesRelatedRepos,
 } from "./build-review-prompt"
 import { MAX_DIFF_BYTES } from "./review-diff"
@@ -225,6 +228,72 @@ describe("resolveModelArgs", () => {
     expect(REVIEW_EFFORT).toBe("high")
     expect(resolveModelArgs("claude-opus-5-5")).toBe(
       "--model claude-opus-5-5 --effort high"
+    )
+  })
+
+  it("passes the light model and effort for a light review", () => {
+    expect(resolveModelArgs("claude-opus-5-5", "light")).toBe(
+      `--model ${LIGHT_MODEL} --effort ${LIGHT_EFFORT}`
+    )
+  })
+})
+
+describe("resolveTier", () => {
+  const mockGit = execFileSync as jest.Mock
+  const full = { mode: "full" as const, reason: "" }
+
+  beforeEach(() => {
+    mockGit.mockReset()
+    mockGit.mockReturnValue("2\t1\tsrc/a.ts\n")
+  })
+
+  it("is standard outside the experiment, without reading the diff", () => {
+    expect(resolveTier(false, "claude-opus-5-5", "main", full, []).tier).toBe(
+      "standard"
+    )
+    expect(mockGit).not.toHaveBeenCalled()
+  })
+
+  it("keeps a model the caller set", () => {
+    expect(resolveTier(true, "claude-fable-5-1", "main", full, [])).toEqual({
+      tier: "standard",
+      reason: "caller set model claude-fable-5-1",
+    })
+    expect(mockGit).not.toHaveBeenCalled()
+  })
+
+  it("classifies the whole PR on a full review", () => {
+    expect(resolveTier(true, "claude-opus-5-5", "main", full, []).tier).toBe(
+      "light"
+    )
+    expect(mockGit.mock.calls[0][1]).toContain("origin/main...HEAD")
+  })
+
+  it("classifies the changes since the earlier review on a re-review", () => {
+    const sha = "a".repeat(40)
+    resolveTier(
+      true,
+      "claude-opus-5-5",
+      "main",
+      { mode: "rereview", reason: "", previous: { sha, body: "" } },
+      []
+    )
+    expect(mockGit.mock.calls[0][1]).toContain(`${sha}..HEAD`)
+  })
+
+  it("is standard when git fails", () => {
+    mockGit.mockImplementation(() => {
+      throw new Error("bad revision")
+    })
+    expect(resolveTier(true, "claude-opus-5-5", "main", full, [])).toEqual({
+      tier: "standard",
+      reason: "could not read the diff: bad revision",
+    })
+  })
+
+  it("is standard with no base branch", () => {
+    expect(resolveTier(true, "claude-opus-5-5", undefined, full, []).tier).toBe(
+      "standard"
     )
   })
 })
