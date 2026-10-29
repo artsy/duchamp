@@ -17,6 +17,7 @@ import {
   type ReviewMode,
   resolveReviewMode,
 } from "./review-mode"
+import { classifyDiff, type ReviewTier } from "./review-risk"
 
 /**
  * Build the review prompt from review/prompt.md plus repo-specific configuration.
@@ -54,6 +55,11 @@ export const EXPERIMENT_LABEL = "ai-review-experiment"
 export const DEFAULT_MODEL = "claude-opus-5-5"
 
 export const REVIEW_EFFORT = "high"
+
+/** Light experiment reviews: docs-only or small diffs away from sensitive code. */
+export const LIGHT_MODEL = "claude-sonnet-5-5"
+
+export const LIGHT_EFFORT = "medium"
 
 /**
  * Prompt and experiment files live in this repo's checkout, never in the PR under
@@ -135,8 +141,47 @@ export const usesRelatedRepos = (
 }
 
 /** Claude Code CLI flags that select the model for this review. */
-export const resolveModelArgs = (model: string): string =>
-  `--model ${model} --effort ${REVIEW_EFFORT}`
+export const resolveModelArgs = (
+  model: string,
+  tier: ReviewTier = "standard"
+): string =>
+  tier === "light"
+    ? `--model ${LIGHT_MODEL} --effort ${LIGHT_EFFORT}`
+    : `--model ${model} --effort ${REVIEW_EFFORT}`
+
+/**
+ * Experiment reviews of light diffs get LIGHT_MODEL. A caller that sets its own model
+ * keeps it. Any failure to read the diff means standard.
+ */
+export const resolveTier = (
+  inExperiment: boolean,
+  model: string,
+  baseRef: string | undefined,
+  reviewMode: ReviewMode,
+  ignorePaths: string[]
+): { tier: ReviewTier; reason: string } => {
+  if (!inExperiment) {
+    return { tier: "standard", reason: "not in the review experiment" }
+  }
+  if (model !== DEFAULT_MODEL) {
+    return { tier: "standard", reason: `caller set model ${model}` }
+  }
+  const range =
+    reviewMode.mode === "rereview"
+      ? `${reviewMode.previous.sha}..HEAD`
+      : baseRef && `origin/${baseRef}...HEAD`
+  if (!range) {
+    return { tier: "standard", reason: "no base branch" }
+  }
+
+  try {
+    const { tier, reason } = classifyDiff(range, ignorePaths)
+    return { tier, reason }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { tier: "standard", reason: `could not read the diff: ${message}` }
+  }
+}
 
 export const loadRepoConfig = (): RepoConfig | null => {
   const configPath = path.join(process.cwd(), ".claude-review.yml")
@@ -503,10 +548,16 @@ const main = (): void => {
     },
     inExperiment
   )
-  const modelArgs = [
-    resolveModelArgs(process.env.DEFAULT_MODEL || DEFAULT_MODEL),
-    addDirArgs(related),
-  ]
+  const model = process.env.DEFAULT_MODEL || DEFAULT_MODEL
+  const tier = resolveTier(
+    inExperiment,
+    model,
+    process.env.BASE_REF,
+    context.reviewMode,
+    ignorePaths
+  )
+  console.log(`Review tier: ${tier.tier} (${tier.reason})`)
+  const modelArgs = [resolveModelArgs(model, tier.tier), addDirArgs(related)]
     .filter(Boolean)
     .join(" ")
 
