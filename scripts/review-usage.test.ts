@@ -381,7 +381,11 @@ describe("formatVolleyPayload", () => {
   })
 
   it("sends no skill metrics for an older usage record", () => {
-    const { skillCalls, skillReferenceReads, ...older } = usage
+    const older = {
+      ...usage,
+      skillCalls: undefined,
+      skillReferenceReads: undefined,
+    }
     expect(
       formatVolleyPayload(older, context).metrics.map(m => m.name)
     ).not.toContain("skill_calls")
