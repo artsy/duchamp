@@ -52,7 +52,7 @@ interface RepoConfig {
 /** Label that opts a single PR into the experiment without enrolling its author. */
 export const EXPERIMENT_LABEL = "ai-review-experiment"
 
-/** Label that asks for the security pass on a review-experiment PR. */
+/** Label that opts a single PR into the security experiment. */
 export const SECURITY_LABEL = "security-review"
 
 export const DEFAULT_MODEL = "claude-opus-5-5"
@@ -74,8 +74,11 @@ const toolingPath = (...parts: string[]): string =>
 export const loadReviewPrompt = (): string =>
   fs.readFileSync(toolingPath("review", "prompt.md"), "utf8")
 
-export const loadParticipants = (): string[] => {
-  const participantsPath = toolingPath("review-experiment", "participants.yml")
+/** Logins in an experiment's participants.yml, lowercased. */
+export const loadParticipants = (
+  experiment = "review-experiment"
+): string[] => {
+  const participantsPath = toolingPath(experiment, "participants.yml")
 
   if (!fs.existsSync(participantsPath)) {
     return []
@@ -143,6 +146,15 @@ export const usesRelatedRepos = (
   return loadParticipants().includes(author.toLowerCase())
 }
 
+/** Whether this review is in the security experiment: listed authors and labelled PRs. */
+export const inSecurityExperiment = (
+  author: string | undefined,
+  labels: string[]
+): boolean =>
+  labels.some(label => label.toLowerCase() === SECURITY_LABEL) ||
+  (!!author &&
+    loadParticipants("security-experiment").includes(author.toLowerCase()))
+
 /** Claude Code CLI flags that select the model for this review. */
 export const resolveModelArgs = (
   model: string,
@@ -162,19 +174,21 @@ export const reviewRange = (
     : baseRef && `origin/${baseRef}...HEAD`
 
 /**
- * Experiment reviews of light diffs get LIGHT_MODEL. A caller that sets its own model
- * keeps it. Any failure to read the diff means standard, with no sensitive files.
+ * Reads the diff once for the experiments that need it. Review-experiment reviews of
+ * light diffs get LIGHT_MODEL, unless the caller set its own model. Security-experiment
+ * reviews use the sensitive files. Any failure to read the diff means standard, with no
+ * sensitive files.
  */
 export const assessChanges = (
-  inExperiment: boolean,
+  groups: { experiment: boolean; security: boolean },
   model: string,
   range: string | undefined,
   ignorePaths: string[]
 ): { tier: ReviewTier; reason: string; sensitive: string[] } => {
-  if (!inExperiment) {
+  if (!groups.experiment && !groups.security) {
     return {
       tier: "standard",
-      reason: "not in the review experiment",
+      reason: "not in the review or security experiment",
       sensitive: [],
     }
   }
@@ -193,6 +207,13 @@ export const assessChanges = (
       sensitive: [],
     }
   }
+  if (!groups.experiment) {
+    return {
+      tier: "standard",
+      reason: "not in the review experiment",
+      sensitive: risk.sensitive,
+    }
+  }
   if (model !== DEFAULT_MODEL) {
     return {
       tier: "standard",
@@ -203,18 +224,11 @@ export const assessChanges = (
   return risk
 }
 
-/** The label only counts inside the review experiment, like the rest of the pass. */
-export const asksForSecurityPass = (
-  inExperiment: boolean,
-  labels: string[]
-): boolean =>
-  inExperiment && labels.some(label => label.toLowerCase() === SECURITY_LABEL)
-
 const MAX_SECURITY_FILES = 30
 
 /**
  * Hands the security read to the security-reviewer subagent (.claude/agents), for
- * experiment PRs that touch sensitive files or carry SECURITY_LABEL.
+ * security-experiment PRs that touch sensitive files or carry SECURITY_LABEL.
  */
 export const formatSecuritySection = (
   sensitive: string[],
@@ -552,6 +566,7 @@ export const formatDelivery = (
 const main = (): void => {
   const labels = parseLabels(process.env.PR_LABELS)
   const inExperiment = usesRelatedRepos(process.env.PR_AUTHOR, labels)
+  const inSecurity = inSecurityExperiment(process.env.PR_AUTHOR, labels)
 
   // Lets the workflow skip minting the related repos token for reviews that don't use it.
   if (process.argv.includes("--check-experiment")) {
@@ -588,13 +603,20 @@ const main = (): void => {
 
   const model = process.env.DEFAULT_MODEL || DEFAULT_MODEL
   const range = reviewRange(process.env.BASE_REF, reviewMode)
-  const changes = assessChanges(inExperiment, model, range, ignorePaths)
-  console.log(`Review tier: ${changes.tier} (${changes.reason})`)
-  const security = formatSecuritySection(
-    changes.sensitive,
-    asksForSecurityPass(inExperiment, labels),
-    range
+  const changes = assessChanges(
+    { experiment: inExperiment, security: inSecurity },
+    model,
+    range,
+    ignorePaths
   )
+  console.log(`Review tier: ${changes.tier} (${changes.reason})`)
+  const security = inSecurity
+    ? formatSecuritySection(
+        changes.sensitive,
+        labels.some(label => label.toLowerCase() === SECURITY_LABEL),
+        range
+      )
+    : ""
   console.log(`Security pass: ${security !== ""}`)
 
   const related = resolveRelatedRepos(inExperiment)

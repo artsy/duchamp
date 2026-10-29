@@ -2,7 +2,6 @@ import { execFileSync } from "child_process"
 import * as fs from "fs"
 import * as path from "path"
 import {
-  asksForSecurityPass,
   assemblePrompt,
   assessChanges,
   buildPrompt,
@@ -14,6 +13,7 @@ import {
   formatInstructionsSection,
   formatReviewModeOutputs,
   formatSecuritySection,
+  inSecurityExperiment,
   LIGHT_EFFORT,
   LIGHT_MODEL,
   loadParticipants,
@@ -275,25 +275,62 @@ describe("assessChanges", () => {
   })
 
   it("is standard outside the experiment, without reading the diff", () => {
-    expect(assessChanges(false, "claude-opus-5-5", range, [])).toEqual({
+    expect(
+      assessChanges(
+        { experiment: false, security: false },
+        "claude-opus-5-5",
+        range,
+        []
+      )
+    ).toEqual({
       tier: "standard",
-      reason: "not in the review experiment",
+      reason: "not in the review or security experiment",
       sensitive: [],
     })
     expect(mockGit).not.toHaveBeenCalled()
   })
 
   it("classifies the range", () => {
-    expect(assessChanges(true, "claude-opus-5-5", range, []).tier).toBe("light")
+    expect(
+      assessChanges(
+        { experiment: true, security: false },
+        "claude-opus-5-5",
+        range,
+        []
+      ).tier
+    ).toBe("light")
     expect(mockGit.mock.calls[0][1]).toContain(range)
   })
 
   it("keeps a model the caller set, and still lists sensitive files", () => {
     mockGit.mockReturnValue("1\t0\t.github/workflows/ci.yml\n")
-    expect(assessChanges(true, "claude-fable-5-1", range, [])).toEqual({
+    expect(
+      assessChanges(
+        { experiment: true, security: false },
+        "claude-fable-5-1",
+        range,
+        []
+      )
+    ).toEqual({
       tier: "standard",
       reason: "caller set model claude-fable-5-1",
       sensitive: [".github/workflows/ci.yml"],
+    })
+  })
+
+  it("lists sensitive files for the security experiment alone, on the standard tier", () => {
+    mockGit.mockReturnValue("1\t0\tsrc/auth.ts\n")
+    expect(
+      assessChanges(
+        { experiment: false, security: true },
+        "claude-opus-5-5",
+        range,
+        []
+      )
+    ).toEqual({
+      tier: "standard",
+      reason: "not in the review experiment",
+      sensitive: ["src/auth.ts"],
     })
   })
 
@@ -301,7 +338,14 @@ describe("assessChanges", () => {
     mockGit.mockImplementation(() => {
       throw new Error("bad revision")
     })
-    expect(assessChanges(true, "claude-opus-5-5", range, [])).toEqual({
+    expect(
+      assessChanges(
+        { experiment: true, security: false },
+        "claude-opus-5-5",
+        range,
+        []
+      )
+    ).toEqual({
       tier: "standard",
       reason: "could not read the diff: bad revision",
       sensitive: [],
@@ -309,24 +353,40 @@ describe("assessChanges", () => {
   })
 
   it("is standard with no range", () => {
-    expect(assessChanges(true, "claude-opus-5-5", undefined, []).tier).toBe(
-      "standard"
-    )
+    expect(
+      assessChanges(
+        { experiment: true, security: false },
+        "claude-opus-5-5",
+        undefined,
+        []
+      ).tier
+    ).toBe("standard")
     expect(mockGit).not.toHaveBeenCalled()
   })
 })
 
-describe("asksForSecurityPass", () => {
-  it("counts the label inside the review experiment, in any case", () => {
-    expect(asksForSecurityPass(true, ["Security-Review"])).toBe(true)
+describe("inSecurityExperiment", () => {
+  it("includes listed authors, in any case", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+    expect(inSecurityExperiment("mounirdhahri", [])).toBe(true)
+    expect(
+      mockFs.readFileSync.mock.calls.map(([p]) => String(p))
+    ).toContainEqual(
+      expect.stringContaining(
+        path.join("security-experiment", "participants.yml")
+      )
+    )
   })
 
-  it("ignores the label outside the review experiment", () => {
-    expect(asksForSecurityPass(false, [SECURITY_LABEL])).toBe(false)
+  it("includes any PR with the label", () => {
+    mockFiles({})
+    expect(inSecurityExperiment("someone", ["Security-Review"])).toBe(true)
   })
 
-  it("is off without the label", () => {
-    expect(asksForSecurityPass(true, ["bug"])).toBe(false)
+  it("leaves out everyone else", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+    expect(inSecurityExperiment("someone", ["bug"])).toBe(false)
+    expect(inSecurityExperiment(undefined, [])).toBe(false)
   })
 })
 

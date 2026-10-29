@@ -9,9 +9,6 @@ An opt-in addition to the [AI PR review](../review/README.md). Experiment PRs:
   [Re-reviews](../review/README.md#re-reviews))
 - run on `claude-sonnet-5-5` at medium effort when the change is docs only, or small and
   away from sensitive code (see [Model routing](../review/README.md#model-routing))
-- get a security pass when the change touches a sensitive file (see
-  [Security pass](../review/README.md#security-pass)), or carries the `security-review`
-  label
 - get the summary posted by the workflow with a "Review stats" block (cost, turns,
   tokens), where other PRs get it from Claude directly (see
   [Usage](../review/README.md#usage))
