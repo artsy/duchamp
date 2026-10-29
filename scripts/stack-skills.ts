@@ -109,9 +109,9 @@ export const formatStackSkillsSection = (skills: string[]): string => {
   return [
     "\n## Stack Practices\n",
     `After you read the diff and before you write findings, run ${skills.length === 1 ? "this skill" : "each of these skills"} with the Skill tool: ${names}.\n`,
-    "- Use it as a checklist for this diff. Open only the reference files that match what the change does, such as list rendering, animations or bundle size. Do not run its profiling or build commands; you cannot measure anything here.",
-    "- Name the rule in every finding it leads to, as `(rule: <reference file name>)`, for example `(rule: js-lists-flatlist-flashlist)`.",
-    "- Its findings go under Suggestions unless the diff itself proves the problem, such as an unbounded list rendered with `map` inside a `ScrollView`, or heavy work in a scroll or gesture handler. Its own guardrails apply: no memoisation advice without a measured render problem.",
+    "- Use it as a checklist for this diff. Open the reference files that match what the change does, such as list rendering, animations or bundle size, and read them before you judge that code. Do not run its profiling or build commands; you cannot measure anything here.",
+    "- Name the rule in every finding it leads to, as `(rule: <rule or reference file name>)`, for example `(rule: js-lists-flatlist-flashlist)`.",
+    "- Its findings go under Suggestions unless the diff itself proves the problem, such as an unbounded list rendered with `map` inside a `ScrollView`, or heavy work in a scroll or gesture handler. When a rule states its own severity, use that instead. Its own guardrails apply: no memoisation advice without a measured render problem.",
     "- If nothing in it applies to this diff, leave it out of the review.\n",
   ].join("\n")
 }

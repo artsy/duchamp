@@ -100,7 +100,8 @@ const countInlineComments = (messages: unknown[]): number => {
   return new Set(comments).size
 }
 
-const SKILL_REFERENCE = /\/\.claude\/skills\/([^/]+)\/references\/([^/]+)\.md$/
+/** Nested references keep their folder, such as `animations/animations-performance`. */
+const SKILL_REFERENCE = /\/\.claude\/skills\/([^/]+)\/references\/(.+)\.md$/
 
 const tally = (keys: string[]): Record<string, number> =>
   keys.reduce<Record<string, number>>((counts, key) => {
@@ -343,7 +344,8 @@ export const formatVolleyPayload = (
       ),
       ...Object.entries(usage.skillReferenceReads ?? {}).map(
         ([key, value]): VolleyMetric => {
-          const [skill, reference] = key.split("/")
+          const slash = key.indexOf("/")
+          const [skill, reference] = [key.slice(0, slash), key.slice(slash + 1)]
           return {
             type: "incrementBy",
             name: "skill_reference_reads",
