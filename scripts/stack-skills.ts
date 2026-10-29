@@ -13,7 +13,7 @@ import { diffPathspec, git } from "./review-diff"
 const toolingPath = (...parts: string[]): string =>
   path.join(__dirname, "..", ...parts)
 
-/** Skills listed for the repo whose folder exists in .claude/stack-skills. */
+/** Skills listed for the repo that have a SKILL.md in .claude/stack-skills. */
 export const loadStackSkills = (repo: string | undefined): string[] => {
   const skillsPath = toolingPath("review", "skills.yml")
   if (!repo || !fs.existsSync(skillsPath)) {

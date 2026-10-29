@@ -1,5 +1,5 @@
 # Stack skills for the best-practices experiment: each vendored skill in
-# .claude/skills/ and the repos whose reviews run it. A review runs a skill only when
+# .claude/stack-skills/ and the repos whose reviews run it. A review runs a skill only when
 # the PR is in the experiment and its diff touches app code (TypeScript outside tests,
 # stories, mocks and generated files).
 #
