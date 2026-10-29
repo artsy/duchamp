@@ -58,6 +58,10 @@ To add another, drop it in `.claude/skills/<name>/SKILL.md` and reference it fro
 prompt. A skill nothing references is dead weight: it costs context on every review
 and never runs.
 
+`react-native-best-practices` is vendored from Callstack for the
+[best-practices experiment](../best-practices-experiment/README.md), which runs it on
+the repos in `skills.yml`. See that README for when it runs and how we count its use.
+
 ## Context in the prompt
 
 For PRs in the [review experiment](../review-experiment/README.md),
@@ -240,3 +244,7 @@ drops the oldest and the script warns.
 Both are adapted rather than vendored verbatim, so their severity schemes and formats
 do not contradict each other in one prompt, and so Artsy's false-positive guardrail
 survives.
+
+`.claude/skills/react-native-best-practices/` is vendored from
+[Callstack's `agent-skills`](https://github.com/callstackincubator/agent-skills/tree/59e9d17446a248b21d86f078fcd0bd2d36db1ca4/skills/react-native-best-practices),
+MIT, with its LICENSE alongside.
