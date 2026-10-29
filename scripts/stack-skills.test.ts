@@ -29,7 +29,7 @@ const mockTooling = (skillsYml: string | null, vendored: string[]): void => {
       return skillsYml !== null
     }
     return vendored.some(skill =>
-      file.endsWith(path.join(".claude", "skills", skill, "SKILL.md"))
+      file.endsWith(path.join(".claude", "stack-skills", skill, "SKILL.md"))
     )
   })
   mockFs.readFileSync.mockReturnValue(skillsYml ?? "")
@@ -84,6 +84,7 @@ describe("isAppCodePath", () => {
   it.each([
     "src/app/Scenes/Artwork/__tests__/Artwork.tests.tsx",
     "src/app/Scenes/Artwork/Artwork.test.tsx",
+    "src/app/Scenes/Artwork/Artwork.tests.tsx",
     "src/app/Components/Button.stories.tsx",
     "src/__generated__/ArtworkQuery.graphql.ts",
     "src/types/env.d.ts",

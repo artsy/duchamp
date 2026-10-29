@@ -25,7 +25,9 @@ Leaving is the same in reverse: remove your login, or drop the label.
 
 A review runs a skill when all three hold: the PR is in this experiment, its repo is
 listed, and the diff touches app code, meaning TypeScript outside tests, stories,
-mocks, snapshots, generated files and `ignore_paths`. The list lives in duchamp, so a
+mocks, snapshots, generated files and `ignore_paths`. Native-only changes (Swift,
+Kotlin, Gradle, Podfile) don't count yet, although some references cover them. We'll
+decide whether to widen this once the TypeScript results are in. The list lives in duchamp, so a
 PR can't drop a skill from its own review, and adding a repo takes a duchamp PR.
 
 When a skill runs, `scripts/stack-skills.ts` adds a "Stack Practices" section to the
@@ -39,9 +41,12 @@ prompt. It tells the reviewer to:
 
 ## Vendored skills
 
-Skills live in `../.claude/skills/<name>/` and are copied to the runner with the
-others (see [Skills](../review/README.md#skills)). Their frontmatter is left as
-upstream, since the prompt calls them by name.
+Stack skills live in `../.claude/stack-skills/<name>/`, apart from the review skills
+in `.claude/skills/`. The workflow copies to the runner only the stack skills a review
+picked (the `stack_skills` output of the prompt step). Copying them to every review
+would let a review outside the experiment load one from its description alone, and
+that would mix the two groups. Their frontmatter is left as upstream, since the prompt
+calls them by name.
 
 `react-native-best-practices` holds `SKILL.md`, `references/*.md` and the LICENSE,
 from upstream commit `59e9d17`. Upstream's `POWER.md` (a packaging file for Kiro),
@@ -57,5 +62,9 @@ update, copy the same files from a newer commit and change the SHA here.
 - `ai_pr_review.skill_reference_reads`, tagged `skill:` and `reference:<file>`:
   which rules it opened
 
-Every review metric also carries `best_practices:true|false`. Rule citations in the
+Every review metric also carries `best_practices:true|false`: true when the review
+ran a stack skill, not merely when the PR was in the group. Rule citations in the
 comments show where a skill changed the review.
+
+Volley drops names and tags outside its allowlists, if those are set in production.
+See [the Datadog notes](../review/datadog/README.md).

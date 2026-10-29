@@ -234,10 +234,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Install review skills and agents
+        env:
+          STACK_SKILLS: ${{ steps.prompt.outputs.stack_skills }}
         run: |
           mkdir -p "$HOME/.claude/skills" "$HOME/.claude/agents"
           cp -R .tooling/.claude/skills/. "$HOME/.claude/skills/"
           cp -R .tooling/.claude/agents/. "$HOME/.claude/agents/"
+          # Only the stack skills this review uses, so other reviews can't load them.
+          for skill in $STACK_SKILLS; do
+            cp -R ".tooling/.claude/stack-skills/$skill" "$HOME/.claude/skills/"
+          done
           ls "$HOME/.claude/skills" "$HOME/.claude/agents"
 
       - name: Resolve previous AI inline threads

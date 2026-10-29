@@ -4,15 +4,16 @@ import * as path from "path"
 import { diffPathspec, git } from "./review-diff"
 
 /**
- * Stack skills, for the best-practices experiment. review/skills.yml maps a vendored
- * skill to the repos it reviews. It lives in duchamp, so a PR cannot drop a skill from
- * its own review. See best-practices-experiment/README.md.
+ * Stack skills, for the best-practices experiment. review/skills.yml maps a skill in
+ * .claude/stack-skills/ to the repos it reviews. It lives in duchamp, so a PR cannot
+ * drop a skill from its own review. The workflow installs only the skills a review
+ * picks, so other reviews can't load them. See best-practices-experiment/README.md.
  */
 
 const toolingPath = (...parts: string[]): string =>
   path.join(__dirname, "..", ...parts)
 
-/** Skills listed for the repo whose folder exists in .claude/skills. */
+/** Skills listed for the repo whose folder exists in .claude/stack-skills. */
 export const loadStackSkills = (repo: string | undefined): string[] => {
   const skillsPath = toolingPath("review", "skills.yml")
   if (!repo || !fs.existsSync(skillsPath)) {
@@ -42,7 +43,7 @@ export const loadStackSkills = (repo: string | undefined): string[] => {
     .map(([skill]) => skill)
     .filter(skill => {
       const exists = fs.existsSync(
-        toolingPath(".claude", "skills", skill, "SKILL.md")
+        toolingPath(".claude", "stack-skills", skill, "SKILL.md")
       )
       if (!exists) {
         console.error(
@@ -54,7 +55,7 @@ export const loadStackSkills = (repo: string | undefined): string[] => {
 }
 
 const NOT_APP_CODE =
-  /(^|\/)(__tests__|__generated__|__snapshots__|__mocks__)\/|\.(test|spec|stories)\.tsx?$|\.d\.ts$/
+  /(^|\/)(__tests__|__generated__|__snapshots__|__mocks__)\/|\.(tests?|spec|stories)\.tsx?$|\.d\.ts$/
 
 /** TypeScript the app runs: not tests, stories, mocks or generated code. */
 export const isAppCodePath = (file: string): boolean =>

@@ -58,9 +58,10 @@ To add another, drop it in `.claude/skills/<name>/SKILL.md` and reference it fro
 prompt. A skill nothing references is dead weight: it costs context on every review
 and never runs.
 
-`react-native-best-practices` is vendored from Callstack for the
-[best-practices experiment](../best-practices-experiment/README.md), which runs it on
-the repos in `skills.yml`. See that README for when it runs and how we count its use.
+Stack skills, such as `react-native-best-practices`, live in `.claude/stack-skills/`
+instead. The [best-practices experiment](../best-practices-experiment/README.md) runs
+them on the repos in `skills.yml`, and the workflow copies only the ones a review uses.
+See that README for when they run and how we count their use.
 
 ## Context in the prompt
 
@@ -245,6 +246,6 @@ Both are adapted rather than vendored verbatim, so their severity schemes and fo
 do not contradict each other in one prompt, and so Artsy's false-positive guardrail
 survives.
 
-`.claude/skills/react-native-best-practices/` is vendored from
+`.claude/stack-skills/react-native-best-practices/` is vendored from
 [Callstack's `agent-skills`](https://github.com/callstackincubator/agent-skills/tree/59e9d17446a248b21d86f078fcd0bd2d36db1ca4/skills/react-native-best-practices),
 MIT, with its LICENSE alongside.

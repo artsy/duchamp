@@ -16,11 +16,15 @@ using the shared workflow reports.
 | `duration_ms` | histogram | Run time per review |
 | `inline_comments` | histogram | Inline comments the review asked to post, leaving out failed calls, `confirmed: false` calls and repeats. The action drops probe comments after the session, so this can run slightly high |
 | `cache_hit_rate` | histogram | Share of input tokens read from the prompt cache |
+| `skill_calls` | counter | Skill tool calls, with a `skill` tag naming the skill |
+| `skill_reference_reads` | counter | Reads of a skill's `references/*.md`, with `skill` and `reference` tags |
 
 All of them carry the tags `repo`, `pr`, `group` (experiment, standard or unknown), `mode`
 (full, rereview or unknown), `outcome`, `model` and `effort`. Reviews from after the
 security experiment also carry `security` (true when the
-[security pass](../README.md#security-pass) ran). Datadog bills custom
+[security pass](../README.md#security-pass) ran). Reviews from after the best-practices
+experiment carry `best_practices` (true when the review ran a
+[stack skill](../../best-practices-experiment/README.md)). Datadog bills custom
 metrics by the series seen each hour, and reviews rarely share every tag in the same
 hour, so the `pr` tag adds few series. The `pr` tag holds the number alone, so filter
 by `repo` too when looking at one PR.
@@ -33,7 +37,8 @@ and p95 over a period as close, not exact.
 
 Volley answers 202 even when it drops a metric. If its `METRIC_NAME_ALLOWLIST` or
 `METRIC_TAG_ALLOWLIST` is set in production, the names and tags above need adding to
-it, or the metrics never arrive.
+it, or the metrics never arrive. Check with `hokusai production env get
+METRIC_NAME_ALLOWLIST` and the same for `METRIC_TAG_ALLOWLIST` in artsy/volley.
 
 ## The dashboard
 
