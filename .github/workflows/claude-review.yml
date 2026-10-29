@@ -234,10 +234,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Install review skills and agents
+        env:
+          STACK_SKILLS: ${{ steps.prompt.outputs.stack_skills }}
         run: |
           mkdir -p "$HOME/.claude/skills" "$HOME/.claude/agents"
           cp -R .tooling/.claude/skills/. "$HOME/.claude/skills/"
           cp -R .tooling/.claude/agents/. "$HOME/.claude/agents/"
+          # Only the stack skills this review uses, so other reviews can't load them.
+          for skill in $STACK_SKILLS; do
+            cp -R ".tooling/.claude/stack-skills/$skill" "$HOME/.claude/skills/"
+          done
           ls "$HOME/.claude/skills" "$HOME/.claude/agents"
 
       - name: Resolve previous AI inline threads
@@ -292,6 +298,7 @@ jobs:
           EXPERIMENT: ${{ steps.experiment.outputs.related_repos }}
           REVIEW_MODE: ${{ steps.prompt.outputs.review_mode }}
           SECURITY_PASS: ${{ steps.prompt.outputs.security_pass }}
+          BEST_PRACTICES: ${{ steps.prompt.outputs.best_practices }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report
