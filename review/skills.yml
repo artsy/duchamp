@@ -5,7 +5,17 @@
 #
 # See ../best-practices-experiment/README.md.
 
+artsy-react-native:
+  - artsy/eigen
+  - artsy/palette-mobile
+  - artsy/energy
+
 react-native-best-practices:
+  - artsy/eigen
+  - artsy/palette-mobile
+  - artsy/energy
+
+swm-react-native-best-practices:
   - artsy/eigen
   - artsy/palette-mobile
   - artsy/energy

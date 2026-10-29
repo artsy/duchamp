@@ -88,6 +88,10 @@ describe("parseReviewUsage", () => {
             "/home/runner/.claude/skills/react-native-best-practices/SKILL.md",
         }),
         toolCall("r5", "Read", { file_path: "src/references/notes.md" }),
+        toolCall("r6", "Read", {
+          file_path:
+            "/home/runner/.claude/skills/swm-react-native-best-practices/references/animations/animations-performance.md",
+        }),
         RESULT
       )
     )
@@ -99,6 +103,7 @@ describe("parseReviewUsage", () => {
     expect(usage?.skillReferenceReads).toEqual({
       "react-native-best-practices/js-lists-flatlist-flashlist": 2,
       "react-native-best-practices/js-memory-leaks": 1,
+      "swm-react-native-best-practices/animations/animations-performance": 1,
     })
   })
 
@@ -362,6 +367,7 @@ describe("formatVolleyPayload", () => {
         skillCalls: { "react-native-best-practices": 1 },
         skillReferenceReads: {
           "react-native-best-practices/js-memory-leaks": 2,
+          "swm-react-native-best-practices/animations/svg-animations": 1,
         },
       },
       context
@@ -376,6 +382,13 @@ describe("formatVolleyPayload", () => {
       expect.arrayContaining([
         "skill:react-native-best-practices",
         "reference:js-memory-leaks",
+      ])
+    )
+    const nested = metrics.filter(m => m.name === "skill_reference_reads")[1]
+    expect(nested?.tags).toEqual(
+      expect.arrayContaining([
+        "skill:swm-react-native-best-practices",
+        "reference:animations/svg-animations",
       ])
     )
   })

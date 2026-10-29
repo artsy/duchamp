@@ -246,6 +246,10 @@ Both are adapted rather than vendored verbatim, so their severity schemes and fo
 do not contradict each other in one prompt, and so Artsy's false-positive guardrail
 survives.
 
+`.claude/stack-skills/swm-react-native-best-practices/` is vendored from
+[Software Mansion's `skills`](https://github.com/software-mansion-labs/skills/tree/58afa0a09b01dc47819af8fd48bb062561414108/skills/react-native-best-practices),
+MIT, renamed to avoid a clash; see its `SOURCE.md`.
+
 `.claude/stack-skills/react-native-best-practices/` is vendored from
 [Callstack's `agent-skills`](https://github.com/callstackincubator/agent-skills/tree/59e9d17446a248b21d86f078fcd0bd2d36db1ca4/skills/react-native-best-practices),
 MIT, with its LICENSE alongside.
