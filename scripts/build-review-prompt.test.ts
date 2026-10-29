@@ -3,6 +3,7 @@ import * as fs from "fs"
 import * as path from "path"
 import {
   assemblePrompt,
+  assessChanges,
   buildPrompt,
   EXPERIMENT_INLINE_SECTION,
   EXPERIMENT_LABEL,
@@ -11,6 +12,7 @@ import {
   formatDiffSection,
   formatInstructionsSection,
   formatReviewModeOutputs,
+  formatSecuritySection,
   LIGHT_EFFORT,
   LIGHT_MODEL,
   loadParticipants,
@@ -22,7 +24,8 @@ import {
   REVIEW_EFFORT,
   resolveModelArgs,
   resolveRelatedRepos,
-  resolveTier,
+  reviewRange,
+  SECURITY_LABEL,
   usesRelatedRepos,
 } from "./build-review-prompt"
 import { MAX_DIFF_BYTES } from "./review-diff"
@@ -238,9 +241,32 @@ describe("resolveModelArgs", () => {
   })
 })
 
-describe("resolveTier", () => {
+describe("reviewRange", () => {
+  it("is the whole PR on a full review", () => {
+    expect(reviewRange("main", { mode: "full", reason: "" })).toBe(
+      "origin/main...HEAD"
+    )
+  })
+
+  it("is the changes since the earlier review on a re-review", () => {
+    const sha = "a".repeat(40)
+    expect(
+      reviewRange("main", {
+        mode: "rereview",
+        reason: "",
+        previous: { sha, body: "" },
+      })
+    ).toBe(`${sha}..HEAD`)
+  })
+
+  it("is undefined with no base branch", () => {
+    expect(reviewRange(undefined, { mode: "full", reason: "" })).toBeUndefined()
+  })
+})
+
+describe("assessChanges", () => {
   const mockGit = execFileSync as jest.Mock
-  const full = { mode: "full" as const, reason: "" }
+  const range = "origin/main...HEAD"
 
   beforeEach(() => {
     mockGit.mockReset()
@@ -248,53 +274,84 @@ describe("resolveTier", () => {
   })
 
   it("is standard outside the experiment, without reading the diff", () => {
-    expect(resolveTier(false, "claude-opus-5-5", "main", full, []).tier).toBe(
-      "standard"
-    )
-    expect(mockGit).not.toHaveBeenCalled()
-  })
-
-  it("keeps a model the caller set", () => {
-    expect(resolveTier(true, "claude-fable-5-1", "main", full, [])).toEqual({
+    expect(assessChanges(false, "claude-opus-5-5", range, [])).toEqual({
       tier: "standard",
-      reason: "caller set model claude-fable-5-1",
+      reason: "not in the review experiment",
+      sensitive: [],
     })
     expect(mockGit).not.toHaveBeenCalled()
   })
 
-  it("classifies the whole PR on a full review", () => {
-    expect(resolveTier(true, "claude-opus-5-5", "main", full, []).tier).toBe(
-      "light"
-    )
-    expect(mockGit.mock.calls[0][1]).toContain("origin/main...HEAD")
+  it("classifies the range", () => {
+    expect(assessChanges(true, "claude-opus-5-5", range, []).tier).toBe("light")
+    expect(mockGit.mock.calls[0][1]).toContain(range)
   })
 
-  it("classifies the changes since the earlier review on a re-review", () => {
-    const sha = "a".repeat(40)
-    resolveTier(
-      true,
-      "claude-opus-5-5",
-      "main",
-      { mode: "rereview", reason: "", previous: { sha, body: "" } },
-      []
-    )
-    expect(mockGit.mock.calls[0][1]).toContain(`${sha}..HEAD`)
+  it("keeps a model the caller set, and still lists sensitive files", () => {
+    mockGit.mockReturnValue("1\t0\t.github/workflows/ci.yml\n")
+    expect(assessChanges(true, "claude-fable-5-1", range, [])).toEqual({
+      tier: "standard",
+      reason: "caller set model claude-fable-5-1",
+      sensitive: [".github/workflows/ci.yml"],
+    })
   })
 
   it("is standard when git fails", () => {
     mockGit.mockImplementation(() => {
       throw new Error("bad revision")
     })
-    expect(resolveTier(true, "claude-opus-5-5", "main", full, [])).toEqual({
+    expect(assessChanges(true, "claude-opus-5-5", range, [])).toEqual({
       tier: "standard",
       reason: "could not read the diff: bad revision",
+      sensitive: [],
     })
   })
 
-  it("is standard with no base branch", () => {
-    expect(resolveTier(true, "claude-opus-5-5", undefined, full, []).tier).toBe(
+  it("is standard with no range", () => {
+    expect(assessChanges(true, "claude-opus-5-5", undefined, []).tier).toBe(
       "standard"
     )
+    expect(mockGit).not.toHaveBeenCalled()
+  })
+})
+
+describe("formatSecuritySection", () => {
+  const range = "origin/main...HEAD"
+
+  it("is empty with no sensitive files and no label", () => {
+    expect(formatSecuritySection([], false, range)).toBe("")
+  })
+
+  it("is empty with no range", () => {
+    expect(formatSecuritySection(["src/auth.ts"], true, undefined)).toBe("")
+  })
+
+  it("lists the sensitive files and hands them to the subagent", () => {
+    const section = formatSecuritySection(
+      ["src/auth.ts", ".github/workflows/ci.yml"],
+      false,
+      range
+    )
+    expect(section).toContain("## Security Pass")
+    expect(section).toContain("- `src/auth.ts`")
+    expect(section).toContain("- `.github/workflows/ci.yml`")
+    expect(section).toContain('`subagent_type: "security-reviewer"`')
+    expect(section).toContain(`\`${range}\` and the files above`)
+    expect(section).toContain("Verify Before You Claim")
+  })
+
+  it("covers every changed file when only the label asks for it", () => {
+    const section = formatSecuritySection([], true, range)
+    expect(section).toContain(`\`${SECURITY_LABEL}\` label`)
+    expect(section).toContain("every changed file")
+  })
+
+  it("caps the file list", () => {
+    const files = Array.from({ length: 35 }, (_, i) => `src/auth${i}.ts`)
+    const section = formatSecuritySection(files, false, range)
+    expect(section).toContain("`src/auth29.ts`")
+    expect(section).not.toContain("`src/auth30.ts`")
+    expect(section).toContain("- and 5 more")
   })
 })
 
@@ -825,6 +882,12 @@ describe("formatDelivery", () => {
     expect(toolArgs).toMatch(/^--allowedTools "Bash\(gh pr comment:\*\),Read,/)
     expect(toolArgs).not.toContain("--json-schema")
     expect(section).toContain("`gh pr comment 42`")
+  })
+
+  it("allows the Agent tool only for the security pass", () => {
+    expect(formatDelivery(true, "42").toolArgs).not.toContain("Agent")
+    expect(formatDelivery(true, "42", true).toolArgs).toMatch(/,Agent"/)
+    expect(formatDelivery(false, "42", true).toolArgs).toMatch(/,Agent"$/)
   })
 })
 

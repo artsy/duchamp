@@ -198,6 +198,7 @@ export interface MetricsContext {
   modelArgs: string
   reviewMode: string
   experiment: string
+  securityPass?: string
 }
 
 type VolleyMetric =
@@ -239,6 +240,7 @@ export const formatVolleyPayload = (
     `outcome:${usage.outcome}`,
     `model:${model}`,
     ...(effort ? [`effort:${effort}`] : []),
+    ...(context.securityPass ? [`security:${context.securityPass}`] : []),
   ]
   const histogram = (name: string, value: number): VolleyMetric => ({
     type: "histogram",
@@ -420,6 +422,7 @@ const main = async (): Promise<void> => {
       modelArgs,
       reviewMode,
       experiment,
+      securityPass: process.env.SECURITY_PASS,
     }),
     process.env.VOLLEY_URL
   )

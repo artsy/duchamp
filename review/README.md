@@ -19,6 +19,8 @@ with `prompt.md` in this directory. It runs on the workflow's `model` input,
 - **Structural.** Functions doing several things, junk-drawer files, copy-paste,
   dead code, patterns applied inconsistently within one PR.
 - **Accessibility as completeness**, wherever the change is user-facing.
+- **A security pass** on risky changes, by a subagent that reads only for security.
+  See [Security pass](#security-pass).
 - **Unattended by design.** The prompt names the finish line (inline comments posted,
   summary returned) and tells the model not to stop and ask. Blocking and required findings
   must name the input that triggers them, unconfirmed concerns say where the model
@@ -99,6 +101,32 @@ For PRs in the [review experiment](../review-experiment/README.md),
 The job log prints the tier and why. Datadog already tags each review with `model:`
 and `effort:`, so the dashboard splits by tier without a new tag. Other PRs stay on
 standard until those numbers show light reviews hold up.
+
+## Security pass
+
+The main review weighs security against everything else. For risky changes, a
+second agent reads only for security:
+
+- **When.** Experiment PRs that touch a sensitive file (the same `SENSITIVE_PATTERNS`
+  as [Model routing](#model-routing)), and any PR with the `security-review` label.
+  Adding the label starts a review straight away.
+- **How.** `formatSecuritySection` in `scripts/build-review-prompt.ts` adds a
+  "Security Pass" section listing the sensitive files and allows the `Agent` tool. The
+  reviewer starts the `security-reviewer` subagent, defined in
+  `.claude/agents/security-reviewer.md`, with the range under review. On a label with
+  no sensitive files, the subagent reads every changed file.
+- **The subagent** has checks for Artsy's stacks: Actions injection and permissions,
+  GraphQL loaders and IDOR, Rails params and authorization, React HTML injection and
+  redirects, React Native secrets, deep links and WebViews. It returns leads, each with
+  a `file:line`, the input that triggers it and what an attacker gets. Its tools are
+  Read, Grep, Glob and Bash, so it has no tool that posts comments. Bash runs under the
+  review's allowlist, as the main reviewer's does.
+- **The main reviewer** checks each lead against the code before posting it, as it
+  would any other claim, and says in the summary how many it posted.
+
+Agents in `.claude/agents/` are copied to `~/.claude/agents/` on the runner, like
+skills and for the same reason. Datadog tags each review `security:true` or
+`security:false`.
 
 ## Re-reviews
 

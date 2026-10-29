@@ -44,7 +44,8 @@ jobs:
       github.event.pull_request.user.login != 'dependabot' &&
       github.event.pull_request.user.login != 'renovate' &&
       !contains(github.event.pull_request.labels.*.name, 'in-progress') &&
-      (github.event.action != 'labeled' && github.event.action != 'unlabeled' || github.event.label.name == 'in-progress')
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled' || github.event.label.name == 'in-progress' ||
+       github.event.action == 'labeled' && github.event.label.name == 'security-review')
     permissions:
       contents: read
       pull-requests: write
@@ -230,11 +231,12 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ github.token }}
 
-      - name: Install review skills
+      - name: Install review skills and agents
         run: |
-          mkdir -p "$HOME/.claude/skills"
+          mkdir -p "$HOME/.claude/skills" "$HOME/.claude/agents"
           cp -R .tooling/.claude/skills/. "$HOME/.claude/skills/"
-          ls "$HOME/.claude/skills"
+          cp -R .tooling/.claude/agents/. "$HOME/.claude/agents/"
+          ls "$HOME/.claude/skills" "$HOME/.claude/agents"
 
       - name: Resolve previous AI inline threads
         if: steps.prompt.outputs.review_mode != 'skip'
@@ -287,6 +289,7 @@ jobs:
           MODEL_ARGS: ${{ steps.prompt.outputs.model_args }}
           EXPERIMENT: ${{ steps.experiment.outputs.related_repos }}
           REVIEW_MODE: ${{ steps.prompt.outputs.review_mode }}
+          SECURITY_PASS: ${{ steps.prompt.outputs.security_pass }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report
