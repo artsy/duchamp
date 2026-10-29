@@ -1,9 +1,9 @@
 # GitHub logins enrolled in the review experiment.
 #
-# PRs by anyone on this list can also read the other Artsy repos listed in their
-# repo's `.claude-review.yml` `related_repos`, such as metaphysics when reviewing
-# eigen, get AGENTS.md and the diff in the prompt, get re-reviews of only what
-# changed, and get fewer inline comments (no inline nits). Every review, in or out
+# PRs by anyone on this list get AGENTS.md and the diff in the prompt, re-reviews of
+# only what changed, a lighter model for small changes, and fewer inline comments (no
+# inline nits). Related repos are now their own experiment; see
+# ../related-repos-experiment/. Every review, in or out
 # of the experiment, uses review/prompt.md.
 #
 # To join or leave, add or remove your login and open a PR. Case does not matter.

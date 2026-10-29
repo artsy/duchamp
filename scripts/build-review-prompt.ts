@@ -34,12 +34,15 @@ import { formatStackSkillsSection, resolveStackSkills } from "./stack-skills"
  * - focus_areas: Array of specific things to watch for (added to the prompt)
  * - ignore_paths: Glob patterns for files to skip
  * - context: Additional context about the codebase
- * - related_repos: Other artsy/<name> repos that experiment reviews can read. Read
- *   from the default branch, so a PR cannot grant its own review access to a repo
+ * - related_repos: Other artsy/<name> repos that related-repos experiment reviews can
+ *   read. Read from the default branch, so a PR cannot grant its own review access to a
+ *   repo
  *
- * The review experiment adds related repos, AGENTS.md and the diff in the prompt, and
- * re-reviews of only what changed since the last review. A PR is in it when its author is listed in review-experiment/participants.yml, or
- * when it carries the EXPERIMENT_LABEL. See review-experiment/README.md.
+ * The review experiment adds AGENTS.md and the diff in the prompt, and re-reviews of
+ * only what changed since the last review. A PR is in it when its author is listed in
+ * review-experiment/participants.yml, or when it carries the EXPERIMENT_LABEL. See
+ * review-experiment/README.md. Related repos are their own experiment; see
+ * related-repos-experiment/README.md.
  */
 
 interface ExcludeConfig {
@@ -58,6 +61,9 @@ interface RepoConfig {
 
 /** Label that opts a single PR into the experiment without enrolling its author. */
 export const EXPERIMENT_LABEL = "ai-review-experiment"
+
+/** Label that opts a single PR into the related-repos experiment. */
+export const RELATED_REPOS_LABEL = "ai-review-related-repos"
 
 /** Label that opts a single PR into the best-practices experiment. */
 export const BEST_PRACTICES_LABEL = "ai-review-best-practices"
@@ -140,8 +146,8 @@ export const parseLabels = (raw: string | undefined): string[] => {
     .filter(label => label.length > 0)
 }
 
-/** Whether this review is in the experiment: on for listed authors and labelled PRs. */
-export const usesRelatedRepos = (
+/** Whether this review is in the review experiment: listed authors and labelled PRs. */
+export const inReviewExperiment = (
   author: string | undefined,
   labels: string[]
 ): boolean => {
@@ -155,6 +161,15 @@ export const usesRelatedRepos = (
 
   return loadParticipants().includes(author.toLowerCase())
 }
+
+/** Whether this review reads related repos: listed authors and labelled PRs. */
+export const inRelatedReposExperiment = (
+  author: string | undefined,
+  labels: string[]
+): boolean =>
+  labels.some(label => label.toLowerCase() === RELATED_REPOS_LABEL) ||
+  (!!author &&
+    loadParticipants("related-repos-experiment").includes(author.toLowerCase()))
 
 export const hasSecurityLabel = (labels: string[]): boolean =>
   labels.some(label => label.toLowerCase() === SECURITY_LABEL)
@@ -418,7 +433,7 @@ export const loadDefaultBranchRepoConfig = (
   }
 }
 
-/** Clone the repo's related repos when this review uses them (see usesRelatedRepos). */
+/** Clone the repo's related repos when this review uses them (see inRelatedReposExperiment). */
 export const resolveRelatedRepos = (enabled: boolean): RelatedRepo[] => {
   const repos = parseRelatedRepos(
     loadDefaultBranchRepoConfig(process.env.DEFAULT_BRANCH)?.related_repos,
@@ -431,7 +446,7 @@ export const resolveRelatedRepos = (enabled: boolean): RelatedRepo[] => {
 
   if (!enabled) {
     console.log(
-      "Ignoring related_repos: only PRs in the review experiment read them"
+      "Ignoring related_repos: only PRs in the related-repos experiment read them"
     )
     return []
   }
@@ -644,7 +659,8 @@ export const formatDelivery = (
 
 const main = (): void => {
   const labels = parseLabels(process.env.PR_LABELS)
-  const inExperiment = usesRelatedRepos(process.env.PR_AUTHOR, labels)
+  const inExperiment = inReviewExperiment(process.env.PR_AUTHOR, labels)
+  const inRelatedRepos = inRelatedReposExperiment(process.env.PR_AUTHOR, labels)
   const inSecurity = inSecurityExperiment(process.env.PR_AUTHOR, labels)
   const labelled = hasSecurityLabel(labels)
   const bestPractices = inBestPractices(process.env.PR_AUTHOR, labels)
@@ -653,9 +669,13 @@ const main = (): void => {
   if (process.argv.includes("--check-experiment")) {
     const outputPath = process.env.GITHUB_OUTPUT
     if (outputPath) {
-      fs.appendFileSync(outputPath, `related_repos=${inExperiment}\n`)
+      fs.appendFileSync(
+        outputPath,
+        `experiment=${inExperiment}\nrelated_repos=${inRelatedRepos}\n`
+      )
     }
-    console.log(`Related repos: ${inExperiment}`)
+    console.log(`Review experiment: ${inExperiment}`)
+    console.log(`Related repos: ${inRelatedRepos}`)
     return
   }
 
@@ -720,7 +740,7 @@ const main = (): void => {
     `Stack skills: ${stack.skills.join(", ") || "none"} (${stack.reason})`
   )
 
-  const related = resolveRelatedRepos(inExperiment)
+  const related = resolveRelatedRepos(inRelatedRepos)
   // These sections go in the head so the diff's budget leaves room for them.
   const promptHead =
     buildPrompt() +
@@ -758,7 +778,7 @@ const main = (): void => {
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\n${formatReviewModeOutputs(context.reviewMode)}`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\n${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {

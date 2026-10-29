@@ -24,9 +24,13 @@ All of them carry the tags `repo`, `pr`, `group` (experiment, standard or unknow
 security experiment also carry `security` (true when the
 [security pass](../README.md#security-pass) ran). Reviews from after the best-practices
 experiment carry `best_practices` (true when the review ran a
-[stack skill](../../best-practices-experiment/README.md)). Datadog bills custom
-metrics by the series seen each hour, and reviews rarely share every tag in the same
-hour, so the `pr` tag adds few series. The `pr` tag holds the number alone, so filter
+[stack skill](../../best-practices-experiment/README.md)). Reviews from after the
+related-repos experiment carry `related_repos` (true when the review read a
+[related repo](../../related-repos-experiment/README.md)). `group` names the review
+experiment only; before that split, experiment reviews also read related repos.
+
+Datadog bills custom metrics by the series seen each hour, and reviews rarely share
+every tag in the same hour, so the `pr` tag adds few series. The `pr` tag holds the number alone, so filter
 by `repo` too when looking at one PR.
 
 Use counters for totals and averages: spend is `cost_cents / 100`, average cost is

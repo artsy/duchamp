@@ -2,9 +2,9 @@ import { execFileSync } from "child_process"
 import * as path from "path"
 
 /**
- * Related repos give experiment reviews read-only context from other Artsy repos,
- * such as metaphysics when reviewing eigen. Repos list them in `.claude-review.yml`
- * under `related_repos`. See review-experiment/README.md.
+ * Related repos give related-repos experiment reviews read-only context from other
+ * Artsy repos, such as metaphysics when reviewing eigen. Repos list them in
+ * `.claude-review.yml` under `related_repos`. See related-repos-experiment/README.md.
  */
 
 export const MAX_RELATED_REPOS = 5

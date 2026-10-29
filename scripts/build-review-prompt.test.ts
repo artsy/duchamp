@@ -15,6 +15,8 @@ import {
   formatSecuritySection,
   hasSecurityLabel,
   inBestPractices,
+  inRelatedReposExperiment,
+  inReviewExperiment,
   inSecurityExperiment,
   LIGHT_EFFORT,
   LIGHT_MODEL,
@@ -31,7 +33,6 @@ import {
   reviewRange,
   SECURITY_LABEL,
   securityLabelJustAdded,
-  usesRelatedRepos,
   writeSecurityDiff,
 } from "./build-review-prompt"
 import { MAX_DIFF_BYTES } from "./review-diff"
@@ -575,7 +576,7 @@ describe("formatSecuritySection", () => {
   })
 })
 
-describe("usesRelatedRepos", () => {
+describe("inReviewExperiment", () => {
   beforeEach(() => {
     jest.clearAllMocks()
   })
@@ -583,26 +584,67 @@ describe("usesRelatedRepos", () => {
   it("is true for an enrolled author, case-insensitively", () => {
     mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
 
-    expect(usesRelatedRepos("mounirdhahri", [])).toBe(true)
+    expect(inReviewExperiment("mounirdhahri", [])).toBe(true)
   })
 
   it("is true for a labelled PR without reading participants", () => {
     mockFs.existsSync.mockReturnValue(false)
 
-    expect(usesRelatedRepos("someone-else", [EXPERIMENT_LABEL])).toBe(true)
+    expect(inReviewExperiment("someone-else", [EXPERIMENT_LABEL])).toBe(true)
     expect(mockFs.existsSync).not.toHaveBeenCalled()
   })
 
   it("is false for an author outside the experiment", () => {
     mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
 
-    expect(usesRelatedRepos("someone-else", ["in-progress"])).toBe(false)
+    expect(inReviewExperiment("someone-else", ["in-progress"])).toBe(false)
   })
 
   it("is false with no author and no label", () => {
     mockFs.existsSync.mockReturnValue(false)
 
-    expect(usesRelatedRepos(undefined, [])).toBe(false)
+    expect(inReviewExperiment(undefined, [])).toBe(false)
+  })
+})
+
+describe("inRelatedReposExperiment", () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it("is true for an enrolled author, case-insensitively, from its own list", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+
+    expect(inRelatedReposExperiment("mounirdhahri", [])).toBe(true)
+    expect(
+      mockFs.readFileSync.mock.calls.map(([p]) => String(p))
+    ).toContainEqual(
+      expect.stringContaining(
+        path.join("related-repos-experiment", "participants.yml")
+      )
+    )
+  })
+
+  it("is true for a labelled PR", () => {
+    mockFs.existsSync.mockReturnValue(false)
+
+    expect(
+      inRelatedReposExperiment("someone-else", ["AI-Review-Related-Repos"])
+    ).toBe(true)
+  })
+
+  it("is false for the review experiment's label alone", () => {
+    mockFs.existsSync.mockReturnValue(false)
+
+    expect(inRelatedReposExperiment("someone-else", [EXPERIMENT_LABEL])).toBe(
+      false
+    )
+  })
+
+  it("is false with no author and no label", () => {
+    mockFs.existsSync.mockReturnValue(false)
+
+    expect(inRelatedReposExperiment(undefined, [])).toBe(false)
   })
 })
 

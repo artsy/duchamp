@@ -394,7 +394,11 @@ describe("formatVolleyPayload", () => {
   })
 
   it("sends no skill metrics for an older usage record", () => {
-    const { skillCalls, skillReferenceReads, ...older } = usage
+    const older = {
+      ...usage,
+      skillCalls: undefined,
+      skillReferenceReads: undefined,
+    }
     expect(
       formatVolleyPayload(older, context).metrics.map(m => m.name)
     ).not.toContain("skill_calls")
@@ -406,6 +410,14 @@ describe("formatVolleyPayload", () => {
       bestPractices: "true",
     }).metrics[0].tags
     expect(tags).toContain("best_practices:true")
+  })
+
+  it("tags whether the review read related repos", () => {
+    const tags = formatVolleyPayload(usage, {
+      ...context,
+      relatedRepos: "false",
+    }).metrics[0].tags
+    expect(tags).toContain("related_repos:false")
   })
 
   it("tags whether the security pass ran, when recorded", () => {
