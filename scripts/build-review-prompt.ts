@@ -24,6 +24,7 @@ import {
   resolveReviewMode,
 } from "./review-mode"
 import { classifyDiff, type DiffRisk, type ReviewTier } from "./review-risk"
+import { formatStackSkillsSection, resolveStackSkills } from "./stack-skills"
 
 /**
  * Build the review prompt from review/prompt.md plus repo-specific configuration.
@@ -57,6 +58,9 @@ interface RepoConfig {
 
 /** Label that opts a single PR into the experiment without enrolling its author. */
 export const EXPERIMENT_LABEL = "ai-review-experiment"
+
+/** Label that opts a single PR into the best-practices experiment. */
+export const BEST_PRACTICES_LABEL = "ai-review-best-practices"
 
 /** Label that opts a single PR into the security experiment. */
 export const SECURITY_LABEL = "security-review"
@@ -183,6 +187,17 @@ export const inSecurityExperiment = (
   hasSecurityLabel(labels) ||
   (!!author &&
     loadParticipants("security-experiment").includes(author.toLowerCase()))
+
+/** Whether this review is in the best-practices experiment: listed authors and labelled PRs. */
+export const inBestPractices = (
+  author: string | undefined,
+  labels: string[]
+): boolean =>
+  labels.some(label => label.toLowerCase() === BEST_PRACTICES_LABEL) ||
+  (!!author &&
+    loadParticipants("best-practices-experiment").includes(
+      author.toLowerCase()
+    ))
 
 /** Claude Code CLI flags that select the model for this review. */
 export const resolveModelArgs = (
@@ -632,6 +647,7 @@ const main = (): void => {
   const inExperiment = usesRelatedRepos(process.env.PR_AUTHOR, labels)
   const inSecurity = inSecurityExperiment(process.env.PR_AUTHOR, labels)
   const labelled = hasSecurityLabel(labels)
+  const bestPractices = inBestPractices(process.env.PR_AUTHOR, labels)
 
   // Lets the workflow skip minting the related repos token for reviews that don't use it.
   if (process.argv.includes("--check-experiment")) {
@@ -694,13 +710,23 @@ const main = (): void => {
         )
       : ""
   console.log(`Security pass: ${security !== ""}`)
+  const stack = resolveStackSkills(
+    bestPractices,
+    process.env.GITHUB_REPOSITORY,
+    range,
+    ignorePaths
+  )
+  console.log(
+    `Stack skills: ${stack.skills.join(", ") || "none"} (${stack.reason})`
+  )
 
   const related = resolveRelatedRepos(inExperiment)
-  // The security section goes in the head so the diff's budget leaves room for it.
+  // These sections go in the head so the diff's budget leaves room for them.
   const promptHead =
     buildPrompt() +
     formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true") +
-    security
+    security +
+    formatStackSkillsSection(stack.skills)
   const context = inExperiment
     ? formatContextSection(
         process.env.BASE_REF,
@@ -732,7 +758,7 @@ const main = (): void => {
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\n${formatReviewModeOutputs(context.reviewMode)}`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\n${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {

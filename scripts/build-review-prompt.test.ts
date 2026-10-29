@@ -14,6 +14,7 @@ import {
   formatReviewModeOutputs,
   formatSecuritySection,
   hasSecurityLabel,
+  inBestPractices,
   inSecurityExperiment,
   LIGHT_EFFORT,
   LIGHT_MODEL,
@@ -409,6 +410,31 @@ describe("pickReviewMode", () => {
       reason: "could not check the earlier review: gh failed",
     })
     expect(mockExec).toHaveBeenCalled()
+  })
+})
+
+describe("inBestPractices", () => {
+  it("includes listed authors, in any case", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+    expect(inBestPractices("mounirdhahri", [])).toBe(true)
+    expect(
+      mockFs.readFileSync.mock.calls.map(([p]) => String(p))
+    ).toContainEqual(
+      expect.stringContaining(
+        path.join("best-practices-experiment", "participants.yml")
+      )
+    )
+  })
+
+  it("includes any PR with the label", () => {
+    mockFiles({})
+    expect(inBestPractices("someone", ["AI-Review-Best-Practices"])).toBe(true)
+  })
+
+  it("leaves out everyone else", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+    expect(inBestPractices("someone", ["bug"])).toBe(false)
+    expect(inBestPractices(undefined, [])).toBe(false)
   })
 })
 

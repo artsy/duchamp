@@ -65,6 +65,40 @@ describe("parseReviewUsage", () => {
       outputTokens: 4_321,
       permissionDenials: 2,
       inlineComments: 0,
+      skillCalls: {},
+      skillReferenceReads: {},
+    })
+  })
+
+  it("counts skill calls and reference reads that went through", () => {
+    const ref = (file: string) => ({
+      file_path: `/home/runner/.claude/skills/react-native-best-practices/references/${file}`,
+    })
+    const usage = parseReviewUsage(
+      executionFile(
+        toolCall("s1", "Skill", { skill: "react-native-best-practices" }),
+        toolCall("s2", "Skill", { skill: "plain-english" }),
+        toolCall("s3", "Skill", { skill: "missing" }),
+        toolResult("s3", true),
+        toolCall("r1", "Read", ref("js-lists-flatlist-flashlist.md")),
+        toolCall("r2", "Read", ref("js-lists-flatlist-flashlist.md")),
+        toolCall("r3", "Read", ref("js-memory-leaks.md")),
+        toolCall("r4", "Read", {
+          file_path:
+            "/home/runner/.claude/skills/react-native-best-practices/SKILL.md",
+        }),
+        toolCall("r5", "Read", { file_path: "src/references/notes.md" }),
+        RESULT
+      )
+    )
+
+    expect(usage?.skillCalls).toEqual({
+      "react-native-best-practices": 1,
+      "plain-english": 1,
+    })
+    expect(usage?.skillReferenceReads).toEqual({
+      "react-native-best-practices/js-lists-flatlist-flashlist": 2,
+      "react-native-best-practices/js-memory-leaks": 1,
     })
   })
 
@@ -319,6 +353,46 @@ describe("formatVolleyPayload", () => {
     expect(tagsFor({ experiment: "", reviewMode: "" })).toEqual(
       expect.arrayContaining(["group:unknown", "mode:unknown"])
     )
+  })
+
+  it("counts skill calls and reference reads with their names as tags", () => {
+    const metrics = formatVolleyPayload(
+      {
+        ...usage,
+        skillCalls: { "react-native-best-practices": 1 },
+        skillReferenceReads: {
+          "react-native-best-practices/js-memory-leaks": 2,
+        },
+      },
+      context
+    ).metrics
+
+    const calls = metrics.find(m => m.name === "skill_calls")
+    expect(calls).toMatchObject({ type: "incrementBy", value: 1 })
+    expect(calls?.tags).toContain("skill:react-native-best-practices")
+    const reads = metrics.find(m => m.name === "skill_reference_reads")
+    expect(reads).toMatchObject({ type: "incrementBy", value: 2 })
+    expect(reads?.tags).toEqual(
+      expect.arrayContaining([
+        "skill:react-native-best-practices",
+        "reference:js-memory-leaks",
+      ])
+    )
+  })
+
+  it("sends no skill metrics for an older usage record", () => {
+    const { skillCalls, skillReferenceReads, ...older } = usage
+    expect(
+      formatVolleyPayload(older, context).metrics.map(m => m.name)
+    ).not.toContain("skill_calls")
+  })
+
+  it("tags whether the review was in the best-practices experiment", () => {
+    const tags = formatVolleyPayload(usage, {
+      ...context,
+      bestPractices: "true",
+    }).metrics[0].tags
+    expect(tags).toContain("best_practices:true")
   })
 
   it("tags whether the security pass ran, when recorded", () => {
