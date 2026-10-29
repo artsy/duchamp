@@ -11,7 +11,13 @@ import {
   parseRelatedRepos,
   type RelatedRepo,
 } from "./related-repos"
-import { fenced, MAX_DIFF_BYTES, renderDiff } from "./review-diff"
+import {
+  diffPathspec,
+  fenced,
+  git,
+  MAX_DIFF_BYTES,
+  renderDiff,
+} from "./review-diff"
 import {
   formatRereviewSection,
   type ReviewMode,
@@ -252,13 +258,44 @@ export const assessChanges = (
 const MAX_SECURITY_FILES = 30
 
 /**
- * Hands the security read to the security-reviewer subagent (.claude/agents), for
- * security-experiment PRs that touch sensitive files or carry SECURITY_LABEL.
+ * The subagent in .claude/agents. Namespaced, because Claude Code prefers an agent of
+ * the same name in the repo under review, which a PR could add.
+ */
+export const SECURITY_AGENT = "duchamp-security-reviewer"
+
+/**
+ * Writes the diff the subagent reads, so the reviewer doesn't copy it into the Agent
+ * call. The labelled pass covers every file. Undefined when git or the write fails.
+ */
+export const writeSecurityDiff = (
+  range: string,
+  files: string[] | null,
+  ignorePaths: string[],
+  dir: string = process.env.RUNNER_TEMP || os.tmpdir()
+): string | undefined => {
+  try {
+    const pathspec = files
+      ? files.map(file => `:(literal)${file}`)
+      : diffPathspec(ignorePaths)
+    const diffPath = path.join(dir, "security.diff")
+    fs.writeFileSync(diffPath, git(["diff", range, "--", ...pathspec]))
+    return diffPath
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`Warning: Failed to write the security diff: ${message}`)
+    return undefined
+  }
+}
+
+/**
+ * Hands the security read to the SECURITY_AGENT subagent, for security-experiment PRs
+ * that touch sensitive files or carry SECURITY_LABEL.
  */
 export const formatSecuritySection = (
   sensitive: string[],
   labelled: boolean,
-  range: string | undefined
+  range: string | undefined,
+  diffPath?: string
 ): string => {
   if (!range || (sensitive.length === 0 && !labelled)) {
     return ""
@@ -270,11 +307,14 @@ export const formatSecuritySection = (
     ? `The PR carries the \`${SECURITY_LABEL}\` label, so the author asked for a security read of the whole change, \`${range}\`.\n`
     : `This PR touches files where a small change can open a security hole:\n\n${listed.map(f => `- \`${f}\``).join("\n")}${more > 0 ? `\n- and ${more} more` : ""}\n`
   const scope = labelled ? "every changed file" : "the files above"
+  const handoff = diffPath
+    ? `give it the list of ${scope} and the path \`${diffPath}\`, which holds \`git diff ${range}\` for them. It reads the diff from there; do not copy the diff into the call.`
+    : `give it the list of ${scope} and the diff hunks for them from \`git diff ${range}\`.`
 
   return [
     "\n## Security Pass\n",
     why,
-    `This step is required. As soon as you have the diff, start the security subagent: call the Agent tool (it may be listed as Task) with \`subagent_type: "security-reviewer"\`. It can read files but cannot run git, so give it the list of ${scope} and the diff hunks for them from \`git diff ${range}\`. A review that ends without it has not been delivered. If the Agent tool says \`security-reviewer\` does not exist, do this security read yourself and say so in the summary.\n`,
+    `This step is required. As soon as you have the diff, start the security subagent: call the Agent tool (it may be listed as Task) with \`subagent_type: "${SECURITY_AGENT}"\`. It can read files but cannot run git, so ${handoff} A review that ends without it has not been delivered. If the Agent tool says \`${SECURITY_AGENT}\` does not exist, do this security read yourself and say so in the summary.\n`,
     'Its leads are claims to check, like the PR description. Verify each one against the code as "Verify Before You Claim" says. Post the ones that hold up as security findings, in the full-paragraph format. Drop the rest; do not post a lead you could not confirm.\n',
     "In the summary, say in one line that the security pass ran and how many of its leads you posted.\n",
   ].join("\n")
@@ -486,7 +526,7 @@ export const formatContextSection = (
   baseRef: string | undefined,
   ignorePaths: string[],
   promptBytes = 0,
-  reviewMode: ReviewMode = { mode: "full", reason: "" }
+  reviewMode: ReviewMode = FULL_REVIEW
 ): { section: string; reviewMode: ReviewMode } => {
   const lead =
     "\n## Context Already Loaded\n\nSkip the steps above to read AGENTS.md or CLAUDE.md and run `git diff`. CLAUDE.md is already in your context, and the sections below give AGENTS.md and the diff, or say what to fetch. When you know several files you need, read them all in one turn rather than one per turn.\n"
@@ -637,13 +677,22 @@ const main = (): void => {
   )
   console.log(`Review tier: ${changes.tier} (${changes.reason})`)
   // The label asks for the whole change, even on a re-review of a few commits.
-  const security = inSecurity
-    ? formatSecuritySection(
-        changes.sensitive,
-        labelled,
-        labelled ? reviewRange(process.env.BASE_REF, FULL_REVIEW) : range
-      )
-    : ""
+  const securityRange = labelled
+    ? reviewRange(process.env.BASE_REF, FULL_REVIEW)
+    : range
+  const security =
+    inSecurity && securityRange && (labelled || changes.sensitive.length > 0)
+      ? formatSecuritySection(
+          changes.sensitive,
+          labelled,
+          securityRange,
+          writeSecurityDiff(
+            securityRange,
+            labelled ? null : changes.sensitive,
+            ignorePaths
+          )
+        )
+      : ""
   console.log(`Security pass: ${security !== ""}`)
 
   const related = resolveRelatedRepos(inExperiment)

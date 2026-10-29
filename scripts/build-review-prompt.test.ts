@@ -31,6 +31,7 @@ import {
   SECURITY_LABEL,
   securityLabelJustAdded,
   usesRelatedRepos,
+  writeSecurityDiff,
 } from "./build-review-prompt"
 import { MAX_DIFF_BYTES } from "./review-diff"
 
@@ -436,6 +437,52 @@ describe("inSecurityExperiment", () => {
   })
 })
 
+describe("writeSecurityDiff", () => {
+  const mockGit = execFileSync as jest.Mock
+  const range = "origin/main...HEAD"
+
+  beforeEach(() => {
+    mockGit.mockReset()
+    mockGit.mockReturnValue("diff --git a/src/auth.ts b/src/auth.ts\n")
+    mockFs.writeFileSync.mockReset()
+  })
+
+  it("writes the diff of the given files, taken literally", () => {
+    expect(
+      writeSecurityDiff(range, ["src/auth.ts", "a*b.ts"], [], "/tmp/r")
+    ).toBe(path.join("/tmp/r", "security.diff"))
+    expect(mockGit.mock.calls[0][1]).toEqual([
+      "diff",
+      range,
+      "--",
+      ":(literal)src/auth.ts",
+      ":(literal)a*b.ts",
+    ])
+    expect(mockFs.writeFileSync).toHaveBeenCalledWith(
+      path.join("/tmp/r", "security.diff"),
+      "diff --git a/src/auth.ts b/src/auth.ts\n"
+    )
+  })
+
+  it("writes every file, minus lockfiles and ignored paths, for the label", () => {
+    writeSecurityDiff(range, null, ["vendor/"], "/tmp/r")
+    expect(mockGit.mock.calls[0][1]).toEqual(
+      expect.arrayContaining([":(exclude,glob)**/vendor/**"])
+    )
+  })
+
+  it("returns undefined when git fails", () => {
+    jest.spyOn(console, "error").mockImplementation(() => {})
+    mockGit.mockImplementation(() => {
+      throw new Error("bad revision")
+    })
+    expect(
+      writeSecurityDiff(range, ["src/auth.ts"], [], "/tmp/r")
+    ).toBeUndefined()
+    expect(mockFs.writeFileSync).not.toHaveBeenCalled()
+  })
+})
+
 describe("formatSecuritySection", () => {
   const range = "origin/main...HEAD"
 
@@ -456,16 +503,30 @@ describe("formatSecuritySection", () => {
     expect(section).toContain("## Security Pass")
     expect(section).toContain("- `src/auth.ts`")
     expect(section).toContain("- `.github/workflows/ci.yml`")
-    expect(section).toContain('`subagent_type: "security-reviewer"`')
+    expect(section).toContain('`subagent_type: "duchamp-security-reviewer"`')
     expect(section).toContain("the list of the files above")
     expect(section).toContain(`\`git diff ${range}\``)
     expect(section).toContain("cannot run git")
     expect(section).toContain("Verify Before You Claim")
   })
 
+  it("points the subagent at the diff file when there is one", () => {
+    const section = formatSecuritySection(
+      ["src/auth.ts"],
+      false,
+      range,
+      "/tmp/runner/security.diff"
+    )
+    expect(section).toContain(
+      `the path \`/tmp/runner/security.diff\`, which holds \`git diff ${range}\``
+    )
+    expect(section).toContain("do not copy the diff into the call")
+    expect(section).not.toContain("diff hunks")
+  })
+
   it("falls back to a security read by the reviewer when the agent is missing", () => {
     expect(formatSecuritySection(["src/auth.ts"], false, range)).toContain(
-      "If the Agent tool says `security-reviewer` does not exist, do this security read yourself"
+      "If the Agent tool says `duchamp-security-reviewer` does not exist, do this security read yourself"
     )
   })
 

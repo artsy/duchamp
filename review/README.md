@@ -118,9 +118,12 @@ second agent reads only for security:
   sensitive files and not only the commits since the last review.
 - **How.** `formatSecuritySection` in `scripts/build-review-prompt.ts` adds a
   "Security Pass" section listing the files to check and allows the `Agent` tool. Once
-  the reviewer has the diff, it starts the `security-reviewer` subagent, defined in
-  `.claude/agents/security-reviewer.md`, and passes it those files and their diff
-  hunks.
+  the reviewer has the diff, it starts the `duchamp-security-reviewer` subagent,
+  defined in `.claude/agents/duchamp-security-reviewer.md`. The prompt step writes the
+  diff for those files to `$RUNNER_TEMP/security.diff` (`writeSecurityDiff`), and the
+  reviewer passes the subagent that path instead of copying the hunks. The name is
+  namespaced because Claude Code prefers an agent of the same name defined in the repo
+  under review, which a PR could add.
 - **The subagent** has checks for Artsy's stacks: Actions injection and permissions,
   GraphQL loaders and IDOR, Rails params and authorization, React HTML injection and
   redirects, React Native secrets, deep links and WebViews. It returns leads, each with
@@ -138,8 +141,8 @@ Agents in `.claude/agents/` are copied to `~/.claude/agents/` on the runner, lik
 skills and for the same reason. A caller pinned to a workflow from before this change
 runs the current tooling without that copy step, so the agent is missing. The prompt
 tells the reviewer to do the security read itself in that case and say so.
-presentation-main-ui pins `2aa350a`; every other caller uses `@main`. Datadog tags each review `security:true` or
-`security:false`.
+
+Datadog tags each review `security:true` or `security:false`.
 
 ## Re-reviews
 
