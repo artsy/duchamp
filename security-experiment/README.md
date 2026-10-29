@@ -2,7 +2,7 @@
 
 An opt-in addition to the [AI PR review](../review/README.md). Reviews of PRs in it
 get a security pass by a subagent that reads only for security. It is separate from
-the [review experiment](../review-experiment/README.md): a PR can be in one, both or
+the [lean reviews experiment](../lean-reviews-experiment/README.md): a PR can be in one, both or
 neither.
 
 ## Joining

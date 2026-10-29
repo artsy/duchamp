@@ -197,7 +197,7 @@ jobs:
         env:
           YARN_IGNORE_PATH: 1
 
-      - name: Check review experiment
+      - name: Check experiments
         id: experiment
         run: npx ts-node .tooling/scripts/build-review-prompt.ts --check-experiment
         env:

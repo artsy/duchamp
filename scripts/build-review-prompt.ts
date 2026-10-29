@@ -38,10 +38,10 @@ import { formatStackSkillsSection, resolveStackSkills } from "./stack-skills"
  *   read. Read from the default branch, so a PR cannot grant its own review access to a
  *   repo
  *
- * The review experiment adds AGENTS.md and the diff in the prompt, and re-reviews of
+ * The lean reviews experiment adds AGENTS.md and the diff in the prompt, and re-reviews of
  * only what changed since the last review. A PR is in it when its author is listed in
- * review-experiment/participants.yml, or when it carries the EXPERIMENT_LABEL. See
- * review-experiment/README.md. Related repos are their own experiment; see
+ * lean-reviews-experiment/participants.yml, or when it carries the LEAN_LABEL. See
+ * lean-reviews-experiment/README.md. Related repos are their own experiment; see
  * related-repos-experiment/README.md.
  */
 
@@ -59,8 +59,11 @@ interface RepoConfig {
   related_repos?: string[]
 }
 
-/** Label that opts a single PR into the experiment without enrolling its author. */
-export const EXPERIMENT_LABEL = "ai-review-experiment"
+/** Label that opts a single PR into lean reviews without enrolling its author. */
+export const LEAN_LABEL = "ai-review-lean"
+
+/** The label from before the rename to lean reviews, still accepted on open PRs. */
+export const LEAN_LEGACY_LABEL = "ai-review-experiment"
 
 /** Label that opts a single PR into the related-repos experiment. */
 export const RELATED_REPOS_LABEL = "ai-review-related-repos"
@@ -92,7 +95,7 @@ export const loadReviewPrompt = (): string =>
 
 /** Logins in an experiment's participants.yml, lowercased. */
 export const loadParticipants = (
-  experiment = "review-experiment"
+  experiment = "lean-reviews-experiment"
 ): string[] => {
   const participantsPath = toolingPath(experiment, "participants.yml")
 
@@ -146,12 +149,16 @@ export const parseLabels = (raw: string | undefined): string[] => {
     .filter(label => label.length > 0)
 }
 
-/** Whether this review is in the review experiment: listed authors and labelled PRs. */
-export const inReviewExperiment = (
+/** Whether this review is in the lean reviews experiment: listed authors and labelled PRs. */
+export const inLeanReviews = (
   author: string | undefined,
   labels: string[]
 ): boolean => {
-  if (labels.some(label => label.toLowerCase() === EXPERIMENT_LABEL)) {
+  if (
+    labels.some(label =>
+      [LEAN_LABEL, LEAN_LEGACY_LABEL].includes(label.toLowerCase())
+    )
+  ) {
     return true
   }
 
@@ -188,11 +195,11 @@ export const pickReviewMode = (
   repo: string | undefined,
   prNumber: string | undefined,
   ignorePaths: string[],
-  inExperiment: boolean
+  inLean: boolean
 ): ReviewMode =>
   securityLabelJustAdded(triggerLabel)
     ? { mode: "full", reason: `${SECURITY_LABEL} label just added` }
-    : resolveReviewMode(repo, prNumber, ignorePaths, inExperiment)
+    : resolveReviewMode(repo, prNumber, ignorePaths, inLean)
 
 /** Whether this review is in the security experiment: listed authors and labelled PRs. */
 export const inSecurityExperiment = (
@@ -235,7 +242,7 @@ export const reviewRange = (
     : baseRef && `origin/${baseRef}...HEAD`
 
 /**
- * Reads the diff once for the experiments that need it. Review-experiment reviews of
+ * Reads the diff once for the experiments that need it. Lean reviews of
  * light diffs get LIGHT_MODEL, unless the caller set its own model. Security-experiment
  * reviews use the sensitive files. Any failure to read the diff means standard, with no
  * sensitive files.
@@ -271,7 +278,7 @@ export const assessChanges = (
   if (!groups.review) {
     return {
       tier: "standard",
-      reason: "not in the review experiment",
+      reason: "not in the lean reviews experiment",
       sensitive: risk.sensitive,
     }
   }
@@ -606,7 +613,7 @@ export const formatReviewModeOutputs = (reviewMode: ReviewMode): string =>
   ].join("\n")
 
 /** Experiment reviews only: fewer inline comments, so the ones left carry weight. */
-export const EXPERIMENT_INLINE_SECTION = [
+export const LEAN_INLINE_SECTION = [
   "\n## Which Findings Go Inline\n",
   'This section narrows "How to Write Comments" and "Report Format". Where they disagree, follow this section.\n',
   "- **Nits never go inline.** List at most three in the summary under `### Nits`, one line each, with a `file:line`. Leave the rest out.",
@@ -619,11 +626,11 @@ export const EXPERIMENT_INLINE_SECTION = [
 /** The prompt in order; experiment reviews get the inline rules before delivery. */
 export const assemblePrompt = (
   parts: { head: string; context: string; delivery: string },
-  inExperiment: boolean
+  inLean: boolean
 ): string =>
   parts.head +
   parts.context +
-  (inExperiment ? EXPERIMENT_INLINE_SECTION : "") +
+  (inLean ? LEAN_INLINE_SECTION : "") +
   parts.delivery
 
 const REVIEW_TOOLS =
@@ -638,14 +645,14 @@ const SUMMARY_SCHEMA =
  * so it shows as claude[bot].
  */
 export const formatDelivery = (
-  inExperiment: boolean,
+  inLean: boolean,
   prNumber = "",
   securityPass = false
 ): { toolArgs: string; section: string } => {
   const tools = securityPass ? `${REVIEW_TOOLS},Agent` : REVIEW_TOOLS
   const inline =
     "Use `mcp__github_inline_comment__create_inline_comment` for inline code comments."
-  if (inExperiment) {
+  if (inLean) {
     return {
       toolArgs: `--allowedTools "${tools}" --json-schema '${SUMMARY_SCHEMA}'`,
       section: `\n## How to Deliver Your Review\n\n${inline}\nReturn the summary comment as the \`summary\` field of your structured output. The workflow posts it on the PR; do not post it yourself.\n`,
@@ -659,7 +666,7 @@ export const formatDelivery = (
 
 const main = (): void => {
   const labels = parseLabels(process.env.PR_LABELS)
-  const inExperiment = inReviewExperiment(process.env.PR_AUTHOR, labels)
+  const inLean = inLeanReviews(process.env.PR_AUTHOR, labels)
   const inRelatedRepos = inRelatedReposExperiment(process.env.PR_AUTHOR, labels)
   const inSecurity = inSecurityExperiment(process.env.PR_AUTHOR, labels)
   const labelled = hasSecurityLabel(labels)
@@ -671,10 +678,10 @@ const main = (): void => {
     if (outputPath) {
       fs.appendFileSync(
         outputPath,
-        `experiment=${inExperiment}\nrelated_repos=${inRelatedRepos}\n`
+        `experiment=${inLean}\nrelated_repos=${inRelatedRepos}\n`
       )
     }
-    console.log(`Review experiment: ${inExperiment}`)
+    console.log(`Lean reviews experiment: ${inLean}`)
     console.log(`Related repos: ${inRelatedRepos}`)
     return
   }
@@ -685,7 +692,7 @@ const main = (): void => {
     process.env.GITHUB_REPOSITORY,
     process.env.PR_NUMBER,
     ignorePaths,
-    inExperiment
+    inLean
   )
   console.log(`Review mode: ${reviewMode.mode} (${reviewMode.reason})`)
 
@@ -706,7 +713,7 @@ const main = (): void => {
   const model = process.env.DEFAULT_MODEL || DEFAULT_MODEL
   const range = reviewRange(process.env.BASE_REF, reviewMode)
   const changes = assessChanges(
-    { review: inExperiment, security: inSecurity },
+    { review: inLean, security: inSecurity },
     model,
     range,
     ignorePaths
@@ -747,7 +754,7 @@ const main = (): void => {
     formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true") +
     security +
     formatStackSkillsSection(stack.skills)
-  const context = inExperiment
+  const context = inLean
     ? formatContextSection(
         process.env.BASE_REF,
         ignorePaths,
@@ -756,7 +763,7 @@ const main = (): void => {
       )
     : { section: "", reviewMode }
   const delivery = formatDelivery(
-    inExperiment,
+    inLean,
     process.env.PR_NUMBER,
     security !== ""
   )
@@ -766,7 +773,7 @@ const main = (): void => {
       context: context.section,
       delivery: delivery.section,
     },
-    inExperiment
+    inLean
   )
   const modelArgs = [resolveModelArgs(model, changes.tier), addDirArgs(related)]
     .filter(Boolean)

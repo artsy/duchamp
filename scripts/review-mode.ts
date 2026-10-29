@@ -10,7 +10,7 @@ import {
 } from "./review-diff"
 
 /**
- * Re-reviews, for the review experiment. Each summary ends with a marker naming the
+ * Re-reviews, for the lean reviews experiment. Each summary ends with a marker naming the
  * commit it reviewed, and the next run picks a mode from what changed since:
  *
  * - full: no earlier review, its commit left the branch history, or a merge since
@@ -200,10 +200,10 @@ export const resolveReviewMode = (
   repo: string | undefined,
   prNumber: string | undefined,
   ignorePaths: string[],
-  inExperiment: boolean
+  inLean: boolean
 ): ReviewMode => {
-  if (!inExperiment) {
-    return { mode: "full", reason: "not in the review experiment" }
+  if (!inLean) {
+    return { mode: "full", reason: "not in the lean reviews experiment" }
   }
   if (!repo || !prNumber) {
     return { mode: "full", reason: "no PR to look up" }

@@ -320,10 +320,13 @@ prompt: |
 
 **Experiments:**
 
-Opt-in groups, each with a `participants.yml` and a label for single PRs:
+Opt-in groups, each with a `participants.yml` and a label for single PRs.
+`review/experiments.md` lists them with past experiments, who created each and the PR
+that introduced it:
 
-- Review experiment (`ai-review-experiment`): AGENTS.md and the diff in the prompt,
-  re-reviews, model routing, fewer inline comments. See `review-experiment/README.md`.
+- Lean reviews (`ai-review-lean`): AGENTS.md and the diff in the prompt,
+  re-reviews, model routing, fewer inline comments. See
+  `lean-reviews-experiment/README.md`.
 - Related-repos experiment (`ai-review-related-repos`): reads the other Artsy repos in
   the repo's `related_repos`, such as metaphysics when reviewing eigen. See
   `related-repos-experiment/README.md`.
