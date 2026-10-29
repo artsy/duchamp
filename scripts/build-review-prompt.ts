@@ -393,6 +393,27 @@ export const formatReviewModeOutputs = (reviewMode: ReviewMode): string =>
     "",
   ].join("\n")
 
+/** Experiment reviews only: fewer inline comments, so the ones left carry weight. */
+export const EXPERIMENT_INLINE_SECTION = [
+  "\n## Which Findings Go Inline\n",
+  'This section narrows "How to Write Comments" and "Report Format". Where they disagree, follow this section.\n',
+  "- **Nits never go inline.** List at most three in the summary under `### Nits`, one line each, with a `file:line`. Leave the rest out.",
+  "- **Questions go inline only when the answer decides whether the PR is safe to merge**, that is, when one answer would make it blocking or required. Put other questions under Questions for Author in the summary.",
+  "- **Score each required finding before you post it.** Rate how likely its trigger is in real use, from 1 (rare edge case) to 5 (most requests or users hit it), and how bad the outcome is, from 1 (cosmetic) to 5 (data loss, outage or security). Multiply the two. If the product is below 6, the finding is not required: put it under Suggestions in the summary and do not post it inline. Do not show the scores in comments.",
+  "- **Blocking findings are not scored.** Security, data loss and broken core paths always go inline.",
+  "",
+].join("\n")
+
+/** The prompt in order; experiment reviews get the inline rules before delivery. */
+export const assemblePrompt = (
+  parts: { head: string; context: string; delivery: string },
+  inExperiment: boolean
+): string =>
+  parts.head +
+  parts.context +
+  (inExperiment ? EXPERIMENT_INLINE_SECTION : "") +
+  parts.delivery
+
 const REVIEW_TOOLS =
   "Read,Glob,Grep,Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(gh pr diff:*),Bash(gh pr view:*),Skill,mcp__github_inline_comment__create_inline_comment"
 
@@ -474,7 +495,14 @@ const main = (): void => {
       )
     : { section: "", reviewMode }
   const delivery = formatDelivery(inExperiment, process.env.PR_NUMBER)
-  const prompt = promptHead + context.section + delivery.section
+  const prompt = assemblePrompt(
+    {
+      head: promptHead,
+      context: context.section,
+      delivery: delivery.section,
+    },
+    inExperiment
+  )
   const modelArgs = [
     resolveModelArgs(process.env.DEFAULT_MODEL || DEFAULT_MODEL),
     addDirArgs(related),

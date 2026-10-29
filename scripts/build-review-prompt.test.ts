@@ -2,7 +2,9 @@ import { execFileSync } from "child_process"
 import * as fs from "fs"
 import * as path from "path"
 import {
+  assemblePrompt,
   buildPrompt,
+  EXPERIMENT_INLINE_SECTION,
   EXPERIMENT_LABEL,
   formatContextSection,
   formatDelivery,
@@ -754,5 +756,39 @@ describe("formatDelivery", () => {
     expect(toolArgs).toMatch(/^--allowedTools "Bash\(gh pr comment:\*\),Read,/)
     expect(toolArgs).not.toContain("--json-schema")
     expect(section).toContain("`gh pr comment 42`")
+  })
+})
+
+describe("EXPERIMENT_INLINE_SECTION", () => {
+  it("keeps nits and most questions out of inline comments", () => {
+    expect(EXPERIMENT_INLINE_SECTION).toContain("Nits never go inline")
+    expect(EXPERIMENT_INLINE_SECTION).toContain("at most three")
+    expect(EXPERIMENT_INLINE_SECTION).toContain(
+      "Questions go inline only when the answer decides"
+    )
+  })
+
+  it("moves required findings scoring below 6 to Suggestions", () => {
+    expect(EXPERIMENT_INLINE_SECTION).toContain("from 1 (rare edge case) to 5")
+    expect(EXPERIMENT_INLINE_SECTION).toContain(
+      "If the product is below 6, the finding is not required"
+    )
+    expect(EXPERIMENT_INLINE_SECTION).toContain(
+      "Blocking findings are not scored"
+    )
+  })
+})
+
+describe("assemblePrompt", () => {
+  const parts = { head: "HEAD", context: "CONTEXT", delivery: "DELIVERY" }
+
+  it("puts the inline rules before delivery for experiment reviews", () => {
+    expect(assemblePrompt(parts, true)).toBe(
+      `HEADCONTEXT${EXPERIMENT_INLINE_SECTION}DELIVERY`
+    )
+  })
+
+  it("leaves them out of standard reviews", () => {
+    expect(assemblePrompt(parts, false)).toBe("HEADCONTEXTDELIVERY")
   })
 })
