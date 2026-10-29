@@ -215,8 +215,8 @@ secrets:
   (`blocking:` / `required:` / `nit:` / `q:`) and a Request Changes / Needs Discussion
   / Approve verdict (see `review/README.md`)
 - Customizable review focus via `.claude-review.yml` config file
-- Add the `security-review` label for a security pass by a dedicated subagent
-  (see `review/README.md`)
+- In the review experiment, add the `security-review` label for a security pass by
+  a dedicated subagent (see `review/README.md`)
 - Configurable PR exclusions (see below)
 - Comments directly on the PR with findings
 - Default exclusions (configurable per-repo):

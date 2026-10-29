@@ -2,6 +2,7 @@ import { execFileSync } from "child_process"
 import * as fs from "fs"
 import * as path from "path"
 import {
+  asksForSecurityPass,
   assemblePrompt,
   assessChanges,
   buildPrompt,
@@ -312,6 +313,20 @@ describe("assessChanges", () => {
       "standard"
     )
     expect(mockGit).not.toHaveBeenCalled()
+  })
+})
+
+describe("asksForSecurityPass", () => {
+  it("counts the label inside the review experiment, in any case", () => {
+    expect(asksForSecurityPass(true, ["Security-Review"])).toBe(true)
+  })
+
+  it("ignores the label outside the review experiment", () => {
+    expect(asksForSecurityPass(false, [SECURITY_LABEL])).toBe(false)
+  })
+
+  it("is off without the label", () => {
+    expect(asksForSecurityPass(true, ["bug"])).toBe(false)
   })
 })
 

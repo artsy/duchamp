@@ -108,8 +108,9 @@ The main review weighs security against everything else. For risky changes, a
 second agent reads only for security:
 
 - **When.** Experiment PRs that touch a sensitive file (the same `SENSITIVE_PATTERNS`
-  as [Model routing](#model-routing)), and any PR with the `security-review` label.
-  Adding the label starts a review straight away.
+  as [Model routing](#model-routing)), and experiment PRs with the `security-review`
+  label. Adding the label starts a review straight away. Outside the experiment the
+  label adds nothing to that review.
 - **How.** `formatSecuritySection` in `scripts/build-review-prompt.ts` adds a
   "Security Pass" section listing the sensitive files and allows the `Agent` tool. The
   reviewer starts the `security-reviewer` subagent, defined in

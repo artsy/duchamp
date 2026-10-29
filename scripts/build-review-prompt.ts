@@ -52,7 +52,7 @@ interface RepoConfig {
 /** Label that opts a single PR into the experiment without enrolling its author. */
 export const EXPERIMENT_LABEL = "ai-review-experiment"
 
-/** Label that asks for the security pass on any PR. */
+/** Label that asks for the security pass on a review-experiment PR. */
 export const SECURITY_LABEL = "security-review"
 
 export const DEFAULT_MODEL = "claude-opus-5-5"
@@ -203,11 +203,18 @@ export const assessChanges = (
   return risk
 }
 
+/** The label only counts inside the review experiment, like the rest of the pass. */
+export const asksForSecurityPass = (
+  inExperiment: boolean,
+  labels: string[]
+): boolean =>
+  inExperiment && labels.some(label => label.toLowerCase() === SECURITY_LABEL)
+
 const MAX_SECURITY_FILES = 30
 
 /**
  * Hands the security read to the security-reviewer subagent (.claude/agents), for
- * experiment PRs that touch sensitive files and for any PR with SECURITY_LABEL.
+ * experiment PRs that touch sensitive files or carry SECURITY_LABEL.
  */
 export const formatSecuritySection = (
   sensitive: string[],
@@ -585,7 +592,7 @@ const main = (): void => {
   console.log(`Review tier: ${changes.tier} (${changes.reason})`)
   const security = formatSecuritySection(
     changes.sensitive,
-    labels.some(label => label.toLowerCase() === SECURITY_LABEL),
+    asksForSecurityPass(inExperiment, labels),
     range
   )
   console.log(`Security pass: ${security !== ""}`)
