@@ -38,6 +38,10 @@ export interface ReviewUsage {
   outputTokens: number
   permissionDenials: number
   inlineComments: number
+  /** Skill tool calls, by skill name. Absent in log lines from before they were counted. */
+  skillCalls?: Record<string, number>
+  /** Reads of a skill's reference files, by `<skill>/<file>`. */
+  skillReferenceReads?: Record<string, number>
 }
 
 const isResultMessage = (message: unknown): message is ResultMessage =>
@@ -54,6 +58,8 @@ interface ContentBlock {
   tool_use_id?: string
   is_error?: boolean
   input?: {
+    skill?: string
+    file_path?: string
     path?: string
     line?: number
     startLine?: number
@@ -94,6 +100,43 @@ const countInlineComments = (messages: unknown[]): number => {
   return new Set(comments).size
 }
 
+const SKILL_REFERENCE = /\/\.claude\/skills\/([^/]+)\/references\/([^/]+)\.md$/
+
+const tally = (keys: string[]): Record<string, number> =>
+  keys.reduce<Record<string, number>>((counts, key) => {
+    counts[key] = (counts[key] ?? 0) + 1
+    return counts
+  }, {})
+
+/** Skills the review loaded, and which of their reference files it read. Failed calls don't count. */
+export const countSkillUse = (
+  messages: unknown[]
+): Required<Pick<ReviewUsage, "skillCalls" | "skillReferenceReads">> => {
+  const blocks = messages.flatMap(contentBlocks)
+  const failed = new Set(
+    blocks
+      .filter(block => block.type === "tool_result" && block.is_error)
+      .map(block => block.tool_use_id)
+  )
+  const calls = blocks.filter(
+    block => block.type === "tool_use" && !failed.has(block.id)
+  )
+  return {
+    skillCalls: tally(
+      calls
+        .filter(block => block.name === "Skill" && block.input?.skill)
+        .map(block => block.input?.skill as string)
+    ),
+    skillReferenceReads: tally(
+      calls
+        .filter(block => block.name === "Read")
+        .map(block => block.input?.file_path?.match(SKILL_REFERENCE))
+        .filter((match): match is RegExpMatchArray => !!match)
+        .map(([, skill, file]) => `${skill}/${file}`)
+    ),
+  }
+}
+
 /** The final result entry of an execution file, or null if there is none. */
 export const parseReviewUsage = (content: string): ReviewUsage | null => {
   let messages: unknown
@@ -125,6 +168,7 @@ export const parseReviewUsage = (content: string): ReviewUsage | null => {
     outputTokens: usage.output_tokens ?? 0,
     permissionDenials: result.permission_denials?.length ?? 0,
     inlineComments: countInlineComments(messages),
+    ...countSkillUse(messages),
   }
 }
 
@@ -199,6 +243,7 @@ export interface MetricsContext {
   reviewMode: string
   experiment: string
   securityPass?: string
+  bestPractices?: string
 }
 
 type VolleyMetric =
@@ -241,6 +286,9 @@ export const formatVolleyPayload = (
     `model:${model}`,
     ...(effort ? [`effort:${effort}`] : []),
     ...(context.securityPass ? [`security:${context.securityPass}`] : []),
+    ...(context.bestPractices
+      ? [`best_practices:${context.bestPractices}`]
+      : []),
   ]
   const histogram = (name: string, value: number): VolleyMetric => ({
     type: "histogram",
@@ -285,6 +333,25 @@ export const formatVolleyPayload = (
       histogram("turns", usage.turns),
       histogram("duration_ms", usage.durationMs),
       histogram("inline_comments", usage.inlineComments),
+      ...Object.entries(usage.skillCalls ?? {}).map(
+        ([skill, value]): VolleyMetric => ({
+          type: "incrementBy",
+          name: "skill_calls",
+          value,
+          tags: [...tags, `skill:${skill}`],
+        })
+      ),
+      ...Object.entries(usage.skillReferenceReads ?? {}).map(
+        ([key, value]): VolleyMetric => {
+          const [skill, reference] = key.split("/")
+          return {
+            type: "incrementBy",
+            name: "skill_reference_reads",
+            value,
+            tags: [...tags, `skill:${skill}`, `reference:${reference}`],
+          }
+        }
+      ),
       // A run that failed before its first turn has no rate, not a rate of 0.
       ...(totalInputTokens(usage) > 0
         ? [histogram("cache_hit_rate", cacheHitRate(usage))]
@@ -423,6 +490,7 @@ const main = async (): Promise<void> => {
       reviewMode,
       experiment,
       securityPass: process.env.SECURITY_PASS,
+      bestPractices: process.env.BEST_PRACTICES,
     }),
     process.env.VOLLEY_URL
   )
