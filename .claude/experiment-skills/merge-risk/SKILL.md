@@ -93,25 +93,34 @@ Keep the numbers to yourself. Don't put the score or the sum in the review.
 
 ## Output
 
-Put this block in the summary comment, right after `### Summary`:
+Put this block in the summary comment, right after `### Summary`. It is collapsed: the
+`<summary>` line is the one row readers see, with the rating and each category's
+verdict emoji in the order below; the rest shows when they open it.
 
 ```
-### Merge Risk: <low | medium | high>
+<details>
+<summary><b>Merge risk: <low | medium | high></b> · Alignment <emoji> · Impact <emoji> · Verification <emoji> · Rollback <emoji> · Error detection <emoji></summary>
 
 **Safe because:** <the one fact>; <pointed at the line | walked it | unproven>
 
 **Alignment:** <verdict>
 - <gap that adds risk, with a file:line link where it helps>
+
 **Impact:** <verdict>
 - <gap>
+
 **Verification:** <verdict>
 - <gap>
+
 **Rollback cost:** <verdict>
 - <gap>
+
 **Error detection:** <verdict>
 - <gap>
 
 **Before you merge:** <the cheapest test or check that would catch the real bug>
+
+</details>
 ```
 
 - List gaps only. A category with nothing to add is one line with its verdict.
@@ -119,3 +128,7 @@ Put this block in the summary comment, right after `### Summary`:
 - A blast-radius risk that is a real bug in this PR is a finding. Post it with the
   usual severity rules and refer to it here; don't write it twice.
 - Leave out "Before you merge" when nothing is worth checking.
+- Keep the `<details>` and `</details>` lines, the blank line after `<summary>` and the
+  blank line before each category, or GitHub won't render the Markdown inside, or
+  folds the next category into the bullet above it. Use `<b>` in the summary line; Markdown
+  doesn't render there.

@@ -21,3 +21,5 @@ Changes from upstream:
 - The block goes in the review summary, rates the whole PR even on a re-review, and
   sends real bugs through the normal findings instead of repeating them.
 - Wording tightened; Artsy examples for one-way doors.
+- The block is collapsed, like the review stats: one row with the rating and each
+  verdict, and the details when opened.
