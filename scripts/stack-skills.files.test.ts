@@ -42,3 +42,24 @@ describe("review/skills.yml against .claude/stack-skills", () => {
     expect(skills.filter(skill => reviewSkills.includes(skill))).toEqual([])
   })
 })
+
+describe(".claude/experiment-skills", () => {
+  const dir = path.join(root, ".claude", "experiment-skills")
+  const experimentSkills = fs.readdirSync(dir)
+
+  it.each(experimentSkills)(
+    "%s has a SKILL.md whose name matches its folder",
+    skill => {
+      const skillMd = fs.readFileSync(path.join(dir, skill, "SKILL.md"), "utf8")
+      expect(skillMd.match(/^name: (.+)$/m)?.[1].trim()).toBe(skill)
+    }
+  )
+
+  it("has no skill named like a review or stack skill", () => {
+    const taken = [
+      ...fs.readdirSync(path.join(root, ".claude", "skills")),
+      ...skills,
+    ]
+    expect(experimentSkills.filter(skill => taken.includes(skill))).toEqual([])
+  })
+})

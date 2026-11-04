@@ -236,6 +236,7 @@ jobs:
       - name: Install review skills and agents
         env:
           STACK_SKILLS: ${{ steps.prompt.outputs.stack_skills }}
+          MERGE_RISK: ${{ steps.prompt.outputs.merge_risk }}
         run: |
           mkdir -p "$HOME/.claude/skills" "$HOME/.claude/agents"
           cp -R .tooling/.claude/skills/. "$HOME/.claude/skills/"
@@ -244,6 +245,9 @@ jobs:
           for skill in $STACK_SKILLS; do
             cp -R ".tooling/.claude/stack-skills/$skill" "$HOME/.claude/skills/"
           done
+          if [ "$MERGE_RISK" = "true" ]; then
+            cp -R .tooling/.claude/experiment-skills/merge-risk "$HOME/.claude/skills/"
+          fi
           ls "$HOME/.claude/skills" "$HOME/.claude/agents"
 
       - name: Resolve previous AI inline threads
@@ -300,6 +304,7 @@ jobs:
           SECURITY_PASS: ${{ steps.prompt.outputs.security_pass }}
           BEST_PRACTICES: ${{ steps.prompt.outputs.best_practices }}
           RELATED_REPOS: ${{ steps.prompt.outputs.related_repos_read }}
+          MERGE_RISK: ${{ steps.prompt.outputs.merge_risk }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report

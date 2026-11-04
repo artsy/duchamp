@@ -334,6 +334,8 @@ that introduced it:
   `security-experiment/README.md`.
 - Best-practices experiment (`ai-review-best-practices`): stack skills such as
   React Native best practices. See `best-practices-experiment/README.md`.
+- Merge risk experiment (`ai-review-merge-risk`): a low, medium or high merge risk
+  rating in the summary. See `merge-risk-experiment/README.md`.
 
 **Security Notes:**
 

@@ -66,6 +66,10 @@ instead. The [best-practices experiment](../best-practices-experiment/README.md)
 them on the repos in `skills.yml`, and the workflow copies only the ones a review uses.
 See that README for when they run and how we count their use.
 
+`.claude/experiment-skills/` holds skills that belong to one experiment, such as
+`merge-risk` for the [merge risk experiment](../merge-risk-experiment/README.md). The
+workflow copies one only when the review is in its experiment.
+
 ## Context in the prompt
 
 For PRs in the [lean reviews experiment](../lean-reviews-experiment/README.md),
@@ -256,3 +260,8 @@ MIT, renamed to avoid a clash; see its `SOURCE.md`.
 `.claude/stack-skills/react-native-best-practices/` is vendored from
 [Callstack's `agent-skills`](https://github.com/callstackincubator/agent-skills/tree/59e9d17446a248b21d86f078fcd0bd2d36db1ca4/skills/react-native-best-practices),
 MIT, with its LICENSE alongside.
+
+`.claude/experiment-skills/merge-risk/` adapts
+[Warp's `merge-risk`](https://github.com/warpdotdev/common-skills/blob/8792394ff1b655e0af451b8fabb68ef0cfcbd208/.agents/skills/merge-risk/SKILL.md)
+and [Cursor's `blast-radius`](https://github.com/cursor/plugins/blob/bb68f2365eceafa0cb2d253112f675acf5f144cc/pstack/skills/blast-radius/SKILL.md),
+both MIT; see its `SOURCE.md`.
