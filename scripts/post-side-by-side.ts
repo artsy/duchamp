@@ -137,7 +137,9 @@ export const earlierSideBySide = (
       c.id !== keepId &&
       c.user?.login === "github-actions[bot]" &&
       // At the end only, so a summary that quotes the marker is never deleted.
-      (c.body ?? "").trimEnd().endsWith(SIDE_BY_SIDE_MARKER)
+      (c.body ?? "")
+        .trimEnd()
+        .endsWith(SIDE_BY_SIDE_MARKER)
   )
 
 const gh = (args: string[], input?: string): string =>
