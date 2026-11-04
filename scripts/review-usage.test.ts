@@ -420,6 +420,14 @@ describe("formatVolleyPayload", () => {
     expect(tags).toContain("related_repos:false")
   })
 
+  it("tags whether the merge risk block was asked for", () => {
+    const tags = formatVolleyPayload(usage, {
+      ...context,
+      mergeRisk: "true",
+    }).metrics[0].tags
+    expect(tags).toContain("merge_risk:true")
+  })
+
   it("tags whether the security pass ran, when recorded", () => {
     const tagsFor = (overrides: Partial<MetricsContext>) =>
       formatVolleyPayload(usage, { ...context, ...overrides }).metrics[0].tags

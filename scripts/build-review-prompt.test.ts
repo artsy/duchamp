@@ -9,11 +9,13 @@ import {
   formatDelivery,
   formatDiffSection,
   formatInstructionsSection,
+  formatMergeRiskSection,
   formatReviewModeOutputs,
   formatSecuritySection,
   hasSecurityLabel,
   inBestPractices,
   inLeanReviews,
+  inMergeRisk,
   inRelatedReposExperiment,
   inSecurityExperiment,
   LEAN_INLINE_SECTION,
@@ -437,6 +439,46 @@ describe("inBestPractices", () => {
     mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
     expect(inBestPractices("someone", ["bug"])).toBe(false)
     expect(inBestPractices(undefined, [])).toBe(false)
+  })
+})
+
+describe("inMergeRisk", () => {
+  it("includes listed authors, in any case", () => {
+    mockFiles({ "participants.yml": "participants:\n  - nickskalkin\n" })
+    expect(inMergeRisk("NickSkalkin", [])).toBe(true)
+    expect(
+      mockFs.readFileSync.mock.calls.map(([p]) => String(p))
+    ).toContainEqual(
+      expect.stringContaining(
+        path.join("merge-risk-experiment", "participants.yml")
+      )
+    )
+  })
+
+  it("includes any PR with the label", () => {
+    mockFiles({})
+    expect(inMergeRisk("someone", ["AI-Review-Merge-Risk"])).toBe(true)
+  })
+
+  it("leaves out everyone else", () => {
+    mockFiles({ "participants.yml": "participants:\n  - nickskalkin\n" })
+    expect(inMergeRisk("someone", ["bug"])).toBe(false)
+    expect(inMergeRisk(undefined, [])).toBe(false)
+  })
+})
+
+describe("formatMergeRiskSection", () => {
+  it("is empty with no range", () => {
+    expect(formatMergeRiskSection(undefined)).toBe("")
+  })
+
+  it("asks for the skill on the whole PR and places the block", () => {
+    const section = formatMergeRiskSection("origin/main...HEAD")
+    expect(section).toContain("## Merge Risk")
+    expect(section).toContain("`merge-risk` skill")
+    expect(section).toContain("`origin/main...HEAD`")
+    expect(section).toContain("right after `### Summary`")
+    expect(section).toContain("skipped, skill not found")
   })
 })
 

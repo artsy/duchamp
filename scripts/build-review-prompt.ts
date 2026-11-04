@@ -41,8 +41,8 @@ import { formatStackSkillsSection, resolveStackSkills } from "./stack-skills"
  * The lean reviews experiment adds AGENTS.md and the diff in the prompt, and re-reviews of
  * only what changed since the last review. A PR is in it when its author is listed in
  * lean-reviews-experiment/participants.yml, or when it carries the LEAN_LABEL. See
- * lean-reviews-experiment/README.md. Related repos are their own experiment; see
- * related-repos-experiment/README.md.
+ * lean-reviews-experiment/README.md. Related repos, security, best practices and merge
+ * risk are their own experiments; see review/experiments.md.
  */
 
 interface ExcludeConfig {
@@ -73,6 +73,9 @@ export const BEST_PRACTICES_LABEL = "ai-review-best-practices"
 
 /** Label that opts a single PR into the security experiment. */
 export const SECURITY_LABEL = "security-review"
+
+/** Label that opts a single PR into the merge risk experiment. */
+export const MERGE_RISK_LABEL = "ai-review-merge-risk"
 
 export const DEFAULT_MODEL = "claude-opus-5-5"
 
@@ -221,6 +224,15 @@ export const inBestPractices = (
       author.toLowerCase()
     ))
 
+/** Whether this review is in the merge risk experiment: listed authors and labelled PRs. */
+export const inMergeRisk = (
+  author: string | undefined,
+  labels: string[]
+): boolean =>
+  labels.some(label => label.toLowerCase() === MERGE_RISK_LABEL) ||
+  (!!author &&
+    loadParticipants("merge-risk-experiment").includes(author.toLowerCase()))
+
 /** Claude Code CLI flags that select the model for this review. */
 export const resolveModelArgs = (
   model: string,
@@ -354,6 +366,25 @@ export const formatSecuritySection = (
     `This step is required. As soon as you have the diff, start the security subagent: call the Agent tool (it may be listed as Task) with \`subagent_type: "${SECURITY_AGENT}"\`. It can read files but cannot run git, so ${handoff} A review that ends without it has not been delivered. If the Agent tool says \`${SECURITY_AGENT}\` does not exist, do this security read yourself and say so in the summary.\n`,
     'Its leads are claims to check, like the PR description. Verify each one against the code as "Verify Before You Claim" says. Post the ones that hold up as security findings, in the full-paragraph format. Drop the rest; do not post a lead you could not confirm.\n',
     "In the summary, say in one line that the security pass ran and how many of its leads you posted.\n",
+  ].join("\n")
+}
+
+/**
+ * Asks for a Merge Risk block in the summary, from the merge-risk skill in
+ * .claude/experiment-skills, which the workflow installs only for these reviews.
+ */
+export const formatMergeRiskSection = (range: string | undefined): string => {
+  if (!range) {
+    return ""
+  }
+
+  return [
+    "\n## Merge Risk\n",
+    `After you read the diff and before you write the summary, run the \`merge-risk\` skill with the Skill tool. Rate the whole PR, \`${range}\`, even when this review covers fewer commits.\n`,
+    "- Put its Merge Risk block in the summary right after `### Summary`. It sits alongside the verdict and does not change it.",
+    "- A risk it finds that is a real bug in this PR is a finding: post it under the usual severity rules, and point to it from the block instead of repeating it.",
+    "- Skip any step that asks the user something or runs code. You can read files and run git and gh, nothing else.",
+    "- If the Skill tool says `merge-risk` does not exist, write `### Merge Risk: skipped, skill not found` in its place so the gap shows.\n",
   ].join("\n")
 }
 
@@ -671,6 +702,7 @@ const main = (): void => {
   const inSecurity = inSecurityExperiment(process.env.PR_AUTHOR, labels)
   const labelled = hasSecurityLabel(labels)
   const bestPractices = inBestPractices(process.env.PR_AUTHOR, labels)
+  const mergeRisk = inMergeRisk(process.env.PR_AUTHOR, labels)
 
   // Lets the workflow skip minting the related repos token for reviews that don't use it.
   if (process.argv.includes("--check-experiment")) {
@@ -747,13 +779,20 @@ const main = (): void => {
     `Stack skills: ${stack.skills.join(", ") || "none"} (${stack.reason})`
   )
 
+  // Merge risk is about the whole merge, so it rates the PR even on a re-review.
+  const mergeRiskSection = mergeRisk
+    ? formatMergeRiskSection(reviewRange(process.env.BASE_REF, FULL_REVIEW))
+    : ""
+  console.log(`Merge risk: ${mergeRiskSection !== ""}`)
+
   const related = resolveRelatedRepos(inRelatedRepos)
   // These sections go in the head so the diff's budget leaves room for them.
   const promptHead =
     buildPrompt() +
     formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true") +
     security +
-    formatStackSkillsSection(stack.skills)
+    formatStackSkillsSection(stack.skills) +
+    mergeRiskSection
   const context = inLean
     ? formatContextSection(
         process.env.BASE_REF,
@@ -785,7 +824,7 @@ const main = (): void => {
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\n${formatReviewModeOutputs(context.reviewMode)}`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\n${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {
