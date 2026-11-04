@@ -240,6 +240,9 @@ secrets:
   App (org secret `REVIEW_APP_PRIVATE_KEY`). The workflow mints a read-only token from
   it for private repos listed in `related_repos`. Without it, private related repos are
   skipped
+- `openai-api-key` (optional): OpenAI API key (`OPENAI_API_KEY`) for the
+  [Codex experiment](../codex-experiment/README.md)'s second review. Without it, only
+  Claude reviews
 
 **Setting Up the API Key:**
 

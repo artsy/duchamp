@@ -8,6 +8,9 @@ on:
       review-app-private-key:
         description: "Private key of the Artsy Review Context GitHub App, which reads private repos listed in related_repos. Without it, private repos are skipped"
         required: false
+      openai-api-key:
+        description: "OpenAI API key for the Codex experiment's second review. Without it, only Claude reviews"
+        required: false
     inputs:
       model:
         description: "Claude model to use for the review"
@@ -49,8 +52,11 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    env:
+      HAS_OPENAI_KEY: ${{ secrets.openai-api-key != '' }}
     outputs:
       should-review: ${{ steps.org-check.outputs.should-review }}
+      review-timeout: ${{ steps.timeout.outputs.minutes }}
     steps:
       - name: Checkout PR repo (sparse - config only)
         uses: actions/checkout@v4
@@ -156,11 +162,29 @@ jobs:
               core.setOutput('should-review', 'false');
             }
 
+      # Codex runs after Claude in the same job, so its PRs get extra time instead of
+      # cutting into Claude's. Expressions can't add numbers, so this step does it.
+      - name: Size the review job
+        id: timeout
+        if: steps.org-check.outputs.should-review == 'true'
+        run: |
+          codex=$(PR_AUTHOR="$PR_AUTHOR" PR_LABELS="$PR_LABELS" GITHUB_OUTPUT=/dev/null \
+            npx ts-node .tooling/scripts/build-review-prompt.ts --check-experiment | sed -n 's/^Codex: //p')
+          extra=0
+          if [ "$codex" = "true" ] && [ "$HAS_OPENAI_KEY" = "true" ]; then extra=$CODEX_EXTRA_MINUTES; fi
+          echo "minutes=$((TIMEOUT_MINUTES + extra))" >> "$GITHUB_OUTPUT"
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
+          # The Codex step's own limit plus a few minutes to post the comparison.
+          CODEX_EXTRA_MINUTES: 20
+
   review:
     needs: check
     if: needs.check.outputs.should-review == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ inputs.timeout-minutes }}
+    timeout-minutes: ${{ fromJSON(needs.check.outputs.review-timeout || format('{0}', inputs.timeout-minutes)) }}
     concurrency:
       group: claude-review-${{ github.repository }}-${{ github.event.pull_request.number }}
       cancel-in-progress: true
@@ -168,6 +192,9 @@ jobs:
       contents: write  # Required for resolveReviewThread GraphQL mutation
       pull-requests: write
       id-token: write
+    # Step conditions can't read secrets, so this says whether the caller passed the key.
+    env:
+      HAS_OPENAI_KEY: ${{ secrets.openai-api-key != '' }}
 
     steps:
       - name: Checkout PR branch
@@ -258,6 +285,23 @@ jobs:
             const { cleanupPreviousAIReviews } = require('./.tooling/scripts/cleanup-ai-reviews.js');
             await cleanupPreviousAIReviews({ github, context, core });
 
+      # Codex has no network, so it reads the PR from a file. Saved before Claude runs,
+      # so Codex never sees Claude's review of this push.
+      - name: Save the PR for Codex
+        continue-on-error: true
+        if: steps.prompt.outputs.codex == 'true' && steps.prompt.outputs.review_mode != 'skip' && env.HAS_OPENAI_KEY == 'true'
+        # Without --comments gh prints the description; with it, only the comments.
+        run: |
+          {
+            gh pr view "$PR_NUMBER"
+            echo
+            gh pr view "$PR_NUMBER" --comments
+          } > "$PR_FILE"
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_FILE: ${{ steps.prompt.outputs.codex_pr_file }}
+          GH_TOKEN: ${{ github.token }}
+
       - name: Run Claude Code Review
         id: review
         if: steps.prompt.outputs.review_mode != 'skip'
@@ -268,17 +312,7 @@ jobs:
           claude_args: >-
             ${{ steps.prompt.outputs.model_args }}
             ${{ steps.prompt.outputs.tool_args }}
-          prompt: |
-            REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
-            BASE BRANCH: ${{ github.event.pull_request.base.ref }}
-
-            The PR branch has been checked out. You have full access to the codebase.
-            Use Read, Glob, and Grep to explore files. Use `git diff origin/${{ github.event.pull_request.base.ref }}...HEAD` to see changes.
-
-            If an AGENTS.md or CLAUDE.md file exists in the repo root, read it first for project-specific guidelines.
-
-            ${{ steps.prompt.outputs.review_prompt }}
+          prompt: ${{ steps.prompt.outputs.review_prompt }}
 
       - name: Post review summary
         if: always() && steps.review.outcome != 'skipped'
@@ -308,3 +342,51 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report
+
+      # The Codex steps go last: the action drops sudo for every step after it. They
+      # run even when Claude's review failed, and their failures don't turn the check red.
+      - name: Prepare Codex
+        id: codex-prep
+        continue-on-error: true
+        if: >-
+          !cancelled() && steps.prompt.outputs.codex == 'true' &&
+          steps.prompt.outputs.review_mode != 'skip' && env.HAS_OPENAI_KEY == 'true'
+        run: |
+          mkdir -p "$HOME/.agents/skills"
+          cp -R "$HOME/.claude/skills/." "$HOME/.agents/skills/"
+          # Checkout leaves the job's token in .git/config, and claude-code-action puts its
+          # app token in the origin URL. Codex can read both, so remove them.
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git -C .tooling config --local --unset-all http.https://github.com/.extraheader || true
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -C .tooling remote set-url origin https://github.com/artsy/duchamp.git
+
+      - name: Run Codex review
+        id: codex
+        continue-on-error: true
+        timeout-minutes: 15
+        if: ${{ !cancelled() && steps.codex-prep.outcome == 'success' }}
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.openai-api-key }}
+          prompt-file: ${{ steps.prompt.outputs.codex_prompt_file }}
+          output-file: ${{ runner.temp }}/codex-review.json
+          output-schema-file: ${{ github.workspace }}/.tooling/codex-experiment/output-schema.json
+          # The legacy sandbox, because permission profiles are still beta. read-only
+          # can read the related repo clones and the PR file under RUNNER_TEMP.
+          sandbox: read-only
+          model: gpt-6.1-terra
+          effort: high
+
+      # Posts Codex's inline comments, then one comment with both reviews side by side.
+      # Claude's own summary and inline comments stay. See scripts/post-side-by-side.ts.
+      - name: Post Claude | Codex
+        continue-on-error: true
+        if: ${{ !cancelled() && steps.codex-prep.outcome == 'success' }}
+        run: npx ts-node .tooling/scripts/post-side-by-side.ts
+        env:
+          CODEX_REVIEW_FILE: ${{ runner.temp }}/codex-review.json
+          CLAUDE_OUTCOME: ${{ steps.review.outcome }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
