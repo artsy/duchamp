@@ -4,9 +4,9 @@ import { isReviewSummary } from "./post-review-summary"
 import { stripReviewFooter } from "./review-mode"
 
 /**
- * For Codex experiment PRs: one comment with Claude's review and Codex's side by side.
- * Claude's own summary comment stays, because re-reviews find the previous review
- * through its marker. Codex posts nothing else.
+ * For Codex experiment PRs: posts Codex's inline comments, then one comment with
+ * Claude's review and Codex's side by side. Claude's own summary comment stays,
+ * because re-reviews find the previous review through its marker.
  */
 
 /** Marks the side-by-side comment, so the next run can replace it. */
@@ -16,6 +16,15 @@ export const SIDE_BY_SIDE_MARKER = "<!-- ai-review-side-by-side -->"
 export const MAX_COLUMN_CHARS = 30_000
 
 const MAX_INLINE_LINE_CHARS = 200
+
+/** Starts each inline comment Codex posts, so cleanup-ai-reviews.js can find them. */
+export const CODEX_COMMENT_PREFIX = "**Codex:**"
+
+export interface CodexFinding {
+  path: string
+  line: number
+  body: string
+}
 
 interface IssueComment {
   id: number
@@ -51,6 +60,15 @@ export const latestClaudeSummary = (
   return marked && marked[1] !== headSha ? null : stripReviewFooter(body)
 }
 
+const oneLine = (path: string, line: number | string, body: string): string => {
+  const first = body.trim().split("\n")[0]
+  const text =
+    first.length > MAX_INLINE_LINE_CHARS
+      ? `${first.slice(0, MAX_INLINE_LINE_CHARS)}…`
+      : first
+  return `- \`${path}:${line}\` ${text}`
+}
+
 /** Claude's inline comments on the reviewed commit, one line each. */
 export const formatInlineComments = (
   comments: ReviewComment[],
@@ -63,18 +81,59 @@ export const formatInlineComments = (
         c.original_commit_id === headSha &&
         !c.in_reply_to_id
     )
-    .map(c => {
-      const firstLine = (c.body ?? "").trim().split("\n")[0]
-      const text =
-        firstLine.length > MAX_INLINE_LINE_CHARS
-          ? `${firstLine.slice(0, MAX_INLINE_LINE_CHARS)}…`
-          : firstLine
-      return `- \`${c.path}:${c.line ?? c.original_line ?? "?"}\` ${text}`
-    })
+    .map(c => oneLine(c.path, c.line ?? c.original_line ?? "?", c.body ?? ""))
 
   return lines.length > 0
     ? `---\n\n**Inline comments (${lines.length})**\n${lines.join("\n")}`
     : ""
+}
+
+/**
+ * Codex's final message, in codex-experiment/output-schema.json. Text that isn't
+ * that JSON is kept as the summary, so a review still shows when Codex ignores the
+ * schema. Null when there is no message.
+ */
+export const parseCodexOutput = (
+  text: string
+): { summary: string; comments: CodexFinding[] } | null => {
+  const trimmed = text.trim()
+  if (!trimmed) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(trimmed)
+    if (typeof parsed?.summary === "string") {
+      const comments = Array.isArray(parsed.comments)
+        ? parsed.comments.filter(
+            (c: Partial<CodexFinding>): c is CodexFinding =>
+              typeof c?.path === "string" &&
+              Number.isInteger(c?.line) &&
+              typeof c?.body === "string" &&
+              c.body.trim().length > 0
+          )
+        : []
+      return { summary: parsed.summary, comments }
+    }
+  } catch {
+    // Not JSON: fall through and keep the text
+  }
+  return { summary: trimmed, comments: [] }
+}
+
+/** Codex's inline comments for its column: posted ones, then ones off the diff. */
+export const formatCodexComments = (
+  posted: CodexFinding[],
+  unposted: CodexFinding[]
+): string => {
+  const list = (findings: CodexFinding[]): string =>
+    findings.map(c => oneLine(c.path, c.line, c.body)).join("\n")
+  const parts = [
+    posted.length > 0 &&
+      `**Inline comments (${posted.length})**\n${list(posted)}`,
+    unposted.length > 0 &&
+      `**Not on a changed line, so not posted inline (${unposted.length})**\n${list(unposted)}`,
+  ].filter(Boolean)
+  return parts.length > 0 ? `---\n\n${parts.join("\n\n")}` : ""
 }
 
 /** The table's headers name the reviewer, so each summary's own title goes. */
@@ -90,6 +149,7 @@ export const buildSideBySide = (input: {
   claude: string | null
   claudeInline: string
   codex: string | null
+  codexInline: string
   headSha: string
 }): string => {
   const claude = input.claude
@@ -98,7 +158,7 @@ export const buildSideBySide = (input: {
         .join("\n\n")
     : "Claude's review didn't finish on this push."
   const codex = input.codex
-    ? stripTitle(input.codex)
+    ? [stripTitle(input.codex), input.codexInline].filter(Boolean).join("\n\n")
     : "Codex didn't return a review on this push."
 
   // Blank lines around each cell's content let GitHub render the Markdown inside it.
@@ -155,6 +215,42 @@ const ghList = <T>(endpoint: string): T[] =>
     .filter(line => line.length > 0)
     .map(line => JSON.parse(line) as T)
 
+/** Posts each finding on its line. GitHub rejects lines outside the diff. */
+const postCodexComments = (
+  repo: string,
+  prNumber: string,
+  headSha: string,
+  findings: CodexFinding[]
+): { posted: CodexFinding[]; unposted: CodexFinding[] } => {
+  const posted: CodexFinding[] = []
+  const unposted: CodexFinding[] = []
+  for (const finding of findings) {
+    try {
+      gh([
+        "api",
+        `repos/${repo}/pulls/${prNumber}/comments`,
+        "-f",
+        `body=${CODEX_COMMENT_PREFIX} ${finding.body.trim()}`,
+        "-f",
+        `commit_id=${headSha}`,
+        "-f",
+        `path=${finding.path}`,
+        "-F",
+        `line=${finding.line}`,
+        "-f",
+        "side=RIGHT",
+      ])
+      posted.push(finding)
+    } catch {
+      unposted.push(finding)
+    }
+  }
+  console.log(
+    `Codex inline comments: ${posted.length} posted, ${unposted.length} not on the diff`
+  )
+  return { posted, unposted }
+}
+
 const main = (): void => {
   const repo = process.env.GITHUB_REPOSITORY ?? ""
   const prNumber = process.env.PR_NUMBER ?? ""
@@ -172,11 +268,22 @@ const main = (): void => {
         headSha
       )
     : ""
-  const codexText =
+  const codexOutput = parseCodexOutput(
     reviewFile && fs.existsSync(reviewFile)
-      ? fs.readFileSync(reviewFile, "utf8").trim()
+      ? fs.readFileSync(reviewFile, "utf8")
       : ""
-  const codex = codexText || null
+  )
+  const codex = codexOutput?.summary.trim() || null
+  let codexInline = ""
+  if (codexOutput) {
+    const { posted, unposted } = postCodexComments(
+      repo,
+      prNumber,
+      headSha,
+      codexOutput.comments
+    )
+    codexInline = formatCodexComments(posted, unposted)
+  }
 
   if (!claude && !codex) {
     console.log("::warning::Neither review finished, so nothing was posted")
@@ -186,7 +293,7 @@ const main = (): void => {
   const posted = JSON.parse(
     gh(
       ["api", `repos/${repo}/issues/${prNumber}/comments`, "-F", "body=@-"],
-      buildSideBySide({ claude, claudeInline, codex, headSha })
+      buildSideBySide({ claude, claudeInline, codex, codexInline, headSha })
     )
   ) as IssueComment
   console.log(`Side-by-side review posted: comment ${posted.id}`)

@@ -1,0 +1,34 @@
+{
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "The review summary comment, in Markdown"
+    },
+    "comments": {
+      "type": "array",
+      "description": "Inline comments, each on a line the PR adds or changes",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "File path from the repo root"
+          },
+          "line": {
+            "type": "integer",
+            "description": "Line number in the PR's version of the file"
+          },
+          "body": {
+            "type": "string",
+            "description": "The comment, starting with its severity marker"
+          }
+        },
+        "required": ["path", "line", "body"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["summary", "comments"],
+  "additionalProperties": false
+}

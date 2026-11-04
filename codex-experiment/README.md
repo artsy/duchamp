@@ -8,14 +8,18 @@ comment shows the two reviews side by side. It is separate from the other
 ## What the PR shows
 
 Claude's review is unchanged: its inline comments on the diff and its summary comment.
-Then one more comment, "AI reviews: Claude | Codex", with two columns:
+Codex's inline comments sit on the diff too, posted by github-actions[bot] and starting
+with **Codex:**, so where both flag a line you see the two side by side. Then one more
+comment, "AI reviews: Claude | Codex", with two columns:
 
 - **Claude:** its summary, then a one-line copy of each inline comment it posted on
   this commit, with its `file:line`.
-- **Codex:** its summary, which holds every finding, since Codex can't post inline.
+- **Codex:** its summary, then the same list for its inline comments, and any it aimed
+  at a line outside the diff, which GitHub won't take inline.
 
-A new push replaces the side-by-side comment. If one review fails, its column says so.
-`scripts/post-side-by-side.ts` builds it.
+A new push replaces the side-by-side comment and resolves both reviewers' earlier
+inline threads. If one review fails, its column says so. `scripts/post-side-by-side.ts`
+does the posting.
 
 ## Joining
 
@@ -40,9 +44,9 @@ A new push replaces the side-by-side comment. If one review fails, its column sa
 Codex gets the same text plus a short "Running in Codex" section at the end
 (`formatCodexNote`), which covers only what Codex can't do the same way:
 
-- **No GitHub tools.** Codex can't post, so every finding goes in its summary with a
-  `file:line`, including the ones Claude would post inline. The workflow posts it in
-  the side-by-side comment.
+- **No GitHub tools.** Codex can't post, so it returns its summary and inline comments
+  as JSON in `output-schema.json`, and the workflow posts them. If it returns plain
+  text instead, that text becomes its column.
 - **No network.** A step saves `gh pr view --comments` to a file before Claude runs, and
   Codex reads that. It never sees Claude's review of the same push.
 - **Skills.** The workflow copies the installed skills to `~/.agents/skills`, where
@@ -70,11 +74,11 @@ Before Codex starts, the workflow removes the job's GitHub token from both check
 
 ## Limits
 
-- **No inline comments from Codex.** Its `output-schema` could return findings with a
-  file and line for a script to post.
 - **Re-reviews follow Claude.** In lean reviews, a re-review hands over the previous
   summary, which is Claude's, and the changes since. Codex reviews those changes, not
   the whole PR again.
 - **No Datadog numbers** for Codex's tokens or cost yet. The OpenAI project's usage
   page shows spend.
-- **One timeout.** Both reviews share the job's `timeout-minutes` (default 30).
+- **Time.** Codex runs after Claude in the same job. Its step stops after 15 minutes,
+  and the `check` job gives Codex PRs 20 extra minutes of job time, so Claude keeps
+  its full `timeout-minutes`.

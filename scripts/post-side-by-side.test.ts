@@ -1,10 +1,13 @@
 import { FOOTER_SENTINEL, reviewMarker } from "./post-review-summary"
 import {
   buildSideBySide,
+  type CodexFinding,
   earlierSideBySide,
+  formatCodexComments,
   formatInlineComments,
   latestClaudeSummary,
   MAX_COLUMN_CHARS,
+  parseCodexOutput,
   type ReviewComment,
   SIDE_BY_SIDE_MARKER,
   stripTitle,
@@ -101,6 +104,69 @@ describe("formatInlineComments", () => {
   })
 })
 
+describe("parseCodexOutput", () => {
+  it("reads the summary and the well-formed comments", () => {
+    const out = parseCodexOutput(
+      JSON.stringify({
+        summary: "## Code Review\nok",
+        comments: [
+          { path: "a.ts", line: 3, body: "🔴 **blocking:** x." },
+          { path: "b.ts", line: 1.5, body: "bad line" },
+          { path: "c.ts", line: 2, body: "  " },
+          { line: 4, body: "no path" },
+        ],
+      })
+    )
+    expect(out).toEqual({
+      summary: "## Code Review\nok",
+      comments: [{ path: "a.ts", line: 3, body: "🔴 **blocking:** x." }],
+    })
+  })
+
+  it("keeps text that isn't the schema as the summary", () => {
+    expect(parseCodexOutput("## Code Review\nplain")).toEqual({
+      summary: "## Code Review\nplain",
+      comments: [],
+    })
+    expect(parseCodexOutput('{"verdict":"ok"}')).toEqual({
+      summary: '{"verdict":"ok"}',
+      comments: [],
+    })
+  })
+
+  it("is null with no message", () => {
+    expect(parseCodexOutput(" \n")).toBeNull()
+  })
+})
+
+describe("formatCodexComments", () => {
+  const finding = (path: string, line: number): CodexFinding => ({
+    path,
+    line,
+    body: "🟠 **required:** y.\n\nWhy.",
+  })
+
+  it("lists posted comments, then the ones off the diff", () => {
+    expect(
+      formatCodexComments([finding("a.ts", 1)], [finding("b.ts", 9)])
+    ).toBe(
+      [
+        "---",
+        "",
+        "**Inline comments (1)**",
+        "- `a.ts:1` 🟠 **required:** y.",
+        "",
+        "**Not on a changed line, so not posted inline (1)**",
+        "- `b.ts:9` 🟠 **required:** y.",
+      ].join("\n")
+    )
+  })
+
+  it("is empty with no comments", () => {
+    expect(formatCodexComments([], [])).toBe("")
+  })
+})
+
 describe("stripTitle", () => {
   it("drops either reviewer's title", () => {
     expect(stripTitle("## Code Review\n\n### Summary\nok")).toBe(
@@ -122,6 +188,7 @@ describe("buildSideBySide", () => {
       claude: "## Code Review\n### Verdict\nRequest Changes",
       claudeInline: "---\n\n**Inline comments (1)**\n- `a.ts:1` 🔴 x",
       codex: "## Codex Review\n### Verdict\nApprove",
+      codexInline: "---\n\n**Inline comments (1)**\n- `b.ts:2` 🟠 y",
       headSha: HEAD,
     })
 
@@ -132,7 +199,8 @@ describe("buildSideBySide", () => {
     expect(claudeAt).toBeGreaterThan(-1)
     expect(codexAt).toBeGreaterThan(claudeAt)
     expect(body).toContain('<td valign="top">\n\n### Verdict')
-    expect(body).toContain("**Inline comments (1)**")
+    expect(body).toContain("- `a.ts:1` 🔴 x")
+    expect(body.indexOf("- `b.ts:2` 🟠 y")).toBeGreaterThan(codexAt)
     expect(body).not.toContain("## Code Review")
     expect(body.endsWith(SIDE_BY_SIDE_MARKER)).toBe(true)
   })
@@ -143,6 +211,7 @@ describe("buildSideBySide", () => {
         claude: null,
         claudeInline: "",
         codex: "ok",
+        codexInline: "",
         headSha: HEAD,
       })
     ).toContain("Claude's review didn't finish")
@@ -151,6 +220,7 @@ describe("buildSideBySide", () => {
         claude: "ok",
         claudeInline: "",
         codex: null,
+        codexInline: "",
         headSha: HEAD,
       })
     ).toContain("Codex didn't return a review")
@@ -161,6 +231,7 @@ describe("buildSideBySide", () => {
       claude: "y".repeat(MAX_COLUMN_CHARS + 10),
       claudeInline: "",
       codex: "ok",
+      codexInline: "",
       headSha: HEAD,
     })
     expect(body).toContain("…cut to fit the comment.")

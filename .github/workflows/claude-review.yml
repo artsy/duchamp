@@ -370,21 +370,22 @@ jobs:
         with:
           openai-api-key: ${{ secrets.openai-api-key }}
           prompt-file: ${{ steps.prompt.outputs.codex_prompt_file }}
-          output-file: ${{ runner.temp }}/codex-review.md
+          output-file: ${{ runner.temp }}/codex-review.json
+          output-schema-file: ${{ github.workspace }}/.tooling/codex-experiment/output-schema.json
           # The legacy sandbox, because permission profiles are still beta. read-only
           # can read the related repo clones and the PR file under RUNNER_TEMP.
           sandbox: read-only
           model: gpt-6.1-terra
           effort: high
 
-      # Claude's own summary and inline comments stay; this adds one comment with both
-      # reviews side by side. See scripts/post-side-by-side.ts.
+      # Posts Codex's inline comments, then one comment with both reviews side by side.
+      # Claude's own summary and inline comments stay. See scripts/post-side-by-side.ts.
       - name: Post Claude | Codex
         continue-on-error: true
         if: ${{ !cancelled() && steps.codex-prep.outcome == 'success' }}
         run: npx ts-node .tooling/scripts/post-side-by-side.ts
         env:
-          CODEX_REVIEW_FILE: ${{ runner.temp }}/codex-review.md
+          CODEX_REVIEW_FILE: ${{ runner.temp }}/codex-review.json
           CLAUDE_OUTCOME: ${{ steps.review.outcome }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

@@ -693,7 +693,7 @@ export const formatCodexNote = (prFile: string): string =>
   [
     "\n## Running in Codex\n",
     'You are OpenAI Codex, in a read-only sandbox with no network. This prompt was written for Claude Code, so where it names a tool you don\'t have, do the following instead. Where this section disagrees with "How to Deliver Your Review", follow this section.\n',
-    "- **You cannot post comments or run `gh`.** Put every finding in the summary, with its `file:line`, including the ones the prompt says go inline. Return the summary as your final message; the workflow posts it next to Claude's.",
+    "- **You cannot post comments or run `gh`.** Your final message is JSON in the given schema, and the workflow posts it. `summary` is the summary comment, shown next to Claude's. `comments` are the inline comments the prompt asks for, in the same format: `path` from the repo root, and `line` in the PR's version of the file, on a line the PR adds or changes. A comment on any other line can't be posted inline and lands in your column instead.",
     `- **The PR description and comments** are in \`${prFile}\`, saved before this run's reviews. Read it where the prompt says to read the PR description or run \`gh pr view\`.`,
     "- **CLAUDE.md is not loaded for you,** whatever the prompt says. Read it from the repo root if it exists.",
     "- **Skills:** where the prompt says to run a skill, read `~/.agents/skills/<name>/SKILL.md` and follow it.",
