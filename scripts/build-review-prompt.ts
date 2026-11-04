@@ -769,17 +769,18 @@ const main = (): void => {
   const mergeRisk = inMergeRisk(process.env.PR_AUTHOR, labels)
   const codex = inCodex(process.env.PR_AUTHOR, labels)
 
-  // Lets the workflow skip minting the related repos token for reviews that don't use it.
+  // Lets the workflow skip minting the related repos token, and size the job for Codex.
   if (process.argv.includes("--check-experiment")) {
     const outputPath = process.env.GITHUB_OUTPUT
     if (outputPath) {
       fs.appendFileSync(
         outputPath,
-        `experiment=${inLean}\nrelated_repos=${inRelatedRepos}\n`
+        `experiment=${inLean}\nrelated_repos=${inRelatedRepos}\ncodex=${codex}\n`
       )
     }
     console.log(`Lean reviews experiment: ${inLean}`)
     console.log(`Related repos: ${inRelatedRepos}`)
+    console.log(`Codex: ${codex}`)
     return
   }
 

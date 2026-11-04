@@ -187,6 +187,11 @@ describe("earlierSideBySide", () => {
         user: bot("github-actions[bot]"),
         body: `b\n${SIDE_BY_SIDE_MARKER}`,
       },
+      {
+        id: 5,
+        user: bot("github-actions[bot]"),
+        body: `quotes ${SIDE_BY_SIDE_MARKER} mid-text\n${FOOTER_SENTINEL}`,
+      },
     ]
     expect(earlierSideBySide(comments, 4).map(c => c.id)).toEqual([1])
   })

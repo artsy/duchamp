@@ -52,8 +52,11 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    env:
+      HAS_OPENAI_KEY: ${{ secrets.openai-api-key != '' }}
     outputs:
       should-review: ${{ steps.org-check.outputs.should-review }}
+      review-timeout: ${{ steps.timeout.outputs.minutes }}
     steps:
       - name: Checkout PR repo (sparse - config only)
         uses: actions/checkout@v4
@@ -159,11 +162,29 @@ jobs:
               core.setOutput('should-review', 'false');
             }
 
+      # Codex runs after Claude in the same job, so its PRs get extra time instead of
+      # cutting into Claude's. Expressions can't add numbers, so this step does it.
+      - name: Size the review job
+        id: timeout
+        if: steps.org-check.outputs.should-review == 'true'
+        run: |
+          codex=$(PR_AUTHOR="$PR_AUTHOR" PR_LABELS="$PR_LABELS" GITHUB_OUTPUT=/dev/null \
+            npx ts-node .tooling/scripts/build-review-prompt.ts --check-experiment | sed -n 's/^Codex: //p')
+          extra=0
+          if [ "$codex" = "true" ] && [ "$HAS_OPENAI_KEY" = "true" ]; then extra=$CODEX_EXTRA_MINUTES; fi
+          echo "minutes=$((TIMEOUT_MINUTES + extra))" >> "$GITHUB_OUTPUT"
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
+          # The Codex step's own limit plus a few minutes to post the comparison.
+          CODEX_EXTRA_MINUTES: 20
+
   review:
     needs: check
     if: needs.check.outputs.should-review == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ inputs.timeout-minutes }}
+    timeout-minutes: ${{ fromJSON(needs.check.outputs.review-timeout || format('{0}', inputs.timeout-minutes)) }}
     concurrency:
       group: claude-review-${{ github.repository }}-${{ github.event.pull_request.number }}
       cancel-in-progress: true
@@ -269,7 +290,13 @@ jobs:
       - name: Save the PR for Codex
         continue-on-error: true
         if: steps.prompt.outputs.codex == 'true' && steps.prompt.outputs.review_mode != 'skip' && env.HAS_OPENAI_KEY == 'true'
-        run: gh pr view "$PR_NUMBER" --comments > "$PR_FILE"
+        # Without --comments gh prints the description; with it, only the comments.
+        run: |
+          {
+            gh pr view "$PR_NUMBER"
+            echo
+            gh pr view "$PR_NUMBER" --comments
+          } > "$PR_FILE"
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_FILE: ${{ steps.prompt.outputs.codex_pr_file }}
@@ -327,13 +354,17 @@ jobs:
         run: |
           mkdir -p "$HOME/.agents/skills"
           cp -R "$HOME/.claude/skills/." "$HOME/.agents/skills/"
-          # Checkout leaves the job's token in .git/config, where Codex could read it.
+          # Checkout leaves the job's token in .git/config, and claude-code-action puts its
+          # app token in the origin URL. Codex can read both, so remove them.
           git config --local --unset-all http.https://github.com/.extraheader || true
           git -C .tooling config --local --unset-all http.https://github.com/.extraheader || true
+          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -C .tooling remote set-url origin https://github.com/artsy/duchamp.git
 
       - name: Run Codex review
         id: codex
         continue-on-error: true
+        timeout-minutes: 15
         if: ${{ !cancelled() && steps.codex-prep.outcome == 'success' }}
         uses: openai/codex-action@v1
         with:
