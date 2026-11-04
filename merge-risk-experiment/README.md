@@ -18,25 +18,35 @@ Leaving is the same in reverse: remove your login, or drop the label.
 
 ## What the review adds
 
-Right after `### Summary`:
+Right after `### Summary`, collapsed to one row like the review stats:
 
 ```
-### Merge Risk: medium
+<details>
+<summary><b>Merge risk: medium</b> · Alignment ✅ · Impact 👀 · Verification ⚠️ · Rollback ✅ · Error detection 👀</summary>
 
 **Safe because:** the rail's only consumers pass `artworks` through
 `ArtworkRail.tsx:41`, which this PR keeps; walked it
 
 **Alignment:** good ✅
+
 **Impact:** medium 👀
 - `ArtworkRail` also renders on Home and Artist pages (`HomeArtworkRail.tsx:18`)
+
 **Verification:** poor ⚠️
 - No before/after screenshots or recording of the rail on a device
+
 **Rollback cost:** low ✅
+
 **Error detection:** decent 👀
 - A blank rail would not throw; nothing reports an empty render
 
 **Before you merge:** scroll the Home rail on Android with 50+ artworks.
+
+</details>
 ```
+
+Readers see the rating and the five verdicts at a glance and open the block for the
+reasons.
 
 - **Five categories.** Alignment with the description, Impact, Verification, Rollback
   cost and Error detection, each rated ⚠️ / 👀 / ✅. A weighted score, kept out of the
