@@ -41,8 +41,8 @@ import { formatStackSkillsSection, resolveStackSkills } from "./stack-skills"
  * The lean reviews experiment adds AGENTS.md and the diff in the prompt, and re-reviews of
  * only what changed since the last review. A PR is in it when its author is listed in
  * lean-reviews-experiment/participants.yml, or when it carries the LEAN_LABEL. See
- * lean-reviews-experiment/README.md. Related repos, security, best practices and merge
- * risk are their own experiments; see review/experiments.md.
+ * lean-reviews-experiment/README.md. Related repos, security, best practices, merge
+ * risk and Codex are their own experiments; see review/experiments.md.
  */
 
 interface ExcludeConfig {
@@ -76,6 +76,9 @@ export const SECURITY_LABEL = "security-review"
 
 /** Label that opts a single PR into the merge risk experiment. */
 export const MERGE_RISK_LABEL = "ai-review-merge-risk"
+
+/** Label that opts a single PR into the Codex experiment. */
+export const CODEX_LABEL = "ai-review-codex"
 
 export const DEFAULT_MODEL = "claude-opus-5-5"
 
@@ -232,6 +235,15 @@ export const inMergeRisk = (
   labels.some(label => label.toLowerCase() === MERGE_RISK_LABEL) ||
   (!!author &&
     loadParticipants("merge-risk-experiment").includes(author.toLowerCase()))
+
+/** Whether this PR also gets a Codex review: listed authors and labelled PRs. */
+export const inCodex = (
+  author: string | undefined,
+  labels: string[]
+): boolean =>
+  labels.some(label => label.toLowerCase() === CODEX_LABEL) ||
+  (!!author &&
+    loadParticipants("codex-experiment").includes(author.toLowerCase()))
 
 /** Claude Code CLI flags that select the model for this review. */
 export const resolveModelArgs = (
@@ -654,6 +666,59 @@ export const LEAN_INLINE_SECTION = [
   "",
 ].join("\n")
 
+/** The opening lines of every review prompt, Claude's and Codex's. */
+export const formatPreamble = (
+  repo = "",
+  prNumber = "",
+  baseRef = ""
+): string =>
+  [
+    `REPO: ${repo}`,
+    `PR NUMBER: ${prNumber}`,
+    `BASE BRANCH: ${baseRef}`,
+    "",
+    "The PR branch has been checked out. You have full access to the codebase.",
+    `Use Read, Glob, and Grep to explore files. Use \`git diff origin/${baseRef}...HEAD\` to see changes.`,
+    "",
+    "If an AGENTS.md or CLAUDE.md file exists in the repo root, read it first for project-specific guidelines.",
+    "",
+    "",
+  ].join("\n")
+
+/**
+ * Codex reviews the same prompt as Claude. This note goes last and covers only what
+ * Codex can't do the same way: it has no GitHub tools, no network and no subagents.
+ */
+export const formatCodexNote = (prFile: string): string =>
+  [
+    "\n## Running in Codex\n",
+    'You are OpenAI Codex, in a read-only sandbox with no network. This prompt was written for Claude Code, so where it names a tool you don\'t have, do the following instead. Where this section disagrees with "How to Deliver Your Review", follow this section.\n',
+    "- **You cannot post comments or run `gh`.** Put every finding in the summary, with its `file:line`, including the ones the prompt says go inline. Return the summary as your final message; the workflow posts it.",
+    "- **Title the summary `## Codex Review`** instead of `## Code Review`, so readers can tell it from Claude's.",
+    `- **The PR description and comments** are in \`${prFile}\`, saved before this run's reviews. Read it where the prompt says to read the PR description or run \`gh pr view\`.`,
+    "- **CLAUDE.md is not loaded for you,** whatever the prompt says. Read it from the repo root if it exists.",
+    "- **Skills:** where the prompt says to run a skill, read `~/.agents/skills/<name>/SKILL.md` and follow it.",
+    "- **Subagents:** you have none. Where the prompt hands work to one, do it yourself and say so in the summary.",
+    "",
+  ].join("\n")
+
+/** Writes Codex's prompt next to the PR file it reads. Undefined when the write fails. */
+export const writeCodexPrompt = (
+  prompt: string,
+  dir: string = process.env.RUNNER_TEMP || os.tmpdir()
+): { promptFile: string; prFile: string } | undefined => {
+  const prFile = path.join(dir, "pr.md")
+  const promptFile = path.join(dir, "codex-prompt.md")
+  try {
+    fs.writeFileSync(promptFile, prompt + formatCodexNote(prFile))
+    return { promptFile, prFile }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`Warning: Failed to write the Codex prompt: ${message}`)
+    return undefined
+  }
+}
+
 /** The prompt in order; experiment reviews get the inline rules before delivery. */
 export const assemblePrompt = (
   parts: { head: string; context: string; delivery: string },
@@ -703,6 +768,7 @@ const main = (): void => {
   const labelled = hasSecurityLabel(labels)
   const bestPractices = inBestPractices(process.env.PR_AUTHOR, labels)
   const mergeRisk = inMergeRisk(process.env.PR_AUTHOR, labels)
+  const codex = inCodex(process.env.PR_AUTHOR, labels)
 
   // Lets the workflow skip minting the related repos token for reviews that don't use it.
   if (process.argv.includes("--check-experiment")) {
@@ -788,6 +854,11 @@ const main = (): void => {
   const related = resolveRelatedRepos(inRelatedRepos)
   // These sections go in the head so the diff's budget leaves room for them.
   const promptHead =
+    formatPreamble(
+      process.env.GITHUB_REPOSITORY,
+      process.env.PR_NUMBER,
+      process.env.BASE_REF
+    ) +
     buildPrompt() +
     formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true") +
     security +
@@ -817,6 +888,8 @@ const main = (): void => {
   const modelArgs = [resolveModelArgs(model, changes.tier), addDirArgs(related)]
     .filter(Boolean)
     .join(" ")
+  const codexFiles = codex ? writeCodexPrompt(prompt) : undefined
+  console.log(`Codex review: ${codexFiles !== undefined}`)
 
   // Set the output for GitHub Actions
   if (outputPath) {
@@ -824,7 +897,7 @@ const main = (): void => {
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\n${formatReviewModeOutputs(context.reviewMode)}`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\ncodex=${codexFiles !== undefined}\ncodex_prompt_file=${codexFiles?.promptFile ?? ""}\ncodex_pr_file=${codexFiles?.prFile ?? ""}\n${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {
