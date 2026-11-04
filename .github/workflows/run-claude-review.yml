@@ -6,6 +6,7 @@ on:
 
 jobs:
   claude-review:
-    uses: artsy/duchamp/.github/workflows/claude-review.yml@main
+    uses: artsy/duchamp/.github/workflows/claude-review.yml@feat/codex-review-experiment # TESTING: revert to main before merge
     secrets:
       anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+      openai-api-key: ${{ secrets.OPENAI_API_KEY }}
