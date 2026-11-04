@@ -61,8 +61,8 @@ CLAUDE.md first) moved from the YAML into the script, so both reviewers get them
 
 The Codex steps are the last in the `review` job, so they reuse the checkout, the
 related repo clones and the installed skills. `openai/codex-action@v1` runs with
-`sandbox: read-only`, the default `drop-sudo` safety strategy, Codex's default model
-and `high` effort, like Claude. Codex runs even when Claude's review failed, and its
+`sandbox: read-only`, the default `drop-sudo` safety strategy, `gpt-6.1-terra` and
+`high` effort, like Claude. The model is named so a new Codex release can't change it. Codex runs even when Claude's review failed, and its
 failures don't turn the review check red.
 
 Before Codex starts, the workflow removes the job's GitHub token from both checkouts'

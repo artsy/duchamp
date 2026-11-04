@@ -343,6 +343,7 @@ jobs:
           # The legacy sandbox, because permission profiles are still beta. read-only
           # can read the related repo clones and the PR file under RUNNER_TEMP.
           sandbox: read-only
+          model: gpt-6.1-terra
           effort: high
 
       # Claude's own summary and inline comments stay; this adds one comment with both
