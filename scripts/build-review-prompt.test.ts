@@ -526,11 +526,10 @@ describe("formatPreamble", () => {
 describe("formatCodexNote", () => {
   const note = formatCodexNote("/tmp/r/pr.md")
 
-  it("puts every finding in the summary, under its own title", () => {
+  it("puts every finding in the summary", () => {
     expect(note).toContain("## Running in Codex")
     expect(note).toContain("cannot post comments")
     expect(note).toContain("including the ones the prompt says go inline")
-    expect(note).toContain("`## Codex Review`")
   })
 
   it("points at the PR file, skills on disk and no subagents", () => {

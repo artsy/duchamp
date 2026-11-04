@@ -1,7 +1,7 @@
 # GitHub logins enrolled in the Codex experiment.
 #
 # PRs by anyone on this list get a second review from OpenAI Codex, next to Claude's,
-# from the same prompt. Codex posts one summary comment titled "Codex Review". This is
+# from the same prompt, shown next to Claude's in one "Claude | Codex" comment. This is
 # separate from the other experiments: a PR can be in any mix of them.
 #
 # Only repos that pass the `openai-api-key` secret run Codex. Elsewhere, enrolment

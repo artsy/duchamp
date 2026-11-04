@@ -345,17 +345,15 @@ jobs:
           sandbox: read-only
           effort: high
 
-      - name: Post Codex review
+      # Claude's own summary and inline comments stay; this adds one comment with both
+      # reviews side by side. See scripts/post-side-by-side.ts.
+      - name: Post Claude | Codex
         continue-on-error: true
-        if: ${{ !cancelled() && steps.codex.outcome == 'success' }}
-        run: |
-          if [ -s "$REVIEW_FILE" ]; then
-            gh pr comment "$PR_NUMBER" --body-file "$REVIEW_FILE"
-          else
-            echo "Codex returned no review" >&2
-            exit 1
-          fi
+        if: ${{ !cancelled() && steps.codex-prep.outcome == 'success' }}
+        run: npx ts-node .tooling/scripts/post-side-by-side.ts
         env:
-          REVIEW_FILE: ${{ runner.temp }}/codex-review.md
+          CODEX_REVIEW_FILE: ${{ runner.temp }}/codex-review.md
+          CLAUDE_OUTCOME: ${{ steps.review.outcome }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ github.token }}
