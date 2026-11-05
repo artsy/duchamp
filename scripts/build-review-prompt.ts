@@ -666,6 +666,17 @@ export const LEAN_INLINE_SECTION = [
   "",
 ].join("\n")
 
+/** Experiment reviews only: a summary that adds to the inline comments instead of repeating them. */
+export const LEAN_SUMMARY_SECTION = [
+  "\n## Keeping the Summary Short\n",
+  'This section narrows "Report Format". Where they disagree, follow this section.\n',
+  "- **Open with one or two sentences, 40 words at most.** Give the verdict and the worst problem. Don't list the other findings; the sections below do that.",
+  '- **Don\'t repeat inline comments.** Under Critical Issues, give each one line with its `file:line`; the inline comment carries the detail. Under Required Changes, list only findings that have no inline comment. If every one has one, write "See the inline comments."',
+  "- **Keep each bullet to about 30 words** under Suggestions, Questions for Author and Nits: one sentence for the problem, one for the fix. Give one example, not several.",
+  "- **Ask only what the code can't answer**, in one sentence.",
+  "",
+].join("\n")
+
 /** The opening lines of every review prompt, Claude's and Codex's. */
 export const formatPreamble = (
   repo = "",
@@ -718,14 +729,14 @@ export const writeCodexPrompt = (
   }
 }
 
-/** The prompt in order; experiment reviews get the inline rules before delivery. */
+/** The prompt in order; experiment reviews get the inline and summary rules before delivery. */
 export const assemblePrompt = (
   parts: { head: string; context: string; delivery: string },
   inLean: boolean
 ): string =>
   parts.head +
   parts.context +
-  (inLean ? LEAN_INLINE_SECTION : "") +
+  (inLean ? LEAN_INLINE_SECTION + LEAN_SUMMARY_SECTION : "") +
   parts.delivery
 
 const REVIEW_TOOLS =

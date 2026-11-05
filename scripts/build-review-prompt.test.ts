@@ -25,6 +25,7 @@ import {
   LEAN_INLINE_SECTION,
   LEAN_LABEL,
   LEAN_LEGACY_LABEL,
+  LEAN_SUMMARY_SECTION,
   LIGHT_EFFORT,
   LIGHT_MODEL,
   loadParticipants,
@@ -1300,12 +1301,26 @@ describe("LEAN_INLINE_SECTION", () => {
   })
 })
 
+describe("LEAN_SUMMARY_SECTION", () => {
+  it("caps the opening and each bullet", () => {
+    expect(LEAN_SUMMARY_SECTION).toContain("40 words at most")
+    expect(LEAN_SUMMARY_SECTION).toContain("about 30 words")
+  })
+
+  it("keeps inline findings out of Required Changes", () => {
+    expect(LEAN_SUMMARY_SECTION).toContain(
+      "list only findings that have no inline comment"
+    )
+    expect(LEAN_SUMMARY_SECTION).toContain('"See the inline comments."')
+  })
+})
+
 describe("assemblePrompt", () => {
   const parts = { head: "HEAD", context: "CONTEXT", delivery: "DELIVERY" }
 
-  it("puts the inline rules before delivery for experiment reviews", () => {
+  it("puts the inline and summary rules before delivery for experiment reviews", () => {
     expect(assemblePrompt(parts, true)).toBe(
-      `HEADCONTEXT${LEAN_INLINE_SECTION}DELIVERY`
+      `HEADCONTEXT${LEAN_INLINE_SECTION}${LEAN_SUMMARY_SECTION}DELIVERY`
     )
   })
 

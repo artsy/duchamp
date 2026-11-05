@@ -125,6 +125,8 @@ verdict emoji in the order below; the rest shows when they open it.
 
 - List gaps only. A category with nothing to add is one line with its verdict.
 - Keep bullets short. Two or three per category at most.
+- Give the proof level on the "Safe because" line. Elsewhere, mention it only when a
+  fact is unproven; don't tag bullets with "pointed at the line" or "walked it".
 - A blast-radius risk that is a real bug in this PR is a finding. Post it with the
   usual severity rules and refer to it here; don't write it twice.
 - Leave out "Before you merge" when nothing is worth checking.
