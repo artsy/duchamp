@@ -18,6 +18,9 @@ cheaper and quieter. Lean PRs:
   5) reaches 6; below that it becomes a suggestion in the summary. Blocking findings
   always go inline. The rules are `LEAN_INLINE_SECTION` in
   `scripts/build-review-prompt.ts`.
+- get a shorter summary. It opens with at most 40 words, keeps each bullet to about
+  30, and doesn't repeat what the inline comments say. The rules are
+  `LEAN_SUMMARY_SECTION` in the same file.
 
 Every review uses the same prompt file and model, in the experiment or not. The
 experiment adds sections to that prompt. Reading other Artsy repos used to be part of
