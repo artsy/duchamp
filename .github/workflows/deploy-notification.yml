@@ -1,0 +1,65 @@
+name: Deploy Slack Notification
+
+on:
+  workflow_call:
+    secrets:
+      anthropic-api-key:
+        required: true
+      slack-bot-token:
+        required: true
+    inputs:
+      release-branch:
+        description: "Base branch that deploy PRs merge into"
+        default: "release"
+        required: false
+        type: string
+      model:
+        description: "Claude model used to write the digest"
+        default: "claude-opus-4-8"
+        required: false
+        type: string
+
+jobs:
+  notify:
+    # Only run for merged deploy PRs into the release branch
+    if: |
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == inputs.release-branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout tooling repo
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .tooling
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install tooling dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: .tooling
+        env:
+          YARN_IGNORE_PATH: 1
+
+      - name: Generate and post deploy digest
+        run: npx ts-node .tooling/scripts/deploy-notification.ts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DEPLOY_PR_NUMBER: ${{ github.event.pull_request.number }}
+          DEPLOY_PR_URL: ${{ github.event.pull_request.html_url }}
+          ANTHROPIC_API_KEY: ${{ secrets.anthropic-api-key }}
+          SLACK_BOT_TOKEN: ${{ secrets.slack-bot-token }}
+          CLAUDE_MODEL: ${{ inputs.model }}
+          CONFIG_PATH: .tooling/deploy-notifications.yml
