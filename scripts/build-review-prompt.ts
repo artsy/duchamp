@@ -99,9 +99,10 @@ const toolingPath = (...parts: string[]): string =>
 export const loadReviewPrompt = (): string =>
   fs.readFileSync(toolingPath("review", "prompt.md"), "utf8")
 
-/** Logins in an experiment's participants.yml, lowercased. */
-export const loadParticipants = (
-  experiment = "lean-reviews-experiment"
+/** A list in an experiment's participants.yml, lowercased. */
+const loadEnrolment = (
+  experiment: string,
+  key: "participants" | "repos"
 ): string[] => {
   const participantsPath = toolingPath(experiment, "participants.yml")
 
@@ -110,24 +111,29 @@ export const loadParticipants = (
   }
 
   try {
-    const parsed = yaml.load(fs.readFileSync(participantsPath, "utf8")) as {
-      participants?: unknown
-    } | null
-    const participants = parsed?.participants
+    const parsed = yaml.load(
+      fs.readFileSync(participantsPath, "utf8")
+    ) as Record<string, unknown> | null
+    const entries = parsed?.[key]
 
-    if (!Array.isArray(participants)) {
+    if (!Array.isArray(entries)) {
       return []
     }
 
-    return participants
-      .filter((login): login is string => typeof login === "string")
-      .map(login => login.toLowerCase())
+    return entries
+      .filter((entry): entry is string => typeof entry === "string")
+      .map(entry => entry.toLowerCase())
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`Warning: Failed to parse participants.yml: ${message}`)
     return []
   }
 }
+
+/** Logins in an experiment's participants.yml, lowercased. */
+export const loadParticipants = (
+  experiment = "lean-reviews-experiment"
+): string[] => loadEnrolment(experiment, "participants")
 
 /**
  * Labels arrive from the workflow as a JSON array. Fall back to a comma-separated
@@ -207,14 +213,20 @@ export const pickReviewMode = (
     ? { mode: "full", reason: `${SECURITY_LABEL} label just added` }
     : resolveReviewMode(repo, prNumber, ignorePaths, inLean)
 
-/** Whether this review is in the security experiment: listed authors and labelled PRs. */
+/**
+ * Whether this review is in the security experiment: listed authors, every PR in a
+ * listed repo, and labelled PRs.
+ */
 export const inSecurityExperiment = (
   author: string | undefined,
-  labels: string[]
+  labels: string[],
+  repo: string | undefined
 ): boolean =>
   hasSecurityLabel(labels) ||
   (!!author &&
-    loadParticipants("security-experiment").includes(author.toLowerCase()))
+    loadParticipants("security-experiment").includes(author.toLowerCase())) ||
+  (!!repo &&
+    loadEnrolment("security-experiment", "repos").includes(repo.toLowerCase()))
 
 /** Whether this review is in the best-practices experiment: listed authors and labelled PRs. */
 export const inBestPractices = (
@@ -774,7 +786,11 @@ const main = (): void => {
   const labels = parseLabels(process.env.PR_LABELS)
   const inLean = inLeanReviews(process.env.PR_AUTHOR, labels)
   const inRelatedRepos = inRelatedReposExperiment(process.env.PR_AUTHOR, labels)
-  const inSecurity = inSecurityExperiment(process.env.PR_AUTHOR, labels)
+  const inSecurity = inSecurityExperiment(
+    process.env.PR_AUTHOR,
+    labels,
+    process.env.GITHUB_REPOSITORY
+  )
   const labelled = hasSecurityLabel(labels)
   const bestPractices = inBestPractices(process.env.PR_AUTHOR, labels)
   const mergeRisk = inMergeRisk(process.env.PR_AUTHOR, labels)

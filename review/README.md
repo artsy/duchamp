@@ -119,7 +119,8 @@ standard until those numbers show light reviews hold up.
 The main review weighs security against everything else. For risky changes, a
 second agent reads only for security:
 
-- **When.** PRs in the [security experiment](../security-experiment/README.md) that
+- **When.** PRs in the [security experiment](../security-experiment/README.md), by
+  enrolled author or in an enrolled repo such as gravity or metaphysics, that
   touch a sensitive file (the same `SENSITIVE_PATTERNS` as
   [Model routing](#model-routing)), and any PR with the `security-review` label, which
   also puts the PR in that experiment.

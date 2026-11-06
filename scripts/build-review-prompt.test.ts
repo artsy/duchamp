@@ -573,7 +573,7 @@ describe("writeCodexPrompt", () => {
 describe("inSecurityExperiment", () => {
   it("includes listed authors, in any case", () => {
     mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
-    expect(inSecurityExperiment("mounirdhahri", [])).toBe(true)
+    expect(inSecurityExperiment("mounirdhahri", [], undefined)).toBe(true)
     expect(
       mockFs.readFileSync.mock.calls.map(([p]) => String(p))
     ).toContainEqual(
@@ -585,13 +585,24 @@ describe("inSecurityExperiment", () => {
 
   it("includes any PR with the label", () => {
     mockFiles({})
-    expect(inSecurityExperiment("someone", ["Security-Review"])).toBe(true)
+    expect(
+      inSecurityExperiment("someone", ["Security-Review"], undefined)
+    ).toBe(true)
+  })
+
+  it("includes every PR in a listed repo, in any case", () => {
+    mockFiles({ "participants.yml": "repos:\n  - artsy/gravity\n" })
+    expect(inSecurityExperiment("someone", [], "Artsy/Gravity")).toBe(true)
+    expect(inSecurityExperiment(undefined, [], "artsy/gravity")).toBe(true)
   })
 
   it("leaves out everyone else", () => {
-    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
-    expect(inSecurityExperiment("someone", ["bug"])).toBe(false)
-    expect(inSecurityExperiment(undefined, [])).toBe(false)
+    mockFiles({
+      "participants.yml":
+        "participants:\n  - MounirDhahri\nrepos:\n  - artsy/gravity\n",
+    })
+    expect(inSecurityExperiment("someone", ["bug"], "artsy/eigen")).toBe(false)
+    expect(inSecurityExperiment(undefined, [], undefined)).toBe(false)
   })
 })
 
