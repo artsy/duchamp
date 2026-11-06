@@ -5,6 +5,9 @@
 # subagent and posts the leads it confirms. This is separate from the review
 # experiment: a PR can be in one, both or neither.
 #
+# Every PR in a repo under `repos` gets the pass on the same terms, whoever wrote it.
+# Use the full `owner/name`.
+#
 # To join or leave, add or remove your login and open a PR. Case does not matter.
 # Anyone can also try it on a single PR by adding the `security-review` label, which
 # runs the pass on the whole change, without being on this list.
@@ -13,3 +16,7 @@
 
 participants:
   - MounirDhahri
+
+repos:
+  - artsy/gravity
+  - artsy/metaphysics
