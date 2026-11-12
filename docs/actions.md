@@ -17,6 +17,7 @@ This document provides detailed reference information for all GitHub Actions ava
 | `incident-next-on-call.yml`          | Remind engineers of an upcoming on-call shift | For scheduled Slack next-on-call reminders |
 | `incident-facilitate-review.yml`     | Pick a random facilitator for the Incident Review | For scheduled Slack Incident Review facilitator selection |
 | `daily-datadog-triage.yml`           | Open one pre-triaged issue from Datadog errors | For private repos triaging production errors |
+| `autofix-datadog.yml`                | Draft PRs (test + fix) for new Datadog errors | For private Rails repos, with `autofix-run-ci.yml` |
 
 ## Action Reference
 
@@ -618,6 +619,117 @@ jobs:
 
 ---
 
+### autofix-datadog.yml
+
+**Purpose**: Turn **new** production errors from Datadog Error Tracking into draft PRs, each with a regression test and a fix, for a human to read before CI runs
+
+**Use Case**: Private Rails repos (Gravity, Volt) whose errors have readable Ruby frames. Success is merged PRs, not PRs opened
+
+Copy `templates/run-autofix.yml` and `templates/run-autofix-ci.yml` into the calling repo. They carry the schedule (Monday and Thursday), the dispatch inputs and the secret names.
+
+```yaml
+jobs:
+  autofix:
+    uses: artsy/duchamp/.github/workflows/autofix-datadog.yml@main
+    with:
+      services: "gravity gravity.grape gravity.sidekiq gravity.sneakers"
+      dd-issue-id: ${{ inputs.dd-issue-id || '' }}
+      dry-run: ${{ inputs.dry-run || false }}
+    secrets:
+      anthropic-api-key: ${{ secrets.ANTHROPIC_AUTOFIX_KEY }}
+      dd-api-key: ${{ secrets.DD_AUTOFIX_API_KEY }}
+      dd-app-key: ${{ secrets.DD_AUTOFIX_APP_KEY }}
+      triage-issues-token: ${{ secrets.TRIAGE_ISSUES_TOKEN }}
+      app-id: ${{ secrets.AUTOFIX_APP_ID }}
+      app-private-key: ${{ secrets.AUTOFIX_APP_PRIVATE_KEY }}
+```
+
+**Jobs:**
+
+1. `stale` (no model): closes `autofix` draft PRs idle for 28 days, deletes the branch, and says so on the triage issue.
+2. `select` (no model): Error Tracking issues for `services` in `env:production`, first seen in the last 5 days. Drops issues that already have a `[triage] … (dd:<id>)` issue or the `autofix/attempted` label, network and infra errors, security errors (never autofixed), errors below `min-events` / `min-users`, and errors whose top in-app frame (taken from a trace stack when the raising frame is a gem) isn't under `app/` or `lib/`. Screens the message, endpoint and URL with `scan_text.py`. Keeps up to `issue-limit` by events and writes a packet per error. Every dropped error is listed with its reason in the step summary.
+3. `triage` (model, read-only): the `datadog-triage` skill on select's candidates, with `ISSUE_LIMIT` and a JSON result. It opens the `[triage]` issues. A missing result fails the run; each entry is checked against the candidates and the repo, and issue numbers come from GitHub.
+4. `fix` (model, one job per issue, two at a time): the agent may read the repo and edit only `app/`, `lib/` (not `lib/tasks/`) and `spec/` (not the spec helpers or `spec/support/`). It cannot run commands other than `git log` and `git blame`, reach the network, or use MCP. It follows the vendored `diagnosing-bugs` and `pr` skills (`vendor/skills/`) as adapted in `scripts/autofix/prompt.md`, and writes a test first, then the fix, or skips.
+5. `publish` (no model, fresh runner): applies the patches to the base commit and checks git's own view of them. Then opens a draft PR with two `[skip ci]` commits (test, then fix), requests `reviewer` and the suspect author (from `git blame` on the top in-app frame), and comments on the triage issue. A rejected or skipped patch gets a comment with the reason instead.
+
+**Publish rejects a patch unless:**
+
+- the agent's decision is `fix`
+- it changes at least one file under `spec/` and one outside it
+- every path is in the allowlist above; no dot-files
+- every file is a regular `100644` file: no symlinks, submodules, mode changes or binaries
+- added plus removed lines stay within `max-lines`, spec lines counted at half weight
+- it adds no `[DEBUG-…]` tags
+
+Paths matching `sensitive-paths` still publish, labelled `autofix/sensitive` and noted under Merge Danger.
+
+**Security model:**
+
+- Error messages, URLs and params are attacker-controlled (Volt's Datadog holds SSTI and `/etc/passwd` probes). They are cut short, stripped of hidden characters and fenced as data, and screened before any model reads them.
+- The fix job holds only the spend-capped Anthropic key and a read-only `github.token`. A PreToolUse hook (`scripts/autofix/fix-guard.sh`) resolves real paths and blocks everything outside the limits above, even if the repo's own Claude settings allow more. The repo's `.claude/settings.json` and `.mcp.json` are removed for that job, so no repo hook runs on files the agent writes.
+- After the agent, the fix job runs only inline shell from the workflow. It builds the patches with git in a pristine clone the agent never saw.
+- No agent-written code runs anywhere until a human adds `autofix/run-ci`. The PR body drops the agent's mentions, closing keywords, issue refs and links outside `app.datadoghq.com` and `github.com/artsy`.
+
+**One-time setup in the calling repo:**
+
+1. Sync the `datadog-triage` and `screen-untrusted-input` skills to `.claude/skills/` from [artsy/agent-tooling](https://github.com/artsy/agent-tooling). The run aborts without them.
+2. Create the `triage`, `triage/fixed` and `triage/rejected` labels. Publish creates the `autofix*` labels.
+3. Add the secrets below and set the repository variable `AUTOFIX_DRY_RUN=true`.
+4. Add `run-autofix-ci.yml` (below).
+5. Remove `AUTOFIX_DRY_RUN` once dry runs have produced at least three patches worth reviewing, and no sooner than two weeks in.
+
+**Dry run and single-issue runs:** run the workflow by hand with `dry-run` checked, or set `AUTOFIX_DRY_RUN=true`. Everything runs except the writes in `publish`: no branch, PR, label or comment. The step summary and the `autofix-dry-run-<id>` artifact show the PR body or the rejection. Triage still opens its issues. To retry one error, or try one without triage, pass its Datadog issue id as `dd-issue-id`. That skips ranking, dedupe, the gates and triage, but not the screen.
+
+**Inputs:**
+
+- `services` (required): Datadog services to search, e.g. `gravity gravity.grape`
+- `dd-site` (optional): Datadog site. Default: `datadoghq.com`
+- `issue-limit` (optional): Most errors attempted per run. Default: `3`
+- `min-events` / `min-users` (optional): Thresholds over the last 5 days. Defaults: `1` / `0`
+- `max-lines` (optional): Patch size cap, spec lines at half weight. Default: `150`
+- `sensitive-paths` (optional): Globs to label and flag, not block. Default: empty
+- `triage-model` / `fix-model` (optional): Defaults `claude-sonnet-5-5` / `claude-opus-5-5`
+- `reviewer` (optional): Always requested; assignee when there's no suspect author. Default: `MounirDhahri`
+- `dd-issue-id` (optional): One Datadog issue, as above
+- `dry-run` (optional): Stop before any write in publish. Default: `false`
+
+**Secrets:**
+
+- `anthropic-api-key` (required): A dedicated Anthropic key with a monthly spend limit
+- `dd-api-key` / `dd-app-key` (required): Read-only Datadog keys, app key scoped `apm_read` + `error_tracking_read`
+- `triage-issues-token` (required): `issues:write` on the calling repo only, for the triage skill
+- `app-id` / `app-private-key` (required): The autofix GitHub App, with contents, pull-requests and issues write on the calling repo
+
+---
+
+### autofix-run-ci.yml
+
+**Purpose**: Run the repo's CI on an autofix PR once someone has read it
+
+**Use Case**: Every repo that uses `autofix-datadog.yml`. Autofix commits carry `[skip ci]`, so CI never runs agent-written code on its own
+
+Copy `templates/run-autofix-ci.yml` into the calling repo. When someone with write access adds the `autofix/run-ci` label to an `autofix/*` PR, this pushes an empty commit (through the API, without checking out the code) on top of the head they labelled. If the branch moved since, the push fails.
+
+```yaml
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  run-ci:
+    if: github.event.label.name == 'autofix/run-ci'
+    uses: artsy/duchamp/.github/workflows/autofix-run-ci.yml@main
+    secrets:
+      app-id: ${{ secrets.AUTOFIX_APP_ID }}
+      app-private-key: ${{ secrets.AUTOFIX_APP_PRIVATE_KEY }}
+```
+
+**Secrets:**
+
+- `app-id` / `app-private-key` (required): The same GitHub App as `autofix-datadog.yml`
+
+---
+
 ## Reusable Action
 
 ### setup-and-install
@@ -662,6 +774,7 @@ jobs:
 | Scheduled upcoming on-call reminders | `incident-next-on-call.yml`    | Notifies engineers ahead of their shift starting |
 | Scheduled Incident Review facilitator selection | `incident-facilitate-review.yml` | Picks a random on-call participant to facilitate |
 | Daily production error triage    | `daily-datadog-triage.yml`           | Private repos only; opens one issue per run |
+| Draft fixes for new production errors | `autofix-datadog.yml` + `autofix-run-ci.yml` | Private Rails repos; a human reads each PR before CI runs |
 | Custom workflows                | `setup-and-install` action           | Use as a step in custom workflows    |
 
 ## Security Considerations
