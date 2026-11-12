@@ -64,6 +64,11 @@ describe("parseSearch", () => {
     expect(second.impactedUsers).toBe(0)
   })
 
+  it("lowercases the first seen version", () => {
+    const [issue] = parseSearch(searchResponse([{ id: "x", firstSeen: 1 }]))
+    expect(issue.firstSeenVersion).toBe("abcdef1234567")
+  })
+
   it("returns nothing for an empty response", () => {
     expect(parseSearch({})).toEqual([])
   })

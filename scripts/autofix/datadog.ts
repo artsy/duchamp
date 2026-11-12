@@ -100,7 +100,7 @@ export const toIssue = (
   functionName: str(attributes?.function_name),
   state: str(attributes?.state),
   firstSeen: num(attributes?.first_seen),
-  firstSeenVersion: str(attributes?.first_seen_version),
+  firstSeenVersion: str(attributes?.first_seen_version).toLowerCase(),
   totalCount: num(counts.total_count),
   impactedUsers: num(counts.impacted_users),
 })
