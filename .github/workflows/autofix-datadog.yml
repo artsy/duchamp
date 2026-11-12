@@ -1,0 +1,784 @@
+name: Autofix Datadog Errors
+
+# Turns new production errors into draft PRs: stale → select → triage → fix →
+# publish. Only triage and fix run a model; select and publish decide by rule.
+# Setup and security model: docs/actions.md, "autofix-datadog.yml".
+
+on:
+  workflow_call:
+    secrets:
+      anthropic-api-key:
+        description: "Dedicated Anthropic key with a monthly spend limit. The only secret the fix agent's job holds"
+        required: true
+      dd-api-key:
+        description: "Datadog API key"
+        required: true
+      dd-app-key:
+        description: "Datadog app key, scoped apm_read + error_tracking_read"
+        required: true
+      triage-issues-token:
+        description: "issues:write on this repo only, for the triage skill"
+        required: true
+      app-id:
+        description: "ID of the autofix GitHub App"
+        required: true
+      app-private-key:
+        description: "Private key of the autofix GitHub App (contents, pull-requests and issues write on this repo)"
+        required: true
+    inputs:
+      services:
+        description: "Datadog services to search, separated by spaces or commas, e.g. 'gravity gravity.grape'"
+        required: true
+        type: string
+      dd-site:
+        description: "Datadog site"
+        default: "datadoghq.com"
+        required: false
+        type: string
+      issue-limit:
+        description: "Most errors to attempt per run"
+        default: 3
+        required: false
+        type: number
+      min-events:
+        description: "Fewest events in the last 5 days for an error to be attempted"
+        default: 1
+        required: false
+        type: number
+      min-users:
+        description: "Fewest impacted users for an error to be attempted"
+        default: 0
+        required: false
+        type: number
+      max-lines:
+        description: "Most changed lines in a patch, spec lines counted at half weight"
+        default: 150
+        required: false
+        type: number
+      sensitive-paths:
+        description: "Globs (e.g. 'app/models/order*.rb lib/payments/**'). Matching patches still publish, labelled autofix/sensitive"
+        default: ""
+        required: false
+        type: string
+      triage-model:
+        description: "Model for the triage skill"
+        default: "claude-sonnet-5-5"
+        required: false
+        type: string
+      fix-model:
+        description: "Model for the fix agent"
+        default: "claude-opus-5-5"
+        required: false
+        type: string
+      reviewer:
+        description: "Always requested as reviewer, and assignee when no suspect author is found"
+        default: "MounirDhahri"
+        required: false
+        type: string
+      dd-issue-id:
+        description: "Fix this one Datadog issue: skips ranking, dedupe and triage. For retries and single-issue dry runs"
+        default: ""
+        required: false
+        type: string
+      dry-run:
+        description: "Stop before pushing a branch. vars.AUTOFIX_DRY_RUN == 'true' does the same"
+        default: false
+        required: false
+        type: boolean
+
+concurrency:
+  group: autofix-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  DRY_RUN: ${{ inputs.dry-run || vars.AUTOFIX_DRY_RUN == 'true' }}
+
+jobs:
+  stale:
+    if: inputs.dd-issue-id == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    steps:
+      - name: Mint app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+
+      - name: Close autofix PRs idle for 28 days
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          cutoff="$(date -u -d '28 days ago' +%Y-%m-%dT%H:%M:%SZ)"
+          gh pr list --repo "$GITHUB_REPOSITORY" --state open --label autofix --limit 200 \
+            --json number,isDraft,updatedAt,headRefName,body \
+            --jq ".[] | select(.isDraft and .updatedAt < \"$cutoff\")
+                  | [.number, .headRefName,
+                     ([(.body // \"\") | capture(\"This PR resolves #(?<n>[0-9]+)\")][0].n // \"\")]
+                  | @tsv" > "$RUNNER_TEMP/stale.tsv"
+          while IFS=$'\t' read -r number branch issue; do
+            case "$branch" in autofix/*) ;; *) continue ;; esac
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "Dry run: would close #$number ($branch)"
+              continue
+            fi
+            gh pr close "$number" --repo "$GITHUB_REPOSITORY" --delete-branch \
+              --comment "Closed by autofix: no activity for 28 days."
+            if [ -n "$issue" ]; then
+              gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" \
+                --body "Autofix closed its draft PR #$number after 28 days without activity."
+            fi
+          done < "$RUNNER_TEMP/stale.tsv"
+
+  select:
+    needs: stale
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      count: ${{ steps.select.outputs.count }}
+      ids: ${{ steps.select.outputs.ids }}
+      base-sha: ${{ steps.base.outputs.sha }}
+      default-branch: ${{ steps.repo.outputs.default-branch }}
+    steps:
+      - name: Refuse to run against a public repo
+        id: repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DD_ISSUE_ID: ${{ inputs.dd-issue-id }}
+        run: |
+          set -euo pipefail
+          # Assigned on its own line so a failing gh aborts here (see daily-datadog-triage.yml).
+          REPO_JSON="$(gh repo view "$GITHUB_REPOSITORY" --json isPrivate,defaultBranchRef)"
+          if [ "$(jq -r .isPrivate <<<"$REPO_JSON")" != "true" ]; then
+            echo "AUTOFIX FAILED: autofix is for private repos only." >&2
+            exit 1
+          fi
+          if [ -n "$DD_ISSUE_ID" ] && ! [[ "$DD_ISSUE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,63}$ ]]; then
+            echo "AUTOFIX FAILED: dd-issue-id is not a Datadog issue id." >&2
+            exit 1
+          fi
+          echo "default-branch=$(jq -r .defaultBranchRef.name <<<"$REPO_JSON")" >> "$GITHUB_OUTPUT"
+
+      # Full history for git blame; blobs are fetched on demand.
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.repo.outputs.default-branch }}
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Record base commit
+        id: base
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout tooling repo
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .tooling
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install tooling dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: .tooling
+        env:
+          YARN_IGNORE_PATH: 1
+
+      - name: Select candidates
+        id: select
+        run: npx ts-node .tooling/scripts/autofix/select.ts
+        env:
+          DD_API_KEY: ${{ secrets.dd-api-key }}
+          DD_APP_KEY: ${{ secrets.dd-app-key }}
+          DD_SITE: ${{ inputs.dd-site }}
+          SERVICES: ${{ inputs.services }}
+          ISSUE_LIMIT: ${{ inputs.issue-limit }}
+          MIN_EVENTS: ${{ inputs.min-events }}
+          MIN_USERS: ${{ inputs.min-users }}
+          DD_ISSUE_ID: ${{ inputs.dd-issue-id }}
+          REPO_DIR: ${{ github.workspace }}
+          OUT_DIR: ${{ runner.temp }}/autofix/select
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          SCAN_SCRIPT: ${{ github.workspace }}/.claude/skills/screen-untrusted-input/scan_text.py
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload packets
+        if: steps.select.outputs.count != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: autofix-select
+          path: ${{ runner.temp }}/autofix/select
+          retention-days: 7
+
+  triage:
+    needs: select
+    if: needs.select.result == 'success' && needs.select.outputs.count != '0' && inputs.dd-issue-id == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # claude-code-action fetches an OIDC token on startup even when given an API key.
+      id-token: write
+    outputs:
+      count: ${{ steps.validate.outputs.count }}
+      ids: ${{ steps.validate.outputs.ids }}
+    steps:
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.select.outputs.base-sha }}
+          fetch-depth: 50
+
+      - name: Checkout tooling repo
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .tooling
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install tooling dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: .tooling
+        env:
+          YARN_IGNORE_PATH: 1
+
+      - name: Download packets
+        uses: actions/download-artifact@v4
+        with:
+          name: autofix-select
+          path: ${{ runner.temp }}/autofix/select
+
+      # The skill considers only the ids listed here, in this order.
+      - name: Hand the candidates to the skill
+        run: cp "$RUNNER_TEMP/autofix/select/error-candidates.md" error-candidates.md
+
+      # Same pinned binary and digest as daily-datadog-triage.yml; bump both together.
+      - name: Install pup (Datadog CLI)
+        env:
+          PUP_VERSION: "1.10.4"
+          PUP_SHA256: "9d99ca0229fb0c767c6f74e07a0efa3e12091e9cfc297757e190247d26b537c5"
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/pup.tar.gz" \
+            "https://github.com/DataDog/pup/releases/download/v${PUP_VERSION}/pup_${PUP_VERSION}_Linux_x86_64.tar.gz"
+          echo "$PUP_SHA256  $RUNNER_TEMP/pup.tar.gz" | sha256sum -c -
+          sudo tar -xzf "$RUNNER_TEMP/pup.tar.gz" -C /usr/local/bin pup
+          pup --version
+
+      - name: Pre-install Datadog agent skills (dd-pup, dd-logs, dd-apm)
+        env:
+          DD_SKILLS_SHA: "6a5635ac5fea33a22ca6a57d3bc903944f87fa70"
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout \
+            https://github.com/datadog-labs/agent-skills "$RUNNER_TEMP/dd-skills"
+          git -C "$RUNNER_TEMP/dd-skills" checkout --quiet "$DD_SKILLS_SHA"
+          mkdir -p "$HOME/.claude/skills"
+          cp -r "$RUNNER_TEMP"/dd-skills/{dd-pup,dd-logs,dd-apm} "$HOME/.claude/skills/"
+          rm -rf "$RUNNER_TEMP/dd-skills"
+
+      # As in daily-datadog-triage.yml: the skill's settings file is the one source of
+      # the tool policy, and an unsubstituted hook path would fail open.
+      - name: Materialize read-only settings
+        run: |
+          set -euo pipefail
+          SKILL_DIR="$GITHUB_WORKSPACE/.claude/skills/datadog-triage"
+          if [ ! -f "$SKILL_DIR/SKILL.md" ] || [ ! -f "$SKILL_DIR/reference/structured-result.md" ]; then
+            echo "AUTOFIX FAILED: no datadog-triage skill with a structured result at .claude/skills/datadog-triage." >&2
+            echo "Sync it from artsy/agent-tooling (plugins/artsy-artnet/skills/datadog-triage)." >&2
+            exit 1
+          fi
+          SETTINGS="$RUNNER_TEMP/triage-settings.json"
+          sed "s|__SKILL_DIR__|$SKILL_DIR|g" \
+            "$SKILL_DIR/reference/settings.example.json" > "$SETTINGS"
+          if grep -q '__SKILL_DIR__' "$SETTINGS"; then
+            echo "AUTOFIX FAILED: __SKILL_DIR__ unsubstituted." >&2
+            exit 1
+          fi
+          chmod +x "$SKILL_DIR/reference/hooks/block-secret-reads.sh"
+          ALLOWED="$(jq -er '.permissions.allow | join(",")' "$SETTINGS")"
+          DENIED="$(jq -er '.permissions.deny | join(",")' "$SETTINGS")"
+          if [ -z "$ALLOWED" ] || [ -z "$DENIED" ]; then
+            echo "AUTOFIX FAILED: empty allow/deny list in settings.example.json." >&2
+            exit 1
+          fi
+          SCHEMA="$(npx ts-node .tooling/scripts/autofix/triage-result.ts --schema)"
+          {
+            echo "TRIAGE_SETTINGS=$SETTINGS"
+            echo "TRIAGE_ALLOWED_TOOLS=$ALLOWED"
+            echo "TRIAGE_DISALLOWED_TOOLS=$DENIED"
+            echo "TRIAGE_SCHEMA=$SCHEMA"
+          } >> "$GITHUB_ENV"
+
+      - name: Run Datadog triage (read-only)
+        id: triage
+        uses: anthropics/claude-code-action@v1
+        env:
+          DD_API_KEY: ${{ secrets.dd-api-key }}
+          DD_APP_KEY: ${{ secrets.dd-app-key }}
+          DD_SITE: ${{ inputs.dd-site }}
+          GH_TOKEN: ${{ secrets.triage-issues-token }}
+        with:
+          anthropic_api_key: ${{ secrets.anthropic-api-key }}
+          # With --json-schema the action fails the step when no result comes back,
+          # which is what the skill does when its preflight fails.
+          claude_args: >-
+            --model ${{ inputs.triage-model }}
+            --settings ${{ env.TRIAGE_SETTINGS }}
+            --allowedTools "${{ env.TRIAGE_ALLOWED_TOOLS }}"
+            --disallowedTools "${{ env.TRIAGE_DISALLOWED_TOOLS }}"
+            --json-schema '${{ env.TRIAGE_SCHEMA }}'
+          prompt: |
+            Use the `datadog-triage` skill. Follow it exactly.
+
+            REPO: ${{ github.repository }}
+            ISSUE_LIMIT: ${{ inputs.issue-limit }}
+
+            `error-candidates.md` at the repo root lists the candidates.
+            Return the structured result.
+
+            `pup` is authenticated via DD_API_KEY / DD_APP_KEY / DD_SITE in the
+            environment, and dd-pup / dd-logs / dd-apm are pre-installed. `gh` is
+            authenticated with issues:write and nothing else.
+
+      - name: Validate the triage result
+        id: validate
+        run: npx ts-node .tooling/scripts/autofix/triage-result.ts
+        env:
+          STRUCTURED_OUTPUT: ${{ steps.triage.outputs.structured_output }}
+          CANDIDATES: ${{ needs.select.outputs.ids }}
+          REPO_DIR: ${{ github.workspace }}
+          BASE_SHA: ${{ needs.select.outputs.base-sha }}
+          OUT_DIR: ${{ runner.temp }}/autofix/triage
+          SCAN_SCRIPT: ${{ github.workspace }}/.claude/skills/screen-untrusted-input/scan_text.py
+          GH_TOKEN: ${{ secrets.triage-issues-token }}
+
+      - name: Upload triage results
+        if: steps.validate.outputs.count != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: autofix-triage
+          path: ${{ runner.temp }}/autofix/triage
+          retention-days: 7
+
+  fix:
+    needs: [select, triage]
+    if: >-
+      !cancelled() && needs.select.result == 'success' && (
+        (needs.triage.result == 'success' && needs.triage.outputs.count != '0') ||
+        (inputs.dd-issue-id != '' && needs.select.outputs.count != '0'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # No id-token: the action gets github.token instead of exchanging OIDC for its app.
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        dd-issue-id: ${{ fromJSON(needs.triage.outputs.ids || needs.select.outputs.ids) }}
+    env:
+      DD_ISSUE_ID: ${{ matrix.dd-issue-id }}
+      BASE_SHA: ${{ needs.select.outputs.base-sha }}
+    steps:
+      # Full history for `git log <first_seen_version>..HEAD`. No credentials are kept,
+      # so blobs can't be fetched later: no partial clone here.
+      - name: Checkout target repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.select.outputs.base-sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout tooling repo
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .autofix-tooling
+          persist-credentials: false
+
+      # Tooling, packet and outputs live outside the repo tree the agent works in.
+      - name: Prepare work directories
+        run: |
+          set -euo pipefail
+          [[ "$DD_ISSUE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,63}$ ]]
+          AUTOFIX="$RUNNER_TEMP/autofix"
+          mkdir -p "$AUTOFIX"/{in,packet,out,artifact}
+          mv .autofix-tooling "$AUTOFIX/tooling"
+          echo "AUTOFIX=$AUTOFIX" >> "$GITHUB_ENV"
+
+      - name: Download packets
+        uses: actions/download-artifact@v4
+        with:
+          name: autofix-select
+          path: ${{ runner.temp }}/autofix/in/select
+
+      - name: Download triage results
+        if: inputs.dd-issue-id == ''
+        uses: actions/download-artifact@v4
+        with:
+          name: autofix-triage
+          path: ${{ runner.temp }}/autofix/in/triage
+
+      - name: Stage this error's packet
+        run: |
+          set -euo pipefail
+          cp "$AUTOFIX/in/select/packets/$DD_ISSUE_ID/context.md" \
+             "$AUTOFIX/in/select/packets/$DD_ISSUE_ID/meta.json" "$AUTOFIX/packet/"
+          if [ -f "$AUTOFIX/in/triage/triage-$DD_ISSUE_ID.json" ]; then
+            cp "$AUTOFIX/in/triage/triage-$DD_ISSUE_ID.json" "$AUTOFIX/packet/triage.json"
+          fi
+          rm -rf "$AUTOFIX/in"
+
+      # The agent never sees this clone; the patch is built here from the allowlisted
+      # paths alone.
+      - name: Make a pristine clone
+        run: |
+          set -euo pipefail
+          git -c core.hooksPath=/dev/null clone --quiet --no-checkout "$GITHUB_WORKSPACE" "$AUTOFIX/pristine"
+          git -C "$AUTOFIX/pristine" -c core.hooksPath=/dev/null checkout --quiet --detach "$BASE_SHA"
+
+      - name: Install vendored skills
+        run: |
+          mkdir -p "$HOME/.claude/skills"
+          cp -R "$AUTOFIX/tooling/vendor/skills/diagnosing-bugs" "$AUTOFIX/tooling/vendor/skills/pr" \
+            "$HOME/.claude/skills/"
+
+      # The repo's own Claude settings could add hooks that run code on files the
+      # agent writes, before anyone has read them. The patch only takes app/, lib/ and
+      # spec/, so removing these never reaches the PR.
+      - name: Materialize fix settings
+        run: |
+          set -euo pipefail
+          rm -f .claude/settings.json .claude/settings.local.json .mcp.json
+          SECRET_HOOK="$GITHUB_WORKSPACE/.claude/skills/datadog-triage/reference/hooks/block-secret-reads.sh"
+          if [ ! -f "$SECRET_HOOK" ]; then
+            echo "AUTOFIX FAILED: no block-secret-reads.sh in the synced datadog-triage skill." >&2
+            exit 1
+          fi
+          chmod +x "$SECRET_HOOK" "$AUTOFIX/tooling/scripts/autofix/fix-guard.sh"
+          SETTINGS="$AUTOFIX/fix-settings.json"
+          sed -e "s|__TOOLING__|$AUTOFIX/tooling|g" -e "s|__REPO__|$GITHUB_WORKSPACE|g" \
+              -e "s|__OUT__|$AUTOFIX/out|g" -e "s|__PACKET__|$AUTOFIX/packet|g" \
+            "$AUTOFIX/tooling/scripts/autofix/fix-settings.json" > "$SETTINGS"
+          # A hook command that doesn't exist is not an error, so a placeholder left
+          # behind would fail open.
+          if grep -Eq '__[A-Z]+__' "$SETTINGS"; then
+            echo "AUTOFIX FAILED: unsubstituted placeholder in fix settings." >&2
+            exit 1
+          fi
+          ALLOWED="$(jq -er '.permissions.allow | join(",")' "$SETTINGS")"
+          DENIED="$(jq -er '.permissions.deny | join(",")' "$SETTINGS")"
+          {
+            echo "FIX_SETTINGS=$SETTINGS"
+            echo "FIX_ALLOWED_TOOLS=$ALLOWED"
+            echo "FIX_DISALLOWED_TOOLS=$DENIED"
+          } >> "$GITHUB_ENV"
+
+      - name: Build the prompt
+        id: prompt
+        run: |
+          set -euo pipefail
+          delimiter="PROMPT_$(openssl rand -hex 16)"
+          {
+            echo "text<<$delimiter"
+            echo "REPO: $GITHUB_REPOSITORY"
+            echo
+            sed -e "s|__OUT__|$AUTOFIX/out|g" -e "s|__PACKET__|$AUTOFIX/packet|g" \
+              "$AUTOFIX/tooling/scripts/autofix/prompt.md"
+            echo "$delimiter"
+          } >> "$GITHUB_OUTPUT"
+
+      # The action writes github.token (contents: read, this job only) into the origin
+      # URL. The agent can't read .git and has no network tool.
+      - name: Run the fix agent
+        id: agent
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.anthropic-api-key }}
+          github_token: ${{ github.token }}
+          claude_args: >-
+            --model ${{ inputs.fix-model }}
+            --max-turns 40
+            --settings ${{ env.FIX_SETTINGS }}
+            --allowedTools "${{ env.FIX_ALLOWED_TOOLS }}"
+            --disallowedTools "${{ env.FIX_DISALLOWED_TOOLS }}"
+          prompt: ${{ steps.prompt.outputs.text }}
+
+      # From here on nothing from the repo or duchamp runs, only this shell. git runs
+      # in the pristine clone, whose config and hooks the agent never touched.
+      - name: Build patches from the pristine clone
+        id: patches
+        if: ${{ !cancelled() && steps.agent.outcome != 'skipped' }}
+        run: |
+          set -euo pipefail
+          pristine="$AUTOFIX/pristine"
+          paths=()
+          for dir in app lib spec; do
+            rm -rf "${pristine:?}/$dir"
+            if [ -e "$GITHUB_WORKSPACE/$dir" ] || [ -L "$GITHUB_WORKSPACE/$dir" ]; then
+              cp -a "$GITHUB_WORKSPACE/$dir" "$pristine/$dir"
+            fi
+            if [ -e "$pristine/$dir" ] || [ -n "$(git -C "$pristine" ls-files -- "$dir")" ]; then
+              paths+=("$dir")
+            fi
+          done
+          if [ "${#paths[@]}" -gt 0 ]; then
+            git -C "$pristine" -c core.hooksPath=/dev/null add -A -- "${paths[@]}"
+          fi
+          diff=(-c core.hooksPath=/dev/null diff --cached --binary --no-ext-diff --no-textconv --no-renames --no-color)
+          git -C "$pristine" "${diff[@]}" -- spec > "$AUTOFIX/artifact/test.patch"
+          git -C "$pristine" "${diff[@]}" -- app lib > "$AUTOFIX/artifact/fix.patch"
+          for file in result.json pr-body.md; do
+            if [ -f "$AUTOFIX/out/$file" ] && [ ! -L "$AUTOFIX/out/$file" ]; then
+              head -c 65536 "$AUTOFIX/out/$file" > "$AUTOFIX/artifact/$file"
+            fi
+          done
+          cp "$AUTOFIX/packet/meta.json" "$AUTOFIX/artifact/meta.json"
+          wc -l "$AUTOFIX"/artifact/*.patch
+
+      - name: Record cost
+        if: ${{ !cancelled() && steps.agent.outputs.execution_file != '' }}
+        env:
+          EXECUTION_FILE: ${{ steps.agent.outputs.execution_file }}
+        run: |
+          set -euo pipefail
+          jq '[.[] | select(.type == "result")] | last
+              | {total_cost_usd, num_turns, duration_ms, subtype, is_error}' \
+            "$EXECUTION_FILE" > "$AUTOFIX/artifact/cost.json"
+          echo "Fix agent for \`$DD_ISSUE_ID\`: \$$(jq -r '.total_cost_usd // 0' "$AUTOFIX/artifact/cost.json"), $(jq -r '.num_turns // 0' "$AUTOFIX/artifact/cost.json") turns" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the patch
+        if: ${{ !cancelled() && steps.patches.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: autofix-${{ matrix.dd-issue-id }}
+          path: ${{ runner.temp }}/autofix/artifact
+          retention-days: 30
+
+  publish:
+    needs: [select, triage, fix]
+    if: ${{ !cancelled() && needs.fix.result != 'skipped' && needs.select.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        dd-issue-id: ${{ fromJSON(needs.triage.outputs.ids || needs.select.outputs.ids) }}
+    env:
+      DD_ISSUE_ID: ${{ matrix.dd-issue-id }}
+      BASE_SHA: ${{ needs.select.outputs.base-sha }}
+    steps:
+      - name: Mint app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+
+      # A missing artifact means the fix job failed or timed out: skip, don't fail.
+      - name: Download the patch
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: autofix-${{ matrix.dd-issue-id }}
+          path: ${{ runner.temp }}/autofix/in
+
+      - name: Note a missing patch
+        if: steps.download.outcome != 'success'
+        run: |
+          echo "No patch for \`$DD_ISSUE_ID\`: the fix job did not finish. Skipped." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkout target repo
+        if: steps.download.outcome == 'success'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.select.outputs.base-sha }}
+          persist-credentials: false
+
+      - name: Checkout tooling repo
+        if: steps.download.outcome == 'success'
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .autofix-tooling
+          persist-credentials: false
+
+      # Out of the repo tree before any patch is applied, so a patch can't reach it.
+      - name: Move tooling out of the repo
+        if: steps.download.outcome == 'success'
+        run: |
+          set -euo pipefail
+          [[ "$DD_ISSUE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,63}$ ]]
+          mv .autofix-tooling "$RUNNER_TEMP/autofix/tooling"
+
+      - name: Setup Node.js
+        if: steps.download.outcome == 'success'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable Corepack
+        if: steps.download.outcome == 'success'
+        run: corepack enable
+
+      - name: Install tooling dependencies
+        if: steps.download.outcome == 'success'
+        run: yarn install --frozen-lockfile
+        working-directory: ${{ runner.temp }}/autofix/tooling
+        env:
+          YARN_IGNORE_PATH: 1
+
+      - name: Apply the patches
+        id: apply
+        if: steps.download.outcome == 'success'
+        run: |
+          set -euo pipefail
+          outcome=applied
+          for name in test.patch fix.patch; do
+            patch="$RUNNER_TEMP/autofix/in/$name"
+            [ -s "$patch" ] || continue
+            if ! git -c core.hooksPath=/dev/null apply --index --whitespace=nowarn -- "$patch"; then
+              outcome=failed
+            fi
+          done
+          echo "outcome=$outcome" >> "$GITHUB_OUTPUT"
+
+      # Reads only git's view of the staged patches; never runs the repo's code.
+      - name: Check the patch and write the PR body
+        id: decide
+        if: steps.download.outcome == 'success'
+        working-directory: ${{ runner.temp }}/autofix/tooling
+        run: npx ts-node scripts/autofix/publish.ts
+        env:
+          REPO_DIR: ${{ github.workspace }}
+          IN_DIR: ${{ runner.temp }}/autofix/in
+          OUT_DIR: ${{ runner.temp }}/autofix/publish
+          APPLY_OUTCOME: ${{ steps.apply.outputs.outcome }}
+          MAX_LINES: ${{ inputs.max-lines }}
+          SENSITIVE_PATHS: ${{ inputs.sensitive-paths }}
+          REVIEWER: ${{ inputs.reviewer }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Dry run, stop here
+        if: steps.decide.outcome == 'success' && env.DRY_RUN == 'true'
+        run: |
+          {
+            echo "Dry run: no branch pushed, no PR opened, no comment posted."
+            for file in "$RUNNER_TEMP"/autofix/publish/*.md; do
+              echo; echo "<details><summary>$(basename "$file")</summary>"; echo
+              echo '````markdown'; cat "$file"; echo '````'; echo "</details>"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the dry run
+        if: steps.decide.outcome == 'success' && env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: autofix-dry-run-${{ matrix.dd-issue-id }}
+          path: ${{ runner.temp }}/autofix/publish
+          retention-days: 30
+
+      - name: Make sure the labels exist
+        if: steps.decide.outcome == 'success' && env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh label create autofix --repo "$GITHUB_REPOSITORY" --color 5319E7 --description "Draft PR from autofix" 2>/dev/null || true
+          gh label create autofix/attempted --repo "$GITHUB_REPOSITORY" --color C5DEF5 --description "Autofix tried this triage issue" 2>/dev/null || true
+          gh label create autofix/sensitive --repo "$GITHUB_REPOSITORY" --color D93F0B --description "Autofix patch touches a sensitive path" 2>/dev/null || true
+          gh label create autofix/run-ci --repo "$GITHUB_REPOSITORY" --color 0E8A16 --description "Reviewed: run CI on this autofix PR" 2>/dev/null || true
+
+      - name: Open the draft PR
+        id: pr
+        if: steps.decide.outputs.verdict == 'publish' && env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          TITLE: ${{ steps.decide.outputs.title }}
+          BRANCH: ${{ steps.decide.outputs.branch }}
+          REVIEWERS: ${{ steps.decide.outputs.reviewers }}
+          ASSIGNEE: ${{ steps.decide.outputs.assignee }}
+          SENSITIVE: ${{ steps.decide.outputs.sensitive }}
+          DEFAULT_BRANCH: ${{ needs.select.outputs.default-branch }}
+        run: |
+          set -euo pipefail
+          open="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json url --jq '.[0].url // ""')"
+          if [ -n "$open" ]; then
+            echo "::warning::An autofix PR is already open for $BRANCH: $open"
+            echo "url=$open" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          bot_id="$(gh api "/users/${APP_SLUG}%5Bbot%5D" --jq .id)"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+          # [skip ci]: the repo's CI runs this code only after a human adds autofix/run-ci.
+          git -c core.hooksPath=/dev/null commit --quiet --no-verify \
+            -m "test: reproduce ${TITLE#fix: } [skip ci]" -- spec
+          git -c core.hooksPath=/dev/null commit --quiet --no-verify -m "$TITLE [skip ci]"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
+          git -c core.hooksPath=/dev/null -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+            push --force --quiet origin "HEAD:refs/heads/$BRANCH"
+          labels=(--label autofix)
+          if [ "$SENSITIVE" = "true" ]; then labels+=(--label autofix/sensitive); fi
+          url="$(gh pr create --repo "$GITHUB_REPOSITORY" --draft --base "$DEFAULT_BRANCH" \
+            --head "$BRANCH" --title "$TITLE" --body-file "$RUNNER_TEMP/autofix/publish/pr-body.md" "${labels[@]}")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          number="${url##*/}"
+          reviewer_args=()
+          IFS=',' read -ra list <<<"$REVIEWERS"
+          for reviewer in "${list[@]}"; do reviewer_args+=(-f "reviewers[]=$reviewer"); done
+          # A reviewer without access, or the PR's own author, gets a 422. Not fatal.
+          gh api -X POST "repos/$GITHUB_REPOSITORY/pulls/$number/requested_reviewers" "${reviewer_args[@]}" >/dev/null \
+            || echo "::warning::Could not request reviewers $REVIEWERS"
+          gh pr edit "$number" --repo "$GITHUB_REPOSITORY" --add-assignee "$ASSIGNEE" \
+            || echo "::warning::Could not assign $ASSIGNEE"
+          echo "Opened $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report on the triage issue
+        if: >-
+          steps.decide.outcome == 'success' && env.DRY_RUN != 'true' &&
+          steps.decide.outputs.triage_issue != '' && (steps.decide.outputs.verdict != 'publish' || steps.pr.outputs.url != '')
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          ISSUE: ${{ steps.decide.outputs.triage_issue }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+        run: |
+          set -euo pipefail
+          comment="$RUNNER_TEMP/autofix/publish/issue-comment.md"
+          if [ -n "$PR_URL" ]; then
+            printf 'Autofix opened a draft PR: %s\n\nCI has not run on it yet.\n' "$PR_URL" > "$comment"
+          fi
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$comment"
+          gh issue edit "$ISSUE" --repo "$GITHUB_REPOSITORY" --add-label autofix/attempted
