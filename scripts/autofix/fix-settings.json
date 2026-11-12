@@ -51,15 +51,6 @@
             "command": "__TOOLING__/scripts/autofix/fix-guard.sh __REPO__ __OUT__ __PACKET__"
           }
         ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "__REPO__/.claude/skills/datadog-triage/reference/hooks/block-secret-reads.sh"
-          }
-        ]
       }
     ]
   }

@@ -292,3 +292,16 @@ describe("other tools", () => {
     expect(result.status).toBe(2)
   })
 })
+
+it("runs only hooks from duchamp's tooling, which the target repo cannot remove", () => {
+  const settings = JSON.parse(
+    fs.readFileSync(path.join(__dirname, "fix-settings.json"), "utf8")
+  )
+  const commands = settings.hooks.PreToolUse.flatMap(
+    (entry: { hooks: { command: string }[] }) =>
+      entry.hooks.map(hook => hook.command)
+  )
+  expect(commands).toEqual([
+    "__TOOLING__/scripts/autofix/fix-guard.sh __REPO__ __OUT__ __PACKET__",
+  ])
+})
