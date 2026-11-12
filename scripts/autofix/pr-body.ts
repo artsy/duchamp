@@ -1,5 +1,6 @@
 import type { Meta } from "./select"
 import { clip, oneLine, stripHidden } from "./text"
+import type { Confidence } from "./triage-result"
 
 /**
  * The draft PR's title, body and the triage issue comment. Everything the fix agent
@@ -14,11 +15,13 @@ export const MAX_HYPOTHESES = 5
 
 export interface FixResult {
   decision: "fix" | "skip"
-  confidence: string
+  confidence: Confidence | ""
   root_cause: string
   hypotheses: string[]
   summary: string
 }
+
+const CONFIDENCE: unknown[] = ["high", "medium", "low"]
 
 /** result.json as the agent wrote it, or null if it isn't the agreed shape. */
 export const parseResult = (raw: string): FixResult | null => {
@@ -48,7 +51,7 @@ export const parseResult = (raw: string): FixResult | null => {
     : []
   return {
     decision: parsed.decision,
-    confidence: text(parsed.confidence),
+    confidence: CONFIDENCE.includes(parsed.confidence) ? parsed.confidence : "",
     root_cause: text(parsed.root_cause),
     hypotheses,
     summary: text(parsed.summary),

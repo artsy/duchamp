@@ -1,4 +1,5 @@
 import type { GuardResult } from "./guards"
+import type { FixResult } from "./pr-body"
 import { branchName, decide, positiveInt, reviewers } from "./publish"
 
 const passing: GuardResult = {
@@ -9,7 +10,7 @@ const passing: GuardResult = {
   files: ["app/x.rb", "spec/x_spec.rb"],
 }
 
-const result = (decision: "fix" | "skip") => ({
+const result = (decision: "fix" | "skip"): FixResult => ({
   decision,
   confidence: "high",
   root_cause: "",

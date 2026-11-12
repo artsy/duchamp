@@ -52,6 +52,23 @@ describe("parseResult", () => {
     })
   })
 
+  it("drops a confidence outside high, medium or low", () => {
+    const result = parseResult(
+      JSON.stringify({ decision: "fix", confidence: "fixes #9 @x" })
+    )
+    expect(result?.confidence).toBe("")
+    expect(
+      prBody({
+        meta,
+        result: result!,
+        agentBody: "",
+        triageIssue: null,
+        sensitive: [],
+        weightedLines: 1,
+      })
+    ).toContain("- Agent confidence: not given;")
+  })
+
   it.each(["", "not json", '{"decision":"merge"}', "null"])(
     "returns null for %p",
     raw => {
