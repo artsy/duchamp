@@ -47,6 +47,14 @@ const run = (tool: string, input: Record<string, unknown>) =>
 const allowed = (tool: string, input: Record<string, unknown>) =>
   run(tool, input).status === 0
 
+// Claude Code treats any other non-zero exit as a warning and runs the call.
+const blocked = (tool: string, input: Record<string, unknown>) => {
+  const result = run(tool, input)
+  return (
+    result.status === 2 && result.stderr.includes("BLOCKED by fix-guard.sh")
+  )
+}
+
 describe("Edit and Write", () => {
   it.each([
     "app/models/artwork.rb",
@@ -64,8 +72,8 @@ describe("Edit and Write", () => {
     expect(allowed("Write", { file_path: path.join(out, "pr-body.md") })).toBe(
       true
     )
-    expect(allowed("Write", { file_path: path.join(out, "other.md") })).toBe(
-      false
+    expect(blocked("Write", { file_path: path.join(out, "other.md") })).toBe(
+      true
     )
   })
 
@@ -83,36 +91,34 @@ describe("Edit and Write", () => {
     "../outside.rb",
     "/proc/self/environ",
   ])("blocks %s", file => {
-    const result = run("Edit", { file_path: file })
-    expect(result.status).toBe(2)
-    expect(result.stderr).toContain("BLOCKED by fix-guard.sh")
+    expect(blocked("Edit", { file_path: file })).toBe(true)
   })
 
   it("resolves symlinks before checking", () => {
-    expect(allowed("Write", { file_path: "app/config_link/secrets.yml" })).toBe(
-      false
+    expect(blocked("Write", { file_path: "app/config_link/secrets.yml" })).toBe(
+      true
     )
-    expect(allowed("Edit", { file_path: "app/models/secrets.rb" })).toBe(false)
+    expect(blocked("Edit", { file_path: "app/models/secrets.rb" })).toBe(true)
   })
 
   it("blocks the hook's own directory and the packet", () => {
     expect(
-      allowed("Edit", { file_path: path.join(packet, "context.md") })
-    ).toBe(false)
-    expect(allowed("Edit", { file_path: HOOK })).toBe(false)
+      blocked("Edit", { file_path: path.join(packet, "context.md") })
+    ).toBe(true)
+    expect(blocked("Edit", { file_path: HOOK })).toBe(true)
   })
 
   it("blocks NotebookEdit and MultiEdit the same way", () => {
-    expect(allowed("NotebookEdit", { notebook_path: "config/x.ipynb" })).toBe(
-      false
+    expect(blocked("NotebookEdit", { notebook_path: "config/x.ipynb" })).toBe(
+      true
     )
     expect(allowed("MultiEdit", { file_path: "app/models/a.rb" })).toBe(true)
   })
 
   it("checks the path the tool writes to, not another argument", () => {
     expect(
-      allowed("Write", { command: "app/models/a.rb", file_path: "Gemfile" })
-    ).toBe(false)
+      blocked("Write", { command: "app/models/a.rb", file_path: "Gemfile" })
+    ).toBe(true)
   })
 })
 
@@ -189,17 +195,22 @@ describe("Bash", () => {
     "bundle exec rspec",
     "cat .git/config",
   ])("blocks %p", command => {
-    expect(allowed("Bash", { command })).toBe(false)
+    expect(blocked("Bash", { command })).toBe(true)
   })
 })
 
 describe("other tools", () => {
-  it.each(["WebFetch", "WebSearch", "mcp__github__create_pull_request"])(
-    "blocks %s",
-    tool => {
-      expect(allowed(tool, {})).toBe(false)
-    }
-  )
+  it.each([
+    "WebFetch",
+    "WebSearch",
+    "mcp__github__create_pull_request",
+    "Monitor",
+    "Agent",
+    "Task",
+    "",
+  ])("blocks %p", tool => {
+    expect(blocked(tool, {})).toBe(true)
+  })
 
   it("lets reads in the repo and the packet through, and nothing else", () => {
     expect(
@@ -210,14 +221,12 @@ describe("other tools", () => {
     ).toBe(true)
     expect(allowed("Grep", { pattern: "x" })).toBe(true)
     expect(allowed("Glob", { pattern: "**/*.rb", path: "app" })).toBe(true)
-    expect(allowed("Read", { file_path: "/proc/self/environ" })).toBe(false)
-    expect(allowed("Read", { file_path: path.join(repo, ".git/config") })).toBe(
-      false
+    expect(blocked("Read", { file_path: "/proc/self/environ" })).toBe(true)
+    expect(blocked("Read", { file_path: path.join(repo, ".git/config") })).toBe(
+      true
     )
-    expect(allowed("Read", { file_path: "/etc/passwd" })).toBe(false)
-    expect(allowed("Grep", { pattern: "token", path: os.homedir() })).toBe(
-      false
-    )
+    expect(blocked("Read", { file_path: "/etc/passwd" })).toBe(true)
+    expect(blocked("Grep", { pattern: "token", path: os.homedir() })).toBe(true)
   })
 
   it.each([
@@ -233,7 +242,7 @@ describe("other tools", () => {
     ["Grep", { pattern: "x", glob: "/etc/*" }],
     ["Grep", { pattern: "x", glob: "../*" }],
   ])("blocks %s outside the read roots: %p", (tool, input) => {
-    expect(allowed(tool, input)).toBe(false)
+    expect(blocked(tool, input)).toBe(true)
   })
 
   it("lets Glob and Grep search inside the repo", () => {
@@ -243,8 +252,18 @@ describe("other tools", () => {
     expect(allowed("Grep", { pattern: "x", path: packet })).toBe(true)
   })
 
-  it("leaves Skill and unknown tools to the permission rules", () => {
+  it("allows Skill and TodoWrite", () => {
     expect(allowed("Skill", { skill: "diagnosing-bugs" })).toBe(true)
+    expect(allowed("TodoWrite", { todos: [] })).toBe(true)
+  })
+
+  it("blocks with exit 2 on an internal error", () => {
+    const result = spawnSync("/bin/bash", [HOOK, repo, out, packet], {
+      input: JSON.stringify({ tool_name: "Read", tool_input: {} }),
+      encoding: "utf8",
+      env: { PATH: path.join(root, "missing") },
+    })
+    expect(result.status).toBe(2)
   })
 
   it("fails closed on input it cannot parse", () => {

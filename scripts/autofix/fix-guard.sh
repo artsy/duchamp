@@ -6,13 +6,14 @@
 # things; this hook holds even if the target repo's own .claude/settings.json widens
 # them, because a hook's block wins over any allow rule.
 
-set -euo pipefail
+set -Eeuo pipefail
 
 block() {
   echo "BLOCKED by fix-guard.sh: $1" >&2
   exit 2
 }
 # Exit 1 would only warn and let the call through, so any failure here blocks.
+# set -E makes the trap fire inside functions too.
 trap 'block "hook error"' ERR
 
 # Python resolves every path (symlinks included, missing tails allowed) so the checks
@@ -168,9 +169,6 @@ case "$tool" in
     esac
     exit 0
     ;;
-  WebFetch | WebSearch | mcp__*)
-    block "$tool is not available in this job"
-    ;;
   Read | Grep | Glob)
     # The workspace sits under $HOME on GitHub runners, so this is an allowlist
     # rather than a deny on ~.
@@ -182,6 +180,10 @@ case "$tool" in
       *) block "$value is outside the repo and the error packet" ;;
     esac
     ;;
+  Skill | TodoWrite)
+    exit 0
+    ;;
+  *)
+    block "$tool is not available in this job"
+    ;;
 esac
-
-exit 0
