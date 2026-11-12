@@ -52,7 +52,7 @@ glob="${fields[7]}"
 glob_git="${fields[8]}"
 
 path_re='^[A-Za-z0-9_][A-Za-z0-9_./-]*$'
-rev='([0-9a-f]{7,40}|HEAD(~[0-9]{1,4})?)'
+rev='([0-9a-fA-F]{7,40}|HEAD(~[0-9]{1,4})?)'
 range_re="^$rev(\\.\\.$rev)?\$"
 rev_re="^$rev\$"
 

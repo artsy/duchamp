@@ -134,6 +134,8 @@ describe("Bash", () => {
     "git log --pretty=format:%h,%s -20 --no-merges HEAD~5..HEAD",
     "git log --follow --max-count=5 -- app/models/artwork.rb",
     "git log a1b2c3d4e5f60718293a4b5c6d7e8f9012345678..HEAD -- app lib/x.rb",
+    "git log A1B2C3D..HEAD -- app",
+    "git blame A1B2C3D4 -- app/models/artwork.rb",
     "git log -Sprice_cents --no-ext-diff --no-textconv --oneline -- app",
     "git log -p --no-ext-diff --no-textconv -1 -- app/models/artwork.rb",
   ])("allows %s", command => {
