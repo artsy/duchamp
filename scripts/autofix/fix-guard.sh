@@ -141,6 +141,7 @@ check_blame() {
 glob_in_repo() {
   [ -n "$glob" ] || return 0
   [[ "$glob" != /* && "$glob" != *~* ]] || block "$glob is not relative to the repo"
+  [[ "$glob" != *\\* ]] || block "$glob has a backslash escape"
   [[ ! "$glob" =~ (^|[/{,])\.\.($|[/},]) ]] || block "$glob climbs out with .."
   [[ ! "$glob" =~ [{,]/ ]] || block "$glob is not relative to the repo"
   [ "$glob_git" = 0 ] || block "$glob can match the .git directory"

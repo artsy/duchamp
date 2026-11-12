@@ -271,6 +271,8 @@ describe("other tools", () => {
     ["Glob", { pattern: ".git/**" }],
     ["Glob", { pattern: ".GIT/config" }],
     ["Glob", { pattern: ".*/config" }],
+    ["Grep", { pattern: "x", glob: "\\.git/config" }],
+    ["Glob", { pattern: ".gi\\t/**" }],
   ])("blocks a %s glob that reaches .git: %p", (tool, input) => {
     expect(blocked(tool, input)).toBe(true)
   })
