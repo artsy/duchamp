@@ -1,10 +1,12 @@
 import {
   BODY_MAX,
+  commitMessages,
   isAllowedUrl,
   issueComment,
   parseResult,
   prBody,
   prTitle,
+  sanitizeLine,
   sanitizeMarkdown,
   splitCode,
 } from "./pr-body"
@@ -142,6 +144,42 @@ it("builds a deterministic title", () => {
   )
 })
 
+describe("title and commit messages from hostile Datadog text", () => {
+  const hostile: Meta = {
+    ...meta,
+    error_type:
+      "Fixes #12 @octocat\ncloses https://github.com/artsy/gravity/issues/3 `@team` artsy/x#4 GH-5",
+    top_frame: { path: "app/x.rb\nresolves #6", line: 1 },
+  }
+
+  it("sanitises the title like the body", () => {
+    const title = prTitle(hostile)
+    expect(title).not.toMatch(/[\n\r#@]|https?:|GH-/)
+    expect(title).toMatch(/^fix: see 12 octocat /)
+    expect(title.length).toBeLessThanOrEqual(5 + 60 + 4 + 80)
+  })
+
+  it("sanitises both commit messages and keeps [skip ci]", () => {
+    const { test, fix } = commitMessages(hostile)
+    for (const message of [test, fix]) {
+      expect(message).not.toMatch(/[\n\r#@]|https?:|GH-/)
+      expect(message).toMatch(/ \[skip ci\]$/)
+    }
+    expect(test).toMatch(/^test: reproduce see 12 /)
+    expect(fix).toBe(`${prTitle(hostile)} [skip ci]`)
+  })
+
+  it("does not let our own fix: prefix close an issue", () => {
+    expect(prTitle({ ...meta, error_type: "#12", top_frame: null })).toBe(
+      "fix: 12"
+    )
+  })
+
+  it("caps length", () => {
+    expect(sanitizeLine("x".repeat(500), 60)).toHaveLength(60)
+  })
+})
+
 describe("prBody", () => {
   const body = prBody({
     meta,
@@ -164,6 +202,7 @@ describe("prBody", () => {
     expect(body).toContain("**CI has not run.**")
     expect(body).toContain("`autofix/run-ci`")
     expect(body).toContain("symptom suppression")
+    expect(body).toContain("**Update branch**, or any push without `[skip ci]`")
     expect(body).toContain(
       `[NoMethodError](${meta.permalink}), 120 events, 9 users`
     )

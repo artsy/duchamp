@@ -142,11 +142,32 @@ export const sanitizeMarkdown = (text: string, max: number): string =>
     max
   )
 
+// Commit messages don't render code, so code spans get no pass, and no URL is kept:
+// "fix: <issue URL>" in a commit closes that issue on merge.
+export const sanitizeLine = (text: string, max: number): string =>
+  oneLine(
+    sanitizeProse(stripHidden(text).replace(/\s+/g, " "))
+      .replace(/(^|\W)@(?=[A-Za-z0-9])/g, "$1")
+      .replace(URL_IN_TEXT, "[link removed]"),
+    max
+  )
+
 const shortSha = (sha: string | null | undefined): string =>
   sha ? sha.slice(0, 12) : "?"
 
-export const prTitle = (meta: Meta): string =>
-  `fix: ${oneLine(meta.error_type || "production error", 60)}${meta.top_frame ? ` in ${oneLine(meta.top_frame.path, 80)}` : ""}`
+const subject = (meta: Meta): string => {
+  const errorType = sanitizeLine(meta.error_type, 60) || "production error"
+  const frame = meta.top_frame ? sanitizeLine(meta.top_frame.path, 80) : ""
+  return frame ? `${errorType} in ${frame}` : errorType
+}
+
+export const prTitle = (meta: Meta): string => `fix: ${subject(meta)}`
+
+/** [skip ci]: the repo's CI runs this code only after a human adds autofix/run-ci. */
+export const commitMessages = (meta: Meta): { test: string; fix: string } => ({
+  test: `test: reproduce ${subject(meta)} [skip ci]`,
+  fix: `${prTitle(meta)} [skip ci]`,
+})
 
 export interface BodyInput {
   meta: Meta
@@ -178,8 +199,9 @@ export const prBody = ({
     "> [!IMPORTANT]",
     "> Opened by autofix from a production error. **CI has not run.** Read the diff, then add the `autofix/run-ci` label to run CI on it.",
     "> Check for symptom suppression: a `rescue`, `&.` or nil guard that hides the error instead of fixing its cause.",
+    "> **Update branch**, or any push without `[skip ci]`, also runs CI on this code: read the diff first.",
     "",
-    `- Datadog: [${oneLine(meta.error_type, 80).replace(/[[\]]/g, "")}](${meta.permalink}), ${meta.total_count} events, ${meta.impacted_users} users, first seen ${meta.first_seen || "unknown"} in \`${shortSha(meta.first_seen_version) || "?"}\``,
+    `- Datadog: [${sanitizeLine(meta.error_type, 80).replace(/[[\]]/g, "")}](${meta.permalink}), ${meta.total_count} events, ${meta.impacted_users} users, first seen ${meta.first_seen || "unknown"} in \`${shortSha(meta.first_seen_version) || "?"}\``,
     `- Suspect range: ${range}`,
     `- Agent confidence: ${oneLine(result.confidence, 20) || "not given"}; ${weightedLines} changed lines (spec lines count half)`,
   ]
