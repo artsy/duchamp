@@ -1,0 +1,66 @@
+{
+  "//": "Settings for autofix-datadog.yml's fix agent. The workflow replaces __TOOLING__, __REPO__, __OUT__ and __PACKET__ with absolute paths, refuses to run if any placeholder is left, and derives --allowedTools / --disallowedTools from the two lists below. fix-guard.sh enforces the same limits and holds even if the target repo's .claude/settings.json allows more.",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "Skill",
+      "Edit(app/**)",
+      "Edit(lib/**)",
+      "Edit(spec/**)",
+      "Write(app/**)",
+      "Write(lib/**)",
+      "Write(spec/**)",
+      "Write(/__OUT__/result.json)",
+      "Write(/__OUT__/pr-body.md)",
+      "Edit(/__OUT__/result.json)",
+      "Edit(/__OUT__/pr-body.md)",
+      "Bash(git log:*)",
+      "Bash(git blame:*)"
+    ],
+    "deny": [
+      "WebFetch",
+      "WebSearch",
+      "NotebookEdit",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Edit(lib/tasks/**)",
+      "Write(lib/tasks/**)",
+      "Edit(spec/spec_helper.rb)",
+      "Write(spec/spec_helper.rb)",
+      "Edit(spec/rails_helper.rb)",
+      "Write(spec/rails_helper.rb)",
+      "Edit(spec/support/**)",
+      "Write(spec/support/**)",
+      "Read(//proc/**)",
+      "Read(//sys/**)",
+      "Read(~/.*)",
+      "Read(~/.*/**)",
+      "Read(.git/**)",
+      "Read(**/.git/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__TOOLING__/scripts/autofix/fix-guard.sh __REPO__ __OUT__ __PACKET__"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "__REPO__/.claude/skills/datadog-triage/reference/hooks/block-secret-reads.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
