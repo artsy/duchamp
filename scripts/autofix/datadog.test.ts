@@ -128,9 +128,9 @@ describe("searchNewIssues", () => {
   it("orders by first seen", async () => {
     const fetch = respond(200, fixture("datadog-search.json"))
     await searchNewIssues(configWith(fetch), { query: "q", from: FROM, to: 2 })
-    expect(JSON.parse(fetch.mock.calls[0][1].body!).data.attributes.order_by).toBe(
-      "FIRST_SEEN"
-    )
+    expect(
+      JSON.parse(fetch.mock.calls[0][1].body!).data.attributes.order_by
+    ).toBe("FIRST_SEEN")
   })
 
   it("accepts a full page that reaches past the start of the window", async () => {

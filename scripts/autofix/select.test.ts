@@ -1,4 +1,6 @@
+import { execFileSync } from "child_process"
 import * as fs from "fs"
+import * as os from "os"
 import * as path from "path"
 import { type ErrorIssue, parseSearch, parseSpan } from "./datadog"
 import {
@@ -18,6 +20,7 @@ import {
   select,
   serviceQuery,
   summaryMarkdown,
+  suspectAuthor,
   suspectRange,
   trackedIds,
   typeGate,
@@ -322,6 +325,41 @@ describe("suspectRange", () => {
   it("returns null for an unknown or malformed version", () => {
     expect(suspectRange(deploys, "1234567", () => false)).toBeNull()
     expect(suspectRange(deploys, "v1.2; rm -rf", () => true)).toBeNull()
+  })
+})
+
+describe("suspectAuthor", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "autofix-blame-"))
+  const git = (...args: string[]) =>
+    execFileSync("git", ["-C", dir, ...args], { encoding: "utf8" }).trim()
+  const commit = (line: string) => {
+    fs.mkdirSync(path.join(dir, "app"), { recursive: true })
+    fs.writeFileSync(path.join(dir, "app/a.rb"), `${line}\n`)
+    git("add", ".")
+    git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", line)
+    return git("rev-parse", "HEAD")
+  }
+  git("init", "-q")
+  const deployed = commit("deployed")
+  const base = commit("later")
+  const top = { path: "app/a.rb", line: 1 } as Parameters<
+    typeof suspectAuthor
+  >[3]
+  afterAll(() => fs.rmSync(dir, { recursive: true, force: true }))
+
+  it("blames the deploy head of the suspect range", () => {
+    const loginFor = jest.fn(() => "octocat")
+    const range = { from: null, to: deployed, deploy: 1 }
+    expect(
+      suspectAuthor(dir, "artsy/x", { range, baseSha: base }, top, loginFor)
+    ).toBe("octocat")
+    expect(loginFor).toHaveBeenCalledWith("artsy/x", deployed)
+  })
+
+  it("blames the base when there is no range", () => {
+    const loginFor = jest.fn(() => "octocat")
+    suspectAuthor(dir, "artsy/x", { range: null, baseSha: base }, top, loginFor)
+    expect(loginFor).toHaveBeenCalledWith("artsy/x", base)
   })
 })
 

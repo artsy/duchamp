@@ -536,11 +536,21 @@ const readSourceLine = (repoDir: string, frame: InAppFrame): string | null => {
   }
 }
 
-const suspectAuthor = (
+const commitLogin = (repository: string, sha: string): string | null =>
+  tryRun("gh", [
+    "api",
+    `repos/${repository}/commits/${sha}`,
+    "--jq",
+    ".author.login // empty",
+  ])?.trim() ?? null
+
+/** Blames the deployed code (the suspect deploy head), else the base. */
+export const suspectAuthor = (
   repoDir: string,
   repository: string,
-  baseSha: string,
-  top: InAppFrame | null
+  revision: { range: SuspectRange | null; baseSha: string },
+  top: InAppFrame | null,
+  loginFor: (repository: string, sha: string) => string | null = commitLogin
 ): string | null => {
   if (!top || top.line < 1) return null
   const blame = tryRun(
@@ -550,7 +560,7 @@ const suspectAuthor = (
       "--porcelain",
       "-L",
       `${top.line},${top.line}`,
-      baseSha,
+      revision.range?.to ?? revision.baseSha,
       "--",
       top.path,
     ],
@@ -558,12 +568,7 @@ const suspectAuthor = (
   )
   const sha = blame?.split(" ")[0]
   if (!sha || !/^[0-9a-f]{40}$/.test(sha) || /^0+$/.test(sha)) return null
-  const login = tryRun("gh", [
-    "api",
-    `repos/${repository}/commits/${sha}`,
-    "--jq",
-    ".author.login // empty",
-  ])?.trim()
+  const login = loginFor(repository, sha)
   return login &&
     /^[A-Za-z0-9-]{1,39}(\[bot\])?$/.test(login) &&
     !login.endsWith("[bot]")
@@ -747,15 +752,21 @@ export const main = async (
 
   fs.mkdirSync(path.join(outDir, "packets"), { recursive: true })
   for (const candidate of selection.selected) {
+    const range = suspectRange(
+      deploys,
+      candidate.issue.firstSeenVersion,
+      isAncestor
+    )
     const meta = buildMeta(candidate, {
       site: config.site,
       baseSha,
-      range: suspectRange(
-        deploys,
-        candidate.issue.firstSeenVersion,
-        isAncestor
+      range,
+      author: suspectAuthor(
+        repoDir,
+        repository,
+        { range, baseSha },
+        candidate.top
       ),
-      author: suspectAuthor(repoDir, repository, baseSha, candidate.top),
     })
     const dir = path.join(outDir, "packets", candidate.issue.id)
     fs.mkdirSync(dir, { recursive: true })
