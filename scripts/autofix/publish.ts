@@ -9,6 +9,7 @@ import {
   parseRawZ,
 } from "./guards"
 import {
+  commitMessages,
   type FixResult,
   issueComment,
   parseResult,
@@ -75,6 +76,22 @@ export const reviewers = (owner: string, author: string | null): string[] =>
     ? [owner, author]
     : [owner]
 
+/** A guard limit from the environment. Anything but a positive integer throws, so a bad input can't turn the guard off. */
+export const positiveInt = (name: string, raw: string | undefined): number => {
+  const value = Number(raw)
+  if (
+    !raw ||
+    !/^\d+$/.test(raw.trim()) ||
+    !Number.isSafeInteger(value) ||
+    value <= 0
+  ) {
+    throw new Error(
+      `${name} must be a positive integer, got ${JSON.stringify(raw ?? null)}`
+    )
+  }
+  return value
+}
+
 export const branchName = (id: string): string =>
   `autofix/dd-${id.replace(/-/g, "").slice(0, 8).toLowerCase()}`
 
@@ -99,6 +116,7 @@ const main = (): void => {
   const owner = required("REVIEWER")
   const runUrl = required("RUN_URL")
   if (!isDdIssueId(id)) throw new Error("invalid dd issue id")
+  const maxLines = positiveInt("MAX_LINES", process.env.MAX_LINES)
 
   const meta: Meta = JSON.parse(
     fs.readFileSync(path.join(inDir, "meta.json"), "utf8")
@@ -139,7 +157,7 @@ const main = (): void => {
           ])
         ),
         patch,
-        maxLines: Number(process.env.MAX_LINES || 150),
+        maxLines,
         sensitive: parsePatterns(process.env.SENSITIVE_PATHS ?? ""),
       }),
   })
@@ -174,9 +192,12 @@ const main = (): void => {
   }
 
   const reviewerList = reviewers(owner, meta.suspect_author)
+  const commits = commitMessages(meta)
   const outputs: Record<string, string> = {
     verdict: decision.verdict,
     title: prTitle(meta),
+    test_commit: commits.test,
+    fix_commit: commits.fix,
     branch: branchName(id),
     reviewers: reviewerList.join(","),
     assignee: reviewerList[reviewerList.length - 1],

@@ -1,5 +1,5 @@
 import type { GuardResult } from "./guards"
-import { branchName, decide, reviewers } from "./publish"
+import { branchName, decide, positiveInt, reviewers } from "./publish"
 
 const passing: GuardResult = {
   ok: true,
@@ -79,4 +79,27 @@ it("names the branch from the short id", () => {
   expect(branchName("0B7E7C2A-1111-4c1d-9a00-000000000001")).toBe(
     "autofix/dd-0b7e7c2a"
   )
+})
+
+describe("positiveInt", () => {
+  it("reads a positive integer", () => {
+    expect(positiveInt("MAX_LINES", "150")).toBe(150)
+  })
+
+  it.each([
+    undefined,
+    "",
+    " ",
+    "abc",
+    "NaN",
+    "0",
+    "-5",
+    "1.5",
+    "1e3",
+    "Infinity",
+  ])("fails closed on %p", raw => {
+    expect(() => positiveInt("MAX_LINES", raw)).toThrow(
+      /MAX_LINES must be a positive integer/
+    )
+  })
 })
