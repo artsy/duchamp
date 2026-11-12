@@ -589,6 +589,8 @@ const listDeploys = (repository: string): Deploy[] =>
       repository,
       "--state",
       "merged",
+      "--base",
+      "release",
       "--search",
       "Deploy in:title",
       "--limit",
