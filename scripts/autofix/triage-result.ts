@@ -4,8 +4,11 @@ import * as path from "path"
 import {
   ddIdInTitle,
   type GitHubIssue,
-  parseScanReport,
+  listIssues,
+  required,
   type ScanFinding,
+  scan,
+  screenReason,
 } from "./select"
 import { isDdIssueId, stripHidden } from "./text"
 
@@ -14,6 +17,9 @@ import { isDdIssueId, stripHidden } from "./text"
  * is model output that read attacker-controlled errors, so every field is checked
  * against what we already know, and issue numbers come from GitHub, not the model.
  */
+
+export const ROOT_CAUSE_MAX = 600
+export const SUSPECT_FILE_MAX = 200
 
 /** The schema passed to the triage run with --json-schema. Mirrors the datadog-triage skill's reference/structured-result.md. */
 export const TRIAGE_SCHEMA = {
@@ -37,7 +43,7 @@ export const TRIAGE_SCHEMA = {
         properties: {
           dd_issue_id: { type: "string" },
           issue_number: { type: ["number", "null"] },
-          root_cause: { type: "string", maxLength: 600 },
+          root_cause: { type: "string", maxLength: ROOT_CAUSE_MAX },
           suspect_file: { type: "string" },
           suspect_line: { type: ["number", "null"] },
           confidence: { enum: ["high", "medium", "low"] },
@@ -46,9 +52,6 @@ export const TRIAGE_SCHEMA = {
     },
   },
 }
-
-export const ROOT_CAUSE_MAX = 600
-export const SUSPECT_FILE_MAX = 200
 
 export type Confidence = "high" | "medium" | "low"
 
@@ -183,10 +186,7 @@ export const validateEntries = (
   for (const entry of shaped) {
     const findings = suspicious.get(entry.dd_issue_id)
     if (findings) {
-      rejected.push({
-        id: entry.dd_issue_id,
-        reason: `screen: suspicious (${findings.map(f => `${f.field}: ${f.check}`).join(", ")})`,
-      })
+      rejected.push({ id: entry.dd_issue_id, reason: screenReason(findings) })
       continue
     }
     const issue = findTriageIssue(deps.triageIssues, entry.dd_issue_id)
@@ -221,34 +221,6 @@ export const summaryMarkdown = (
 
 // ---- CLI ---------------------------------------------------------------
 
-const required = (name: string): string => {
-  const value = process.env[name]
-  if (!value) throw new Error(`${name} is required`)
-  return value
-}
-
-export const listTriageIssues = (repository: string): GitHubIssue[] =>
-  JSON.parse(
-    execFileSync(
-      "gh",
-      [
-        "issue",
-        "list",
-        "--repo",
-        repository,
-        "--state",
-        "all",
-        "--label",
-        "triage",
-        "--limit",
-        "1000",
-        "--json",
-        "number,title,state",
-      ],
-      { encoding: "utf8" }
-    )
-  )
-
 const main = (): void => {
   const repoDir = required("REPO_DIR")
   const baseSha = required("BASE_SHA")
@@ -259,7 +231,7 @@ const main = (): void => {
   const entries = parseStructuredOutput(process.env.STRUCTURED_OUTPUT)
   const { accepted, rejected } = validateEntries(entries, {
     candidates,
-    triageIssues: listTriageIssues(required("GITHUB_REPOSITORY")),
+    triageIssues: listIssues(required("GITHUB_REPOSITORY"), "triage"),
     fileExists: file => {
       try {
         const type = execFileSync(
@@ -276,26 +248,7 @@ const main = (): void => {
         return false
       }
     },
-    screen: list =>
-      parseScanReport(
-        execFileSync(
-          "python3",
-          [
-            "-I",
-            scanScript,
-            "--source",
-            "triage",
-            "--label",
-            "id",
-            "--field",
-            "root_cause",
-          ],
-          {
-            input: list.map(item => JSON.stringify(item)).join("\n"),
-            encoding: "utf8",
-          }
-        )
-      ),
+    screen: list => scan(scanScript, "triage", ["root_cause"], list),
   })
 
   fs.mkdirSync(outDir, { recursive: true })
