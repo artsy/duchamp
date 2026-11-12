@@ -175,15 +175,6 @@ describe("prBody", () => {
 })
 
 describe("issueComment", () => {
-  it("links an opened PR", () => {
-    expect(
-      issueComment(
-        { kind: "opened", prUrl: "https://github.com/artsy/gravity/pull/1" },
-        "run"
-      )
-    ).toContain("https://github.com/artsy/gravity/pull/1")
-  })
-
   it("sanitises the agent's skip reason", () => {
     const comment = issueComment(
       {

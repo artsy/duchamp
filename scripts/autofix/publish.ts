@@ -15,9 +15,9 @@ import {
   prBody,
   prTitle,
 } from "./pr-body"
-import type { Meta } from "./select"
+import { listIssues, type Meta, required } from "./select"
 import { isDdIssueId } from "./text"
-import { findTriageIssue, listTriageIssues } from "./triage-result"
+import { findTriageIssue } from "./triage-result"
 
 /**
  * The publish job's decision for one fix artifact: reject, skip, or publish, plus the
@@ -79,12 +79,6 @@ export const branchName = (id: string): string =>
   `autofix/dd-${id.replace(/-/g, "").slice(0, 8).toLowerCase()}`
 
 // ---- CLI ---------------------------------------------------------------
-
-const required = (name: string): string => {
-  const value = process.env[name]
-  if (!value) throw new Error(`${name} is required`)
-  return value
-}
 
 const git = (repoDir: string, args: string[]): string =>
   execFileSync("git", args, {
@@ -151,7 +145,7 @@ const main = (): void => {
   })
 
   const triageIssue = findTriageIssue(
-    listTriageIssues(required("GITHUB_REPOSITORY")),
+    listIssues(required("GITHUB_REPOSITORY"), "triage"),
     id
   )
   fs.mkdirSync(outDir, { recursive: true })

@@ -219,15 +219,12 @@ export const prBody = ({
 }
 
 export type Outcome =
-  | { kind: "opened"; prUrl: string }
   | { kind: "rejected"; reasons: string[] }
   | { kind: "skipped"; summary: string }
 
 /** The comment on the triage issue. Agent text only in the skip case, sanitised. */
 export const issueComment = (outcome: Outcome, runUrl: string): string => {
   switch (outcome.kind) {
-    case "opened":
-      return `Autofix opened a draft PR: ${outcome.prUrl}\n\nCI has not run on it yet.\n`
     case "rejected":
       return `Autofix did not open a PR (${runUrl}). The patch failed the publish checks:\n\n${outcome.reasons.map(reason => `- ${oneLine(sanitizeMarkdown(reason, 300), 300)}`).join("\n")}\n`
     case "skipped":
