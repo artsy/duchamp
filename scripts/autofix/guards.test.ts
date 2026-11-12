@@ -155,7 +155,16 @@ describe("checkGuards on git output", () => {
     write("app/models/artwork.rb", "class Artwork; end\n")
     git("add", "-A")
     expect(checkGuards(input()).reasons).toContain(
-      "needs at least one change under spec/ and one outside it"
+      "needs at least one added or modified file under spec/ and one change outside it"
+    )
+  })
+
+  it("does not count a deleted spec as the test", () => {
+    write("app/models/artwork.rb", "class Artwork; end\n")
+    git("rm", "-q", "spec/models/artwork_spec.rb")
+    git("add", "-A")
+    expect(checkGuards(input()).reasons).toContain(
+      "needs at least one added or modified file under spec/ and one change outside it"
     )
   })
 

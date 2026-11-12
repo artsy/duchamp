@@ -147,8 +147,13 @@ export const checkGuards = (input: GuardInput): GuardResult => {
       `the agent's decision is ${JSON.stringify(input.decision)}, not "fix"`
     )
   }
-  if (!files.some(isSpecPath) || !files.some(file => !isSpecPath(file))) {
-    reasons.push("needs at least one change under spec/ and one outside it")
+  const specWritten = input.raw.some(
+    entry => isSpecPath(entry.path) && /^[AM]$/.test(entry.status)
+  )
+  if (!specWritten || !files.some(file => !isSpecPath(file))) {
+    reasons.push(
+      "needs at least one added or modified file under spec/ and one change outside it"
+    )
   }
   for (const file of files.filter(file => !isAllowedPath(file))) {
     reasons.push(`path outside the allowlist: ${file}`)
