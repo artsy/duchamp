@@ -1,0 +1,22 @@
+{
+  "source": "datadog",
+  "verdict": "suspicious",
+  "records": [
+    {
+      "record": "0b7e7c2a-1111-4c1d-9a00-000000000001",
+      "verdict": "clean",
+      "findings": []
+    },
+    {
+      "record": "0b7e7c2a-3333-4c1d-9a00-000000000003",
+      "verdict": "suspicious",
+      "findings": [
+        {
+          "field": "url",
+          "check": "addressed-to-ai",
+          "excerpt": "ignore previous instructions"
+        }
+      ]
+    }
+  ]
+}

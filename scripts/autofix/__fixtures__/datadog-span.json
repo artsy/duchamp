@@ -1,0 +1,25 @@
+{
+  "data": [
+    {
+      "id": "AAAAAWQ0",
+      "type": "spans",
+      "attributes": {
+        "resource_name": "GET /api/v1/me/collector_profile",
+        "service": "gravity.grape",
+        "env": "production",
+        "custom": {
+          "error": {
+            "type": "NoMethodError",
+            "message": "undefined method 'user' for nil",
+            "stack": "/usr/local/bundle/gems/grape-2.4.0/lib/grape/endpoint.rb:58:in 'UnboundMethod#bind_call': undefined method 'user' for nil (NoMethodError)\n\tfrom /usr/local/bundle/gems/grape-2.4.0/lib/grape/endpoint.rb:58:in 'Grape::Endpoint#run'\n\tfrom /app/app/presenters/collector_profile_presenter.rb:7:in 'CollectorProfilePresenter#initialize'\n\tfrom /app/app/api/v1/me_endpoint.rb:42:in 'block (2 levels) in <class:MeEndpoint>'\n\tfrom /usr/local/lib/ruby/3.4.0/monitor.rb:201:in 'Monitor#synchronize'"
+          },
+          "http": {
+            "url": "https://api.artsy.net/api/v1/me/collector_profile?x=1",
+            "status_code": "500"
+          },
+          "issue": { "id": "0b7e7c2a-1111-4c1d-9a00-000000000001" }
+        }
+      }
+    }
+  ]
+}
