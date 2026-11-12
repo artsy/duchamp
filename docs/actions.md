@@ -648,9 +648,9 @@ jobs:
 
 1. `stale` (no model): closes `autofix` draft PRs idle for 28 days, deletes the branch, and says so on the triage issue.
 2. `select` (no model): Error Tracking issues for `services` in `env:production`, first seen in the last 5 days. Drops issues that already have a `[triage] … (dd:<id>)` issue or the `autofix/attempted` label, network and infra errors, security errors (never autofixed), errors below `min-events` / `min-users`, and errors whose top in-app frame (taken from a trace stack when the raising frame is a gem) isn't under `app/` or `lib/`. Screens the message, endpoint and URL with `scan_text.py`. Keeps up to `issue-limit` by events and writes a packet per error. Every dropped error is listed with its reason in the step summary.
-3. `triage` (model, read-only): the `datadog-triage` skill on select's candidates, with `ISSUE_LIMIT` and a JSON result. It opens the `[triage]` issues. A missing result fails the run; each entry is checked against the candidates and the repo, and issue numbers come from GitHub.
-4. `fix` (model, one job per issue, two at a time): the agent may read the repo and edit only `app/`, `lib/` (not `lib/tasks/`) and `spec/` (not the spec helpers or `spec/support/`). It cannot run commands other than `git log` and `git blame`, reach the network, or use MCP. It follows the vendored `diagnosing-bugs` and `pr` skills (`vendor/skills/`) as adapted in `scripts/autofix/prompt.md`, and writes a test first, then the fix, or skips.
-5. `publish` (no model, fresh runner): applies the patches to the base commit and checks git's own view of them. Then opens a draft PR with two `[skip ci]` commits (test, then fix), requests `reviewer` and the suspect author (from `git blame` on the top in-app frame), and comments on the triage issue. A rejected or skipped patch gets a comment with the reason instead.
+3. `triage` (model, read-only): the `datadog-triage` skill on select's candidates, with `ISSUE_LIMIT` and a JSON result. It opens the `[triage]` issues. A missing result, or a `status` other than `ok`, fails the run; each entry is checked against the candidates and the repo, and issue numbers come from GitHub.
+4. `fix` (model, one job per issue, two at a time): the agent may read the repo and edit only `app/`, `lib/` (not `lib/tasks/`) and `spec/` (not the spec helpers or `spec/support/`). It cannot run commands other than `git log` and `git blame` with a fixed set of read-only flags, reach the network, or use MCP. It follows the vendored `diagnosing-bugs` and `pr` skills (`vendor/skills/`) as adapted in `scripts/autofix/prompt.md`, and writes a test first, then the fix, or skips.
+5. `publish` (no model, fresh runner): applies the patches to the base commit and checks git's own view of them. It takes `meta.json` from select's artifact; the fix job supplies only the patches, `result.json`, `pr-body.md` and its cost. Then opens a draft PR with two `[skip ci]` commits (test, then fix), requests `reviewer` and the suspect author (from `git blame` on the top in-app frame), and comments on the triage issue. A rejected or skipped patch gets a comment with the reason instead.
 
 **Publish rejects a patch unless:**
 
@@ -668,7 +668,8 @@ Paths matching `sensitive-paths` still publish, labelled `autofix/sensitive` and
 - Error messages, URLs and params are attacker-controlled (Volt's Datadog holds SSTI and `/etc/passwd` probes). They are cut short, stripped of hidden characters and fenced as data, and screened before any model reads them.
 - The fix job holds only the spend-capped Anthropic key and a read-only `github.token`. A PreToolUse hook (`scripts/autofix/fix-guard.sh`) resolves real paths and blocks everything outside the limits above, even if the repo's own Claude settings allow more. The repo's `.claude/settings.json` and `.mcp.json` are removed for that job, so no repo hook runs on files the agent writes.
 - After the agent, the fix job runs only inline shell from the workflow. It builds the patches with git in a pristine clone the agent never saw.
-- No agent-written code runs anywhere until a human adds `autofix/run-ci`. The PR body drops the agent's mentions, closing keywords, issue refs and links outside `app.datadoghq.com` and `github.com/artsy`.
+- No agent-written code runs anywhere until a human adds `autofix/run-ci`. The PR body drops the agent's mentions, closing keywords, issue refs and links outside `app.datadoghq.com` and `github.com/artsy`; the title and commit messages drop all links too.
+- GitHub's **Update branch** button, or any push without `[skip ci]`, also runs CI on the agent's code, so read the diff first. Add a branch ruleset on `autofix/*` that limits who can push.
 
 **One-time setup in the calling repo:**
 
@@ -708,11 +709,11 @@ Paths matching `sensitive-paths` still publish, labelled `autofix/sensitive` and
 
 **Use Case**: Every repo that uses `autofix-datadog.yml`. Autofix commits carry `[skip ci]`, so CI never runs agent-written code on its own
 
-Copy `templates/run-autofix-ci.yml` into the calling repo. When someone with write access adds the `autofix/run-ci` label to an `autofix/*` PR, this pushes an empty commit (through the API, without checking out the code) on top of the head they labelled. If the branch moved since, the push fails.
+Copy `templates/run-autofix-ci.yml` into the calling repo. When someone with write access adds the `autofix/run-ci` label to an `autofix/*` PR, this pushes an empty commit (through the API, without checking out the code) on top of the head they labelled. If the branch moved since, the push fails. It listens on `pull_request_target`, because the head commit's `[skip ci]` suppresses `pull_request` runs; that is safe because it never checks out the PR's code.
 
 ```yaml
 on:
-  pull_request:
+  pull_request_target:
     types: [labeled]
 
 jobs:
