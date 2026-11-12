@@ -131,12 +131,23 @@ export const frameGate = (
   return { top }
 }
 
+/**
+ * Ruby puts the message, which can span lines, into the stack's first line. Cut it
+ * out so a message can't add frames of its own.
+ */
+const withoutMessage = (stack: string, messages: string[]): string =>
+  messages
+    .filter(message => message.length > 0)
+    .reduce((text, message) => text.split(message).join(""), stack)
+
 /** The stack to use: the span's, or the issue's own raising frame when there is no span. */
 export const framesFor = (
   issue: ErrorIssue,
   span: ErrorSpan | null
 ): Frame[] => {
-  const fromSpan = span?.stack ? parseStack(span.stack) : []
+  const fromSpan = span?.stack
+    ? parseStack(withoutMessage(span.stack, [span.message, issue.errorMessage]))
+    : []
   if (fromSpan.length > 0) return fromSpan
   return issue.filePath
     ? [{ file: issue.filePath, line: 0, method: issue.functionName }]

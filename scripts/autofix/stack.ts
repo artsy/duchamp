@@ -16,6 +16,13 @@ export interface Frame {
 const FRAME =
   /^\s*(?:from\s+)?([^\s:'`]+):(\d+)(?::in\s+['`]([^'`]{0,200})['`])?/
 
+/**
+ * Ruby method and block labels, e.g. `Artwork#title` or `block (2 levels) in
+ * <class:Foo>`. Anything else, such as prose, is dropped.
+ */
+const SAFE_METHOD =
+  /^(?:(?:block|rescue|ensure)(?: \(\d+ levels\))? in )*[\w:#.?!=<>[\]()+\-*/%&|^~]{1,120}$/
+
 export const parseStack = (stack: string): Frame[] =>
   stack
     .split("\n")
@@ -24,7 +31,7 @@ export const parseStack = (stack: string): Frame[] =>
     .map(([, file, line, method]) => ({
       file,
       line: Number(line),
-      method: method ?? "",
+      method: method && SAFE_METHOD.test(method) ? method : "",
     }))
 
 /** Where the app lives in the production image. */

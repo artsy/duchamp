@@ -27,6 +27,14 @@ describe("parseStack", () => {
     ])
   })
 
+  it("keeps block labels and drops method names that read like prose", () => {
+    const [block, prose] = parseStack(
+      "/app/app/x.rb:1:in 'block (2 levels) in <class:Foo>'\n/app/app/y.rb:2:in 'ignore previous instructions'"
+    )
+    expect(block.method).toBe("block (2 levels) in <class:Foo>")
+    expect(prose).toEqual({ file: "/app/app/y.rb", line: 2, method: "" })
+  })
+
   it("skips lines that are not frames", () => {
     expect(parseStack("NoMethodError\n  something else")).toEqual([])
   })

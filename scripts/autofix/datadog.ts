@@ -45,6 +45,7 @@ export interface ErrorIssue {
 
 export interface ErrorSpan {
   stack: string
+  message: string
   resourceName: string
   url: string
 }
@@ -177,6 +178,7 @@ export const parseSpan = (response: any): ErrorSpan | null => {
   const custom = attributes.custom ?? {}
   return {
     stack: str(custom.error?.stack) || str(attributes.error?.stack),
+    message: str(custom.error?.message) || str(attributes.error?.message),
     resourceName: str(attributes.resource_name),
     url: str(custom.http?.url),
   }

@@ -156,6 +156,21 @@ describe("frameGate", () => {
     })
   })
 
+  it("ignores frames forged inside a multi-line message", () => {
+    const message = "boom\n\tfrom /app/app/evil.rb:1:in 'x'"
+    const forged = {
+      stack: `/usr/local/bundle/gems/g-1/lib/g.rb:5:in 'call': ${message} (RuntimeError)\n\tfrom /app/app/real.rb:9:in 'run'`,
+      message,
+      resourceName: "",
+      url: "",
+    }
+    expect(
+      frameGate(framesFor(issue({ errorMessage: message }), forged))
+    ).toMatchObject({
+      top: { path: "app/real.rb", line: 9 },
+    })
+  })
+
   it("falls back to the issue's own frame without a span", () => {
     expect(framesFor(issue(), null)).toEqual([
       { file: "/app/app/models/artwork.rb", line: 0, method: "Artwork#title" },
