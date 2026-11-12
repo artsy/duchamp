@@ -97,8 +97,9 @@ const sanitizeUrls = (text: string): string =>
         : `[link removed]${match.slice(url.length)}`
     })
 
+// GitHub also closes an issue named by its URL, and github.com/artsy URLs are kept.
 const CLOSING_KEYWORD =
-  /\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b(?=\s*:?\s*(?:[\w.-]+\/[\w.-]+)?#\d)/gi
+  /\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b(?=\s*:?\s*(?:(?:[\w.-]+\/[\w.-]+)?#\d|https?:\/\/github\.com\/))/gi
 
 /** Mentions, closing keywords, issue refs and raw HTML, outside code. */
 const sanitizeProse = (text: string): string =>

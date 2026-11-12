@@ -78,6 +78,17 @@ describe("sanitizeMarkdown", () => {
     expect(sanitize("This fixes the nil")).toBe("This fixes the nil")
   })
 
+  it("removes a closing keyword in front of an issue URL", () => {
+    expect(
+      sanitizeMarkdown(
+        "Fixes https://github.com/artsy/gravity/issues/7 and the fix https://app.datadoghq.com/x",
+        500
+      )
+    ).toBe(
+      "see https://github.com/artsy/gravity/issues/7 and the fix https://app.datadoghq.com/x"
+    )
+  })
+
   it("keeps allowlisted links and drops the rest", () => {
     expect(sanitize(`[Datadog](${meta.permalink})`)).toBe(
       `[Datadog](${meta.permalink})`
