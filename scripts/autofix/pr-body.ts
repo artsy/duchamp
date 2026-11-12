@@ -72,7 +72,8 @@ export const isAllowedUrl = (raw: string): boolean => {
   }
 }
 
-const URL_IN_TEXT = /\b(?:https?:\/\/|www\.)[^\s<>()"'`\]]+/gi
+const URL_IN_TEXT =
+  /(?:\b(?:https?:\/\/|www\.)|(?<![\w:/])\/\/(?=[\w-]+(?:\.[\w-]+)+))[^\s<>()"'`\]]+/gi
 
 /** Links and images: allowed URLs stay, others go. Applies inside code too. */
 const sanitizeUrls = (text: string): string =>
@@ -108,7 +109,7 @@ const CLOSING_KEYWORD =
 const sanitizeProse = (text: string): string =>
   text
     .replace(/<!--[\s\S]*?(-->|$)/g, "")
-    .replace(/<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^>]*)?\/?>/g, "")
+    .replace(/<\/?[A-Za-z][A-Za-z0-9-]*(?:[\s/][^>]*)?>/g, "")
     .replace(CLOSING_KEYWORD, "see")
     .replace(/(^|[^\w])@(?=[A-Za-z0-9])/g, "$1")
     .replace(/(?:\b[\w.-]+\/[\w.-]+)?#(\d+)\b/g, "$1")

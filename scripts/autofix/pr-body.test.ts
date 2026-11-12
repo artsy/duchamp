@@ -118,6 +118,9 @@ describe("sanitizeMarkdown", () => {
     expect(sanitize("[click](https://evil.example/x)")).toBe("click")
     expect(sanitize("see https://evil.example/x.")).toBe("see [link removed].")
     expect(sanitize("see www.evil.example")).toBe("see [link removed]")
+    expect(sanitize("see //evil.example/x")).toBe("see [link removed]")
+    expect(sanitize("`//evil.example/x`")).toBe("`[link removed]`")
+    expect(sanitize("a // b and //TODO")).toBe("a // b and //TODO")
     expect(sanitize("<https://evil.example>")).toBe("[link removed]")
     expect(sanitize("[x]: https://evil.example\nbody")).toBe("body")
     expect(sanitize("[a](https://github.com/someone-else/repo)")).toBe("a")
@@ -135,6 +138,7 @@ describe("sanitizeMarkdown", () => {
       sanitize('<img src="https://evil.example/p.gif"> hi <!-- hidden -->')
     ).toBe("hi")
     expect(sanitize("a <!-- unterminated")).toBe("a")
+    expect(sanitize("<a/href=//evil.example>x</a>")).toBe("x")
   })
 
   it("treats an unclosed fence as code to the end, as GitHub does", () => {
