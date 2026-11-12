@@ -21,8 +21,8 @@ limits.
 
 ## What you can do
 
-Read, Glob and Grep anywhere in the repo; `git log` and `git blame`; the `Skill`
-tool. Edit and Write only under `app/`, `lib/` (not `lib/tasks/`) and `spec/` (not
+Read, Glob and Grep anywhere in the repo; `git log` and `git blame`, written
+without quotes or other shell syntax; the `Skill` tool. Edit and Write only under `app/`, `lib/` (not `lib/tasks/`) and `spec/` (not
 `spec/spec_helper.rb`, `spec/rails_helper.rb` or `spec/support/`), plus the two
 output files below. Nothing else: no other shell command, no network, no tests. A
 hook blocks anything outside this. Don't try to work around a block; if you need

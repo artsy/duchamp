@@ -25,8 +25,8 @@ skills = os.path.realpath(os.path.expanduser("~/.claude/skills"))
 data = json.load(sys.stdin)
 tool = data.get("tool_name", "")
 args = data.get("tool_input") or {}
-value = args.get("command") or args.get("file_path") or args.get("notebook_path") or args.get("path") or ""
-value = str(value)
+key = {"Bash": "command", "NotebookEdit": "notebook_path", "Grep": "path", "Glob": "path"}.get(tool, "file_path")
+value = str(args.get(key) or "")
 target = os.path.realpath(os.path.join(repo, value)) if value else ""
 sys.stdout.write("\0".join([tool, value, target, repo, out, packet, skills]) + "\0")
 ' "$1" "$2" "$3" > "$parsed"
@@ -60,12 +60,13 @@ case "$tool" in
     esac
     ;;
   Bash)
-    # Only plain `git log` and `git blame`. No shell syntax, and no options that
-    # write files or run diff drivers.
+    # Only plain `git log` and `git blame`: no shell syntax, no quotes (--out"put" reaches
+    # git as --output), no option that writes a file, prints one, or runs a diff driver.
     [[ "$value" =~ ^git\ (log|blame)(\ |$) ]] || block "only git log and git blame may run"
-    [[ "$value" != *[\;\&\|\`\$\<\>\(\)\{\}\\]* ]] || block "shell syntax is not allowed"
+    [[ "$value" != *[\;\&\|\`\$\<\>\(\)\{\}\\\"\']* ]] || block "shell syntax and quotes are not allowed"
     [[ "$value" != *$'\n'* ]] || block "one command per call"
-    [[ ! "$value" =~ --output(=|\ |$)|--ext-diff|--textconv ]] || block "git option not allowed"
+    [[ ! "$value" =~ --output|--ext-diff|--textconv|--con|--ignore-revs ]] || block "git option not allowed"
+    [[ ! "$value" =~ ^git\ blame.*[[:space:]]-[A-Za-z]*S ]] || block "git blame -S is not allowed"
     exit 0
     ;;
   WebFetch | WebSearch | mcp__*)

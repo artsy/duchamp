@@ -108,6 +108,12 @@ describe("Edit and Write", () => {
     )
     expect(allowed("MultiEdit", { file_path: "app/models/a.rb" })).toBe(true)
   })
+
+  it("checks the path the tool writes to, not another argument", () => {
+    expect(
+      allowed("Write", { command: "app/models/a.rb", file_path: "Gemfile" })
+    ).toBe(false)
+  })
 })
 
 describe("Bash", () => {
@@ -116,6 +122,7 @@ describe("Bash", () => {
     "git log a1b2c3d..HEAD -- app",
     "git blame -L 10,20 app/models/artwork.rb",
     "git log",
+    "git log -Sprice_cents --oneline -- app",
   ])("allows %s", command => {
     expect(allowed("Bash", { command })).toBe(true)
   })
@@ -132,6 +139,14 @@ describe("Bash", () => {
     "git log > app/x.rb",
     "git log --output=app/x.rb",
     "git log --output app/x.rb",
+    "git log --output\tapp/x.rb",
+    'git log --format=[core]%n%x09fsmonitor=id --out"put"=.git/config',
+    "git log --out'put'=.git/config",
+    "git blame --contents .git/config app/models/artwork.rb",
+    "git blame --con /proc/self/environ app/models/artwork.rb",
+    "git blame --ignore-revs-file .git/config app/models/artwork.rb",
+    "git blame -S .git/config app/models/artwork.rb",
+    "git blame -wS.git/config app/models/artwork.rb",
     "git log -p --ext-diff",
     "git log -p --textconv",
     "git log\nid",
