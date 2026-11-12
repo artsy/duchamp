@@ -1,0 +1,60 @@
+# Copy into a target repo as `.github/workflows/run-autofix.yml`.
+#
+# Turns new production errors from Datadog into draft PRs: a regression test plus
+# a fix, for a human to read before CI runs. Pair it with run-autofix-ci.yml.
+#
+# Required secrets:
+#   ANTHROPIC_AUTOFIX_KEY  - dedicated Anthropic key with a monthly spend limit
+#   DD_AUTOFIX_API_KEY     - Datadog API key
+#   DD_AUTOFIX_APP_KEY     - Datadog app key, scoped apm_read + error_tracking_read
+#   TRIAGE_ISSUES_TOKEN    - issues:write on this repo only (fine-grained token)
+#   AUTOFIX_APP_ID         - autofix GitHub App ID
+#   AUTOFIX_APP_PRIVATE_KEY - its private key (contents, pull-requests, issues write)
+#
+# One-time setup:
+#   - sync the `datadog-triage` and `screen-untrusted-input` skills into
+#     `.claude/skills/` from artsy/agent-tooling (the run aborts without them)
+#   - create the `triage`, `triage/fixed` and `triage/rejected` labels
+#   - set the repository variable AUTOFIX_DRY_RUN=true until a few dry runs look right
+name: Autofix
+
+on:
+  schedule:
+    - cron: "0 7 * * 1,4" # 07:00 UTC, Monday and Thursday
+  workflow_dispatch:
+    inputs:
+      dd-issue-id:
+        description: "Fix one Datadog issue (skips ranking and triage)"
+        required: false
+        type: string
+      dry-run:
+        description: "Stop before pushing a branch"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  id-token: write
+
+jobs:
+  autofix:
+    uses: artsy/duchamp/.github/workflows/autofix-datadog.yml@main
+    with:
+      services: "gravity gravity.grape gravity.sidekiq gravity.sneakers"
+      dd-issue-id: ${{ inputs.dd-issue-id || '' }}
+      dry-run: ${{ inputs.dry-run || false }}
+      # issue-limit: 3
+      # min-events: 5
+      # min-users: 1
+      # max-lines: 150
+      # sensitive-paths: "app/models/order*.rb lib/payments/**"
+    secrets:
+      anthropic-api-key: ${{ secrets.ANTHROPIC_AUTOFIX_KEY }}
+      dd-api-key: ${{ secrets.DD_AUTOFIX_API_KEY }}
+      dd-app-key: ${{ secrets.DD_AUTOFIX_APP_KEY }}
+      triage-issues-token: ${{ secrets.TRIAGE_ISSUES_TOKEN }}
+      app-id: ${{ secrets.AUTOFIX_APP_ID }}
+      app-private-key: ${{ secrets.AUTOFIX_APP_PRIVATE_KEY }}
