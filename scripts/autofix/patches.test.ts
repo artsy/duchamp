@@ -114,7 +114,7 @@ it("splits the agent's changes into a test patch and a fix patch, from app/lib/s
   expect(test + fix).not.toContain("Gemfile")
   expect(read("result.json")).toBe('{"decision":"fix"}')
   expect(read("pr-body.md")).toBe("## Summary\n")
-  expect(read("meta.json")).toContain("dd_issue_id")
+  expect(fs.existsSync(path.join(autofix, "artifact/meta.json"))).toBe(false)
 })
 
 it("ignores a tampered .git/config in the workspace", () => {

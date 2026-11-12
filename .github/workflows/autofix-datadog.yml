@@ -559,7 +559,6 @@ jobs:
               head -c 65536 "$AUTOFIX/out/$file" > "$AUTOFIX/artifact/$file"
             fi
           done
-          cp "$AUTOFIX/packet/meta.json" "$AUTOFIX/artifact/meta.json"
           wc -l "$AUTOFIX"/artifact/*.patch
 
       - name: Record cost
@@ -616,6 +615,24 @@ jobs:
         if: steps.download.outcome != 'success'
         run: |
           echo "No patch for \`$DD_ISSUE_ID\`: the fix job did not finish. Skipped." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Download packets
+        if: steps.download.outcome == 'success'
+        uses: actions/download-artifact@v4
+        with:
+          name: autofix-select
+          path: ${{ runner.temp }}/autofix/select
+
+      # meta.json (title, reviewers, base SHA, suspect range) comes from select, never
+      # from the fix job, whose artifact supplies only the patches and the agent's files.
+      - name: Stage this error's meta.json
+        if: steps.download.outcome == 'success'
+        run: |
+          set -euo pipefail
+          [[ "$DD_ISSUE_ID" =~ ^[A-Za-z0-9][A-Za-z0-9-]{0,63}$ ]]
+          rm -f "$RUNNER_TEMP/autofix/in/meta.json"
+          cp "$RUNNER_TEMP/autofix/select/packets/$DD_ISSUE_ID/meta.json" "$RUNNER_TEMP/autofix/in/meta.json"
+          rm -rf "$RUNNER_TEMP/autofix/select"
 
       - name: Checkout target repo
         if: steps.download.outcome == 'success'
@@ -726,6 +743,8 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           TITLE: ${{ steps.decide.outputs.title }}
+          TEST_COMMIT: ${{ steps.decide.outputs.test_commit }}
+          FIX_COMMIT: ${{ steps.decide.outputs.fix_commit }}
           BRANCH: ${{ steps.decide.outputs.branch }}
           REVIEWERS: ${{ steps.decide.outputs.reviewers }}
           ASSIGNEE: ${{ steps.decide.outputs.assignee }}
@@ -743,9 +762,11 @@ jobs:
           git config user.name "${APP_SLUG}[bot]"
           git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
           # [skip ci]: the repo's CI runs this code only after a human adds autofix/run-ci.
-          git -c core.hooksPath=/dev/null commit --quiet --no-verify \
-            -m "test: reproduce ${TITLE#fix: } [skip ci]" -- spec
-          git -c core.hooksPath=/dev/null commit --quiet --no-verify -m "$TITLE [skip ci]"
+          for message in "$TEST_COMMIT" "$FIX_COMMIT"; do
+            [[ "$message" == *" [skip ci]" ]] || { echo "AUTOFIX FAILED: commit message without [skip ci]." >&2; exit 1; }
+          done
+          git -c core.hooksPath=/dev/null commit --quiet --no-verify -m "$TEST_COMMIT" -- spec
+          git -c core.hooksPath=/dev/null commit --quiet --no-verify -m "$FIX_COMMIT"
           auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           echo "::add-mask::$auth"
           git -c core.hooksPath=/dev/null -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
