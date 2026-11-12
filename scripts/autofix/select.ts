@@ -132,13 +132,14 @@ export const frameGate = (
 }
 
 /**
- * Ruby puts the message, which can span lines, into the stack's first line. Cut it
- * out so a message can't add frames of its own.
+ * dd-trace writes `<frame>: <message> (<class>)`, and a message can span lines. Cut
+ * it out so it can't add frames of its own. The `: ` keeps a short message such as
+ * "404" from also cutting paths and line numbers.
  */
 const withoutMessage = (stack: string, messages: string[]): string =>
   messages
     .filter(message => message.length > 0)
-    .reduce((text, message) => text.split(message).join(""), stack)
+    .reduce((text, message) => text.split(`: ${message}`).join(": "), stack)
 
 /** The stack to use: the span's, or the issue's own raising frame when there is no span. */
 export const framesFor = (

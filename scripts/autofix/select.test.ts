@@ -171,6 +171,19 @@ describe("frameGate", () => {
     })
   })
 
+  it("keeps paths and line numbers intact when the message is short", () => {
+    const short = {
+      stack:
+        "/app/app/models/artwork.rb:404:in 'Artwork#find': 404 (RuntimeError)\n\tfrom /app/app/api/a.rb:1:in 'a'",
+      message: "404",
+      resourceName: "",
+      url: "",
+    }
+    expect(
+      frameGate(framesFor(issue({ errorMessage: "a" }), short))
+    ).toMatchObject({ top: { path: "app/models/artwork.rb", line: 404 } })
+  })
+
   it("falls back to the issue's own frame without a span", () => {
     expect(framesFor(issue(), null)).toEqual([
       { file: "/app/app/models/artwork.rb", line: 0, method: "Artwork#title" },
