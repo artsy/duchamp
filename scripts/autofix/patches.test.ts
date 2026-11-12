@@ -202,3 +202,45 @@ it("applies on a fresh checkout and passes the guards end to end", () => {
   })
   expect(result.reasons).toEqual([])
 })
+
+describe("Materialize fix settings", () => {
+  const tooling = () => path.join(autofix, "tooling")
+
+  beforeEach(() => {
+    for (const name of ["fix-settings.json", "fix-guard.sh"]) {
+      write(
+        path.join(tooling(), "scripts/autofix", name),
+        fs.readFileSync(path.join(__dirname, name), "utf8")
+      )
+    }
+    write(path.join(workspace, ".claude/skills/evil/SKILL.md"), "hooks\n")
+    write(path.join(workspace, ".claude/settings.json"), "{}\n")
+    write(path.join(workspace, ".mcp.json"), "{}\n")
+    git(workspace, "add", ".")
+    git(workspace, "commit", "-qm", "repo claude config")
+    fs.rmSync(path.join(autofix, "pristine"), { recursive: true })
+    sh(stepScript("fix", "Make a pristine clone"), workspace, {
+      BASE_SHA: git(workspace, "rev-parse", "HEAD").trim(),
+    })
+    const env = path.join(root, "github_env")
+    fs.writeFileSync(env, "")
+    sh(stepScript("fix", "Materialize fix settings"), workspace, {
+      GITHUB_ENV: env,
+    })
+  })
+
+  it("moves the repo's whole .claude/ and .mcp.json out of the tree", () => {
+    expect(fs.existsSync(path.join(workspace, ".claude"))).toBe(false)
+    expect(fs.existsSync(path.join(workspace, ".mcp.json"))).toBe(false)
+    expect(
+      fs.existsSync(path.join(autofix, "target-claude/skills/evil/SKILL.md"))
+    ).toBe(true)
+  })
+
+  it("keeps the move out of the patches", () => {
+    write(path.join(workspace, "spec/models/artwork_spec.rb"), "changed\n")
+    buildPatches()
+    expect(read("test.patch") + read("fix.patch")).not.toContain(".claude")
+    expect(read("test.patch") + read("fix.patch")).not.toContain(".mcp.json")
+  })
+})

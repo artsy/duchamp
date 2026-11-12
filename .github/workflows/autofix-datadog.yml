@@ -469,19 +469,18 @@ jobs:
           cp -R "$AUTOFIX/tooling/vendor/skills/diagnosing-bugs" "$AUTOFIX/tooling/vendor/skills/pr" \
             "$HOME/.claude/skills/"
 
-      # The repo's own Claude settings could add hooks that run code on files the
-      # agent writes, before anyone has read them. The patch only takes app/, lib/ and
-      # spec/, so removing these never reaches the PR.
+      # The repo's own .claude/ could add hooks, skills or instructions that run on
+      # files the agent writes, before anyone has read them. The agent's skills come
+      # from duchamp. The patch only takes app/, lib/ and spec/, so this never reaches
+      # the PR.
       - name: Materialize fix settings
         run: |
           set -euo pipefail
-          rm -f .claude/settings.json .claude/settings.local.json .mcp.json
-          SECRET_HOOK="$GITHUB_WORKSPACE/.claude/skills/datadog-triage/reference/hooks/block-secret-reads.sh"
-          if [ ! -f "$SECRET_HOOK" ]; then
-            echo "AUTOFIX FAILED: no block-secret-reads.sh in the synced datadog-triage skill." >&2
-            exit 1
+          if [ -e .claude ] || [ -L .claude ]; then
+            mv .claude "$AUTOFIX/target-claude"
           fi
-          chmod +x "$SECRET_HOOK" "$AUTOFIX/tooling/scripts/autofix/fix-guard.sh"
+          rm -f .mcp.json
+          chmod +x "$AUTOFIX/tooling/scripts/autofix/fix-guard.sh"
           SETTINGS="$AUTOFIX/fix-settings.json"
           sed -e "s|__TOOLING__|$AUTOFIX/tooling|g" -e "s|__REPO__|$GITHUB_WORKSPACE|g" \
               -e "s|__OUT__|$AUTOFIX/out|g" -e "s|__PACKET__|$AUTOFIX/packet|g" \
