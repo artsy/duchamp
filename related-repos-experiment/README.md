@@ -11,10 +11,13 @@ can be in either, both or neither.
 1. **Enrol.** Add your GitHub login to `participants.yml` and open a PR. Every PR you
    author then reads related repos, in any repo using the shared workflow. Case does
    not matter.
-2. **Per PR.** Add the `ai-review-related-repos` label to a single PR. It takes effect
+2. **Per repo.** Add the repo's full `owner/name` under `repos` in `participants.yml`.
+   Every PR in it then reads related repos, whoever wrote it. artsy/volt and
+   artsy/gravity are listed.
+3. **Per PR.** Add the `ai-review-related-repos` label to a single PR. It takes effect
    on the next push.
 
-Leaving is the same in reverse: remove your login, or drop the label.
+Leaving is the same in reverse: remove your login or the repo, or drop the label.
 
 Datadog tags each review `related_repos:true` when it read at least one related repo.
 

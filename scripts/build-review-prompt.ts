@@ -198,14 +198,24 @@ export const inLeanReviews = (
   return loadParticipants().includes(author.toLowerCase())
 }
 
-/** Whether this review reads related repos: listed authors and labelled PRs. */
+/**
+ * Whether this review reads related repos: listed authors, every PR in a listed repo,
+ * and labelled PRs.
+ */
 export const inRelatedReposExperiment = (
   author: string | undefined,
-  labels: string[]
+  labels: string[],
+  repo: string | undefined
 ): boolean =>
   labels.some(label => label.toLowerCase() === RELATED_REPOS_LABEL) ||
   (!!author &&
-    loadParticipants("related-repos-experiment").includes(author.toLowerCase()))
+    loadParticipants("related-repos-experiment").includes(
+      author.toLowerCase()
+    )) ||
+  (!!repo &&
+    loadEnrolment("related-repos-experiment", "repos").includes(
+      repo.toLowerCase()
+    ))
 
 export const hasSecurityLabel = (labels: string[]): boolean =>
   labels.some(label => label.toLowerCase() === SECURITY_LABEL)
@@ -802,7 +812,11 @@ export const formatDelivery = (
 const main = (): void => {
   const labels = parseLabels(process.env.PR_LABELS)
   const inLean = inLeanReviews(process.env.PR_AUTHOR, labels)
-  const inRelatedRepos = inRelatedReposExperiment(process.env.PR_AUTHOR, labels)
+  const inRelatedRepos = inRelatedReposExperiment(
+    process.env.PR_AUTHOR,
+    labels,
+    process.env.GITHUB_REPOSITORY
+  )
   const inSecurity = inSecurityExperiment(
     process.env.PR_AUTHOR,
     labels,

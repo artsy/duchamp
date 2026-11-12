@@ -775,7 +775,9 @@ describe("inRelatedReposExperiment", () => {
   it("is true for an enrolled author, case-insensitively, from its own list", () => {
     mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
 
-    expect(inRelatedReposExperiment("mounirdhahri", [])).toBe(true)
+    expect(inRelatedReposExperiment("mounirdhahri", [], "artsy/eigen")).toBe(
+      true
+    )
     expect(
       mockFs.readFileSync.mock.calls.map(([p]) => String(p))
     ).toContainEqual(
@@ -789,20 +791,49 @@ describe("inRelatedReposExperiment", () => {
     mockFs.existsSync.mockReturnValue(false)
 
     expect(
-      inRelatedReposExperiment("someone-else", ["AI-Review-Related-Repos"])
+      inRelatedReposExperiment(
+        "someone-else",
+        ["AI-Review-Related-Repos"],
+        undefined
+      )
     ).toBe(true)
   })
 
   it("is false for the lean reviews experiment's label alone", () => {
     mockFs.existsSync.mockReturnValue(false)
 
-    expect(inRelatedReposExperiment("someone-else", [LEAN_LABEL])).toBe(false)
+    expect(
+      inRelatedReposExperiment("someone-else", [LEAN_LABEL], undefined)
+    ).toBe(false)
   })
 
   it("is false with no author and no label", () => {
     mockFs.existsSync.mockReturnValue(false)
 
-    expect(inRelatedReposExperiment(undefined, [])).toBe(false)
+    expect(inRelatedReposExperiment(undefined, [], undefined)).toBe(false)
+  })
+
+  it("is true for any author in a listed repo, case-insensitively", () => {
+    mockFiles({
+      "participants.yml":
+        "participants:\n  - MounirDhahri\nrepos:\n  - artsy/volt\n  - artsy/gravity\n",
+    })
+
+    expect(inRelatedReposExperiment("someone-else", [], "Artsy/Volt")).toBe(
+      true
+    )
+    expect(inRelatedReposExperiment(undefined, [], "artsy/gravity")).toBe(true)
+  })
+
+  it("is false for an unlisted author in an unlisted repo", () => {
+    mockFiles({
+      "participants.yml":
+        "participants:\n  - MounirDhahri\nrepos:\n  - artsy/volt\n",
+    })
+
+    expect(inRelatedReposExperiment("someone-else", [], "artsy/eigen")).toBe(
+      false
+    )
   })
 })
 
