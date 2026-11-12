@@ -1,0 +1,66 @@
+name: Autofix Run CI
+
+# Autofix commits carry [skip ci], so the repo's CI runs agent-written code only
+# after a human has read it and added the `autofix/run-ci` label. This pushes an
+# empty commit without [skip ci] on top of the head they reviewed.
+
+on:
+  workflow_call:
+    secrets:
+      app-id:
+        description: "ID of the autofix GitHub App"
+        required: true
+      app-private-key:
+        description: "Private key of the autofix GitHub App"
+        required: true
+
+jobs:
+  run-ci:
+    if: >-
+      github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      github.event.label.name == 'autofix/run-ci' &&
+      startsWith(github.event.pull_request.head.ref, 'autofix/') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Mint app token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+
+      - name: Check the labeller can write to the repo
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          LABELLER: ${{ github.event.sender.login }}
+        run: |
+          set -euo pipefail
+          permission="$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$LABELLER/permission" --jq .permission)"
+          case "$permission" in
+            admin | maintain | write) echo "$LABELLER has $permission access." ;;
+            *)
+              echo "AUTOFIX RUN-CI REFUSED: $LABELLER has $permission access, not write." >&2
+              exit 1
+              ;;
+          esac
+
+      # Built through the API from the head the label was added on, without checking
+      # the code out. The ref update is not forced, so a push since then makes it fail.
+      - name: Push an empty commit to start CI
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          LABELLER: ${{ github.event.sender.login }}
+        run: |
+          set -euo pipefail
+          tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$HEAD_SHA" --jq .tree.sha)"
+          commit="$(gh api -X POST "repos/$GITHUB_REPOSITORY/git/commits" \
+            -f message="chore: run CI on the reviewed autofix patch (labelled by $LABELLER)" \
+            -f tree="$tree" -f "parents[]=$HEAD_SHA" --jq .sha)"
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/heads/$BRANCH" \
+            -f sha="$commit" -F force=false >/dev/null
+          echo "Pushed $commit on $BRANCH to start CI." >> "$GITHUB_STEP_SUMMARY"
