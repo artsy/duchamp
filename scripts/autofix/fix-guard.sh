@@ -20,7 +20,7 @@ trap 'block "hook error"' ERR
 # below compare real locations. -I keeps it from importing anything from the cwd.
 parsed="$(mktemp)"
 python3 -I -c '
-import json, os, sys
+import fnmatch, json, os, re, sys
 repo, out, packet = (os.path.realpath(p) for p in sys.argv[1:4])
 skills = os.path.realpath(os.path.expanduser("~/.claude/skills"))
 data = json.load(sys.stdin)
@@ -30,12 +30,17 @@ key = {"Bash": "command", "NotebookEdit": "notebook_path", "Grep": "path", "Glob
 value = str(args.get(key) or "")
 target = os.path.realpath(os.path.join(repo, value)) if value else ""
 glob = str(args.get({"Glob": "pattern", "Grep": "glob"}.get(tool, "")) or "")
-sys.stdout.write("\0".join([tool, value, target, repo, out, packet, skills, glob]) + "\0")
+# A bare * or ** is left to the tools, which skip .git themselves.
+glob_git = any(
+    seg not in ("*", "**") and fnmatch.fnmatchcase(".git", seg.lower())
+    for seg in re.split(r"[/{},]", glob) if seg
+)
+sys.stdout.write("\0".join([tool, value, target, repo, out, packet, skills, glob, str(int(glob_git))]) + "\0")
 ' "$1" "$2" "$3" > "$parsed"
 fields=()
 while IFS= read -r -d '' field; do fields+=("$field"); done < "$parsed"
 rm -f "$parsed"
-[ "${#fields[@]}" -eq 8 ] || block "could not read the tool call"
+[ "${#fields[@]}" -eq 9 ] || block "could not read the tool call"
 tool="${fields[0]}"
 value="${fields[1]}"
 target="${fields[2]}"
@@ -44,6 +49,7 @@ out="${fields[4]}"
 packet="${fields[5]}"
 skills="${fields[6]}"
 glob="${fields[7]}"
+glob_git="${fields[8]}"
 
 path_re='^[A-Za-z0-9_][A-Za-z0-9_./-]*$'
 rev='([0-9a-f]{7,40}|HEAD(~[0-9]{1,4})?)'
@@ -137,6 +143,7 @@ glob_in_repo() {
   [[ "$glob" != /* && "$glob" != *~* ]] || block "$glob is not relative to the repo"
   [[ ! "$glob" =~ (^|[/{,])\.\.($|[/},]) ]] || block "$glob climbs out with .."
   [[ ! "$glob" =~ [{,]/ ]] || block "$glob is not relative to the repo"
+  [ "$glob_git" = 0 ] || block "$glob can match the .git directory"
 }
 
 case "$tool" in

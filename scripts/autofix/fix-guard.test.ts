@@ -249,12 +249,28 @@ describe("other tools", () => {
     expect(allowed("Glob", { pattern: "app/**/*.rb" })).toBe(true)
     expect(allowed("Glob", { pattern: "*.rb", path: repo })).toBe(true)
     expect(allowed("Grep", { pattern: "/api/v1", glob: "*.rb" })).toBe(true)
+    expect(allowed("Grep", { pattern: "x", glob: "**/*.{rb,erb}" })).toBe(true)
+    expect(allowed("Glob", { pattern: "app/**/.gitkeep" })).toBe(true)
     expect(allowed("Grep", { pattern: "x", path: packet })).toBe(true)
   })
 
   it("allows Skill and TodoWrite", () => {
     expect(allowed("Skill", { skill: "diagnosing-bugs" })).toBe(true)
     expect(allowed("TodoWrite", { todos: [] })).toBe(true)
+  })
+
+  it.each([
+    ["Grep", { pattern: "x", glob: ".git/config" }],
+    ["Grep", { pattern: "x", glob: "**/.git/**" }],
+    ["Grep", { pattern: "x", glob: "{app,.git}/*" }],
+    ["Grep", { pattern: "x", glob: ".g*/config" }],
+    ["Grep", { pattern: "x", glob: "*git/config" }],
+    ["Grep", { pattern: "x", glob: ".[g]it/config" }],
+    ["Glob", { pattern: ".git/**" }],
+    ["Glob", { pattern: ".GIT/config" }],
+    ["Glob", { pattern: ".*/config" }],
+  ])("blocks a %s glob that reaches .git: %p", (tool, input) => {
+    expect(blocked(tool, input)).toBe(true)
   })
 
   it("blocks with exit 2 on an internal error", () => {
