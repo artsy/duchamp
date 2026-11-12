@@ -78,13 +78,13 @@ describe("parseResult", () => {
 })
 
 describe("sanitizeMarkdown", () => {
-  it("removes mentions in prose but not in code", () => {
+  it("removes mentions in prose and makes them inert in code", () => {
     expect(sanitize("Thanks @octocat and @artsy/eng")).toBe(
       "Thanks octocat and artsy/eng"
     )
-    expect(sanitize("`@user = nil`")).toBe("`@user = nil`")
+    expect(sanitize("`@user = nil` for #12")).toBe("`@\u200Buser = nil` for 12")
     expect(sanitize("```ruby\n@user = profile.user\n```")).toBe(
-      "```ruby\n@user = profile.user\n```"
+      "```ruby\n@\u200Buser = profile.user\n```"
     )
     expect(sanitize("mail me at a@b.com")).toBe("mail me at a@b.com")
   })
@@ -144,19 +144,26 @@ describe("sanitizeMarkdown", () => {
   it("treats an unclosed fence as code to the end, as GitHub does", () => {
     const text = "intro @a\n```\n@b #1\n"
     expect(splitCode(text).map(part => part.code)).toEqual([false, true])
-    expect(sanitize(text)).toBe("intro a\n```\n@b #1")
+    expect(sanitize(text)).toBe("intro a\n```\n@\u200Bb #\u200B1")
   })
 
   it.each([
     "`a\n\n@x Fixes #1\n\nb`",
     "```x`\n@x Fixes #1",
     "cc `@octocat Fixes #1",
-  ])("treats text GitHub renders as prose as prose: %p", text => {
-    const out = sanitize(text)
-    expect(out).not.toMatch(/@/)
-    expect(out).not.toMatch(/fixes/i)
-    expect(out).not.toMatch(/#\d/)
-  })
+    "\\`@octocat Fixes #1`",
+    "`a\n# Fixes #1 @octocat\n`",
+    "`a\n> Fixes #1 @octocat\n`",
+    "`a\n- Fixes #1 @octocat\n`",
+    "<span>@octocat Fixes #1 `</span> `",
+  ])(
+    "leaves no live mention or issue ref in text GitHub renders as prose: %p",
+    text => {
+      const out = sanitize(text)
+      expect(out).not.toMatch(/@[A-Za-z0-9]/)
+      expect(out).not.toMatch(/#\d/)
+    }
+  )
 
   it("cuts to length", () => {
     expect(sanitizeMarkdown("x".repeat(50), 10)).toHaveLength(10)

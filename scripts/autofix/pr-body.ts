@@ -136,11 +136,18 @@ export const splitCode = (text: string): { code: boolean; text: string }[] => {
   return parts
 }
 
+// splitCode can't match cmark-gfm exactly, so code that GitHub renders as prose still
+// must not mention anyone or name an issue. U+200B is invisible in real code spans.
+const inertCode = (text: string): string =>
+  text.replace(/@(?=[A-Za-z0-9])/g, "@\u200B").replace(/#(?=\d)/g, "#\u200B")
+
 export const sanitizeMarkdown = (text: string, max: number): string =>
   clip(
     splitCode(stripHidden(text))
       .map(part =>
-        sanitizeUrls(part.code ? part.text : sanitizeProse(part.text))
+        sanitizeUrls(
+          part.code ? inertCode(part.text) : sanitizeProse(part.text)
+        )
       )
       .join("")
       .trim(),
