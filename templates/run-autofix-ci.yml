@@ -5,8 +5,10 @@
 # code. Only labels from people with write access count.
 name: Autofix Run CI
 
+# pull_request_target, because the head commit's [skip ci] suppresses pull_request.
+# Safe here: the job never checks out or runs the PR's code, only calls the API.
 on:
-  pull_request:
+  pull_request_target:
     types: [labeled]
 
 permissions: {}

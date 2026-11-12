@@ -2,7 +2,8 @@ name: Autofix Run CI
 
 # Autofix commits carry [skip ci], so the repo's CI runs agent-written code only
 # after a human has read it and added the `autofix/run-ci` label. This pushes an
-# empty commit without [skip ci] on top of the head they reviewed.
+# empty commit without [skip ci] on top of the head they reviewed. Callers trigger it
+# on pull_request_target: [skip ci] on the head commit suppresses pull_request runs.
 
 on:
   workflow_call:
@@ -17,7 +18,7 @@ on:
 jobs:
   run-ci:
     if: >-
-      github.event_name == 'pull_request' && github.event.action == 'labeled' &&
+      github.event_name == 'pull_request_target' && github.event.action == 'labeled' &&
       github.event.label.name == 'autofix/run-ci' &&
       startsWith(github.event.pull_request.head.ref, 'autofix/') &&
       github.event.pull_request.head.repo.full_name == github.repository
