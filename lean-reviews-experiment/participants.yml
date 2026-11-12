@@ -1,5 +1,8 @@
 # GitHub logins enrolled in the lean reviews experiment.
 #
+# `everyone: true` puts every PR in the experiment, whoever wrote it. Set it to false
+# (or remove it) to go back to the list and the labels.
+#
 # PRs by anyone on this list get AGENTS.md and the diff in the prompt, re-reviews of
 # only what changed, a lighter model for small changes, and fewer inline comments (no
 # inline nits). Related repos are now their own experiment; see
@@ -11,6 +14,8 @@
 # without being on this list.
 #
 # See README.md in this directory.
+
+everyone: true
 
 participants:
   - MounirDhahri

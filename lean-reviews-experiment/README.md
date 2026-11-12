@@ -1,7 +1,8 @@
 # Lean reviews
 
-An opt-in addition to the [AI PR review](../review/README.md) that makes reviews
-cheaper and quieter. Lean PRs:
+An addition to the [AI PR review](../review/README.md) that makes reviews cheaper and
+quieter. It started as an opt-in and is now on for every PR, through `everyone: true`
+in `participants.yml`. Lean PRs:
 
 - get the repo's AGENTS.md and the PR diff in the prompt (see
   [Context in the prompt](../review/README.md#context-in-the-prompt))
@@ -29,7 +30,8 @@ this experiment; it is now the
 
 ## Joining
 
-Two ways in:
+With `everyone: true` in `participants.yml`, every PR is in and there is nothing to
+join. Setting it to false turns the experiment back into an opt-in, with two ways in:
 
 1. **Enrol.** Add your GitHub login to `participants.yml` and open a PR. Every PR you
    author then gets these changes, in any repo using the shared workflow. Case does
