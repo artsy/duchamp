@@ -175,7 +175,7 @@ Other PRs get a full review on every push and no marker.
 Anything that posts with the repo's `GITHUB_TOKEN` writes as `github-actions[bot]`,
 including a workflow a PR adds. So a PR author with write access could plant a marker
 and skip the AI review of their own changes. The AI review is not a merge gate, so the
-experiment accepts that. Signing the marker would close it before a wider rollout.
+experiment accepts that, now for every PR since lean reviews went to everyone. Signing the marker would close it before a wider rollout.
 
 ## Precedence
 
@@ -227,7 +227,7 @@ It prints median cost, turns, time and cache hit rate per window, group and revi
 mode. The group is `experiment` for PRs in
 [lean reviews](../lean-reviews-experiment/README.md) (the value predates the rename),
 `standard` for the rest, and `unknown` for log lines from before the group was
-recorded. The two groups differ in more than one way (lean PRs also re-review and
+recorded. Since lean reviews went to every PR, new runs are all `experiment`. The two groups differ in more than one way (lean PRs also re-review and
 route models), so compare each group with itself before and after a change.
 It finds runs by the caller's workflow file, `run-claude-review.yml` unless you pass
 `--workflow`. GitHub keeps logs for 90 days by default, so older windows are gone.

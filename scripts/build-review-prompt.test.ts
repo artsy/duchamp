@@ -748,6 +748,23 @@ describe("inLeanReviews", () => {
 
     expect(inLeanReviews(undefined, [])).toBe(false)
   })
+
+  it("is true for every PR when participants.yml sets everyone", () => {
+    mockFiles({
+      "participants.yml": "everyone: true\nparticipants:\n  - MounirDhahri\n",
+    })
+
+    expect(inLeanReviews("someone-else", [])).toBe(true)
+    expect(inLeanReviews(undefined, [])).toBe(true)
+  })
+
+  it("ignores everyone unless it is the boolean true", () => {
+    mockFiles({ "participants.yml": 'everyone: "true"\nparticipants: []\n' })
+    expect(inLeanReviews("someone-else", [])).toBe(false)
+
+    mockFiles({ "participants.yml": "everyone: false\nparticipants: []\n" })
+    expect(inLeanReviews("someone-else", [])).toBe(false)
+  })
 })
 
 describe("inRelatedReposExperiment", () => {

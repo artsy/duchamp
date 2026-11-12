@@ -99,36 +99,46 @@ const toolingPath = (...parts: string[]): string =>
 export const loadReviewPrompt = (): string =>
   fs.readFileSync(toolingPath("review", "prompt.md"), "utf8")
 
+const loadParticipantsFile = (
+  experiment: string
+): Record<string, unknown> | null => {
+  const participantsPath = toolingPath(experiment, "participants.yml")
+
+  if (!fs.existsSync(participantsPath)) {
+    return null
+  }
+
+  try {
+    return yaml.load(fs.readFileSync(participantsPath, "utf8")) as Record<
+      string,
+      unknown
+    > | null
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`Warning: Failed to parse participants.yml: ${message}`)
+    return null
+  }
+}
+
 /** A list in an experiment's participants.yml, lowercased. */
 const loadEnrolment = (
   experiment: string,
   key: "participants" | "repos"
 ): string[] => {
-  const participantsPath = toolingPath(experiment, "participants.yml")
+  const entries = loadParticipantsFile(experiment)?.[key]
 
-  if (!fs.existsSync(participantsPath)) {
+  if (!Array.isArray(entries)) {
     return []
   }
 
-  try {
-    const parsed = yaml.load(
-      fs.readFileSync(participantsPath, "utf8")
-    ) as Record<string, unknown> | null
-    const entries = parsed?.[key]
-
-    if (!Array.isArray(entries)) {
-      return []
-    }
-
-    return entries
-      .filter((entry): entry is string => typeof entry === "string")
-      .map(entry => entry.toLowerCase())
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(`Warning: Failed to parse participants.yml: ${message}`)
-    return []
-  }
+  return entries
+    .filter((entry): entry is string => typeof entry === "string")
+    .map(entry => entry.toLowerCase())
 }
+
+/** Whether an experiment's participants.yml sets `everyone: true`. */
+const enrolsEveryone = (experiment: string): boolean =>
+  loadParticipantsFile(experiment)?.everyone === true
 
 /** Logins in an experiment's participants.yml, lowercased. */
 export const loadParticipants = (
@@ -161,7 +171,10 @@ export const parseLabels = (raw: string | undefined): string[] => {
     .filter(label => label.length > 0)
 }
 
-/** Whether this review is in the lean reviews experiment: listed authors and labelled PRs. */
+/**
+ * Whether this review is in the lean reviews experiment: every PR when participants.yml
+ * sets `everyone: true`, otherwise listed authors and labelled PRs.
+ */
 export const inLeanReviews = (
   author: string | undefined,
   labels: string[]
@@ -171,6 +184,10 @@ export const inLeanReviews = (
       [LEAN_LABEL, LEAN_LEGACY_LABEL].includes(label.toLowerCase())
     )
   ) {
+    return true
+  }
+
+  if (enrolsEveryone("lean-reviews-experiment")) {
     return true
   }
 
