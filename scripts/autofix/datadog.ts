@@ -130,10 +130,13 @@ export interface SearchOptions {
   to: number
 }
 
-/** Open backend issues matching `query`, most events first. */
-export const searchIssues = async (
+/** The search endpoint returns at most this many issues and has no paging. */
+export const SEARCH_LIMIT = 100
+
+const search = async (
   config: DatadogConfig,
-  { query, from, to }: SearchOptions
+  { query, from, to }: SearchOptions,
+  orderBy: "TOTAL_COUNT" | "FIRST_SEEN"
 ): Promise<ErrorIssue[]> =>
   parseSearch(
     await request(
@@ -148,13 +151,41 @@ export const searchIssues = async (
             from,
             to,
             track: "trace",
-            order_by: "TOTAL_COUNT",
+            order_by: orderBy,
             states: ["OPEN"],
           },
         },
       }
     )
   )
+
+/** Open backend issues matching `query`, most events first. */
+export const searchIssues = (
+  config: DatadogConfig,
+  options: SearchOptions
+): Promise<ErrorIssue[]> => search(config, options, "TOTAL_COUNT")
+
+/**
+ * Open issues first seen since `from`, newest first. A full page is complete only
+ * when it reaches an issue first seen before `from`; otherwise this throws.
+ */
+export const searchNewIssues = async (
+  config: DatadogConfig,
+  options: SearchOptions
+): Promise<ErrorIssue[]> => {
+  const issues = await search(config, options, "FIRST_SEEN")
+  if (issues.length < SEARCH_LIMIT) return issues
+  const newestFirst = issues.every(
+    (issue, i) => i === 0 || issues[i - 1].firstSeen >= issue.firstSeen
+  )
+  if (!newestFirst || issues[issues.length - 1].firstSeen >= options.from) {
+    throw new DatadogError(
+      `Datadog search returned a full page of ${issues.length} issues without reaching the start of the window; some new errors would be missed`,
+      200
+    )
+  }
+  return issues
+}
 
 /** One issue by id, without counts (the get endpoint has none). */
 export const getIssue = async (

@@ -8,7 +8,9 @@ import {
   latestErrorSpan,
   parseSearch,
   permalink,
+  SEARCH_LIMIT,
   searchIssues,
+  searchNewIssues,
 } from "./datadog"
 
 const fixture = (name: string): string =>
@@ -22,6 +24,20 @@ const respond = (status: number, body: string) =>
     status,
     text: async () => body,
   }))
+
+const searchResponse = (issues: { id: string; firstSeen: number }[]) => ({
+  data: issues.map(({ id }) => ({
+    id,
+    type: "error_tracking_search_result",
+    attributes: { total_count: 1 },
+    relationships: { issue: { data: { id, type: "issue" } } },
+  })),
+  included: issues.map(({ id, firstSeen }) => ({
+    id,
+    type: "issue",
+    attributes: { first_seen: firstSeen, first_seen_version: "ABCDEF1234567" },
+  })),
+})
 
 const configWith = (fetch: Fetch): DatadogConfig => ({
   apiKey: "api",
@@ -93,6 +109,55 @@ describe("searchIssues", () => {
         to: 2,
       })
     ).rejects.toThrow("invalid JSON")
+  })
+})
+
+describe("searchNewIssues", () => {
+  const FROM = 1_000_000
+  const issues = (count: number, oldest: number) =>
+    Array.from({ length: count }, (_, i) => ({
+      id: `id-${i}`,
+      firstSeen: i === count - 1 ? oldest : FROM + (count - i) * 1000,
+    }))
+
+  it("orders by first seen", async () => {
+    const fetch = respond(200, fixture("datadog-search.json"))
+    await searchNewIssues(configWith(fetch), { query: "q", from: FROM, to: 2 })
+    expect(JSON.parse(fetch.mock.calls[0][1].body!).data.attributes.order_by).toBe(
+      "FIRST_SEEN"
+    )
+  })
+
+  it("accepts a full page that reaches past the start of the window", async () => {
+    const body = JSON.stringify(searchResponse(issues(SEARCH_LIMIT, FROM - 1)))
+    const found = await searchNewIssues(configWith(respond(200, body)), {
+      query: "q",
+      from: FROM,
+      to: 2,
+    })
+    expect(found).toHaveLength(SEARCH_LIMIT)
+  })
+
+  it("throws on a full page still inside the window", async () => {
+    const body = JSON.stringify(searchResponse(issues(SEARCH_LIMIT, FROM)))
+    await expect(
+      searchNewIssues(configWith(respond(200, body)), {
+        query: "q",
+        from: FROM,
+        to: 2,
+      })
+    ).rejects.toThrow("full page")
+  })
+
+  it("throws on a full page that is not newest first", async () => {
+    const page = issues(SEARCH_LIMIT, FROM - 1)
+    page[0].firstSeen = FROM - 5
+    await expect(
+      searchNewIssues(
+        configWith(respond(200, JSON.stringify(searchResponse(page)))),
+        { query: "q", from: FROM, to: 2 }
+      )
+    ).rejects.toThrow("full page")
   })
 })
 

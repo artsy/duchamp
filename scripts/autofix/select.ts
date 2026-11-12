@@ -10,6 +10,7 @@ import {
   latestErrorSpan,
   permalink,
   searchIssues,
+  searchNewIssues,
 } from "./datadog"
 import { type Frame, type InAppFrame, inAppFrames, parseStack } from "./stack"
 import { clip, fence, isDdIssueId, oneLine, stripHidden } from "./text"
@@ -716,7 +717,7 @@ export const main = async (
   } else {
     // This search doubles as the preflight: an auth or scope failure throws here,
     // so an empty list below is a verified "nothing new".
-    const issues = await searchIssues(config, {
+    const issues = await searchNewIssues(config, {
       query: serviceQuery(required("SERVICES")),
       from: now - WINDOW_DAYS * DAY_MS,
       to: now,
