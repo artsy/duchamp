@@ -666,7 +666,7 @@ Paths matching `sensitive-paths` still publish, labelled `autofix/sensitive` and
 **Security model:**
 
 - Error messages, URLs and params are attacker-controlled (Volt's Datadog holds SSTI and `/etc/passwd` probes). They are cut short, stripped of hidden characters and fenced as data, and screened before any model reads them.
-- The fix job holds only the spend-capped Anthropic key and a read-only `github.token`. A PreToolUse hook (`scripts/autofix/fix-guard.sh`) resolves real paths and blocks everything outside the limits above, even if the repo's own Claude settings allow more. The repo's `.claude/settings.json` and `.mcp.json` are removed for that job, so no repo hook runs on files the agent writes.
+- The fix job holds only the spend-capped Anthropic key and a read-only `github.token`. A PreToolUse hook (`scripts/autofix/fix-guard.sh`) resolves real paths and blocks everything outside the limits above, even if the repo's own Claude settings allow more. The repo's whole `.claude/` directory and `.mcp.json` are moved out of the tree for that job, so no repo hook, skill or setting applies to the agent. The hook runs from a read-only copy of duchamp.
 - After the agent, the fix job runs only inline shell from the workflow. It builds the patches with git in a pristine clone the agent never saw.
 - No agent-written code runs anywhere until a human adds `autofix/run-ci`. The PR body drops the agent's mentions, closing keywords, issue refs and links outside `app.datadoghq.com` and `github.com/artsy`; the title and commit messages drop all links too.
 - GitHub's **Update branch** button, or any push without `[skip ci]`, also runs CI on the agent's code, so read the diff first. Add a branch ruleset on `autofix/*` that limits who can push.

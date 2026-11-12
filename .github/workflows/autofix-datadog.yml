@@ -498,6 +498,9 @@ jobs:
             echo "FIX_ALLOWED_TOOLS=$ALLOWED"
             echo "FIX_DISALLOWED_TOOLS=$DENIED"
           } >> "$GITHUB_ENV"
+          # The hook and its settings can't be replaced even by a write the guard misses.
+          chmod -R a-w "$AUTOFIX/tooling"
+          chmod a-w "$SETTINGS"
 
       - name: Build the prompt
         id: prompt
@@ -578,6 +581,10 @@ jobs:
           name: autofix-${{ matrix.dd-issue-id }}
           path: ${{ runner.temp }}/autofix/artifact
           retention-days: 30
+
+      - name: Let the runner clean up the tooling
+        if: always()
+        run: chmod -R u+w "$AUTOFIX/tooling" || true
 
   publish:
     needs: [select, triage, fix]

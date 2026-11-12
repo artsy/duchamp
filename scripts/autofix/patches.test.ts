@@ -80,6 +80,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  execFileSync("chmod", ["-R", "u+w", root])
   fs.rmSync(root, { recursive: true, force: true })
 })
 
@@ -235,6 +236,15 @@ describe("Materialize fix settings", () => {
     expect(
       fs.existsSync(path.join(autofix, "target-claude/skills/evil/SKILL.md"))
     ).toBe(true)
+  })
+
+  it("makes the hook and its settings read-only", () => {
+    const writable = (file: string) => (fs.statSync(file).mode & 0o222) !== 0
+    expect(writable(path.join(tooling(), "scripts/autofix/fix-guard.sh"))).toBe(
+      false
+    )
+    expect(writable(path.join(tooling(), "scripts/autofix"))).toBe(false)
+    expect(writable(path.join(autofix, "fix-settings.json"))).toBe(false)
   })
 
   it("keeps the move out of the patches", () => {
