@@ -121,8 +121,15 @@ describe("Bash", () => {
     "git log --oneline -5 -- app/models/artwork.rb",
     "git log a1b2c3d..HEAD -- app",
     "git blame -L 10,20 app/models/artwork.rb",
+    "git blame -w -M -C -L10,20 a1b2c3d -- app/models/artwork.rb",
+    "git blame HEAD~2 app/models/artwork.rb",
     "git log",
-    "git log -Sprice_cents --oneline -- app",
+    "git log -n 3 --format=%h%x09%an%x09%s --since=2026-01-01 --author=octocat",
+    "git log --pretty=format:%h,%s -20 --no-merges HEAD~5..HEAD",
+    "git log --follow --max-count=5 -- app/models/artwork.rb",
+    "git log a1b2c3d4e5f60718293a4b5c6d7e8f9012345678..HEAD -- app lib/x.rb",
+    "git log -Sprice_cents --no-ext-diff --no-textconv --oneline -- app",
+    "git log -p --no-ext-diff --no-textconv -1 -- app/models/artwork.rb",
   ])("allows %s", command => {
     expect(allowed("Bash", { command })).toBe(true)
   })
@@ -149,6 +156,35 @@ describe("Bash", () => {
     "git blame -wS.git/config app/models/artwork.rb",
     "git log -p --ext-diff",
     "git log -p --textconv",
+    "git log -p",
+    "git log -p --no-ext-diff",
+    "git log --stat --no-textconv",
+    "git log -Sprice_cents --oneline -- app",
+    "git log --format=%GS",
+    "git log --show-signature",
+    "git log --all",
+    "git log -c",
+    "git log --grep=x",
+    "git log -n",
+    "git log -n x",
+    "git log main..HEAD",
+    "git log HEAD@{1}",
+    "git log -- /etc/passwd",
+    "git log -- ../outside",
+    "git log -- .git/config",
+    "git log -- :(top)app",
+    "git log app/models/artwork.rb",
+    "git log --since=x --until=*",
+    "git blame",
+    "git blame -L /def/,+5 app/models/artwork.rb",
+    "git blame -L 1,2",
+    "git blame app/a.rb app/b.rb",
+    "git blame --incremental app/a.rb",
+    "git blame -C5 app/a.rb",
+    "git blame -- /proc/self/environ",
+    "git  -C / log",
+    "git status",
+    "git log\tapp",
     "git log\nid",
     "bundle exec rspec",
     "cat .git/config",
@@ -182,6 +218,29 @@ describe("other tools", () => {
     expect(allowed("Grep", { pattern: "token", path: os.homedir() })).toBe(
       false
     )
+  })
+
+  it.each([
+    ["Glob", { pattern: "/etc/*" }],
+    ["Glob", { pattern: "~/.ssh/*" }],
+    ["Glob", { pattern: "../**/*.yml" }],
+    ["Glob", { pattern: "app/../../**" }],
+    ["Glob", { pattern: "{app,/etc}/*" }],
+    ["Glob", { pattern: "*.rb", path: "/etc" }],
+    ["Glob", { pattern: "*.rb", path: "../" }],
+    ["Grep", { pattern: "x", path: "/etc" }],
+    ["Grep", { pattern: "x", path: "app/config_link" }],
+    ["Grep", { pattern: "x", glob: "/etc/*" }],
+    ["Grep", { pattern: "x", glob: "../*" }],
+  ])("blocks %s outside the read roots: %p", (tool, input) => {
+    expect(allowed(tool, input)).toBe(false)
+  })
+
+  it("lets Glob and Grep search inside the repo", () => {
+    expect(allowed("Glob", { pattern: "app/**/*.rb" })).toBe(true)
+    expect(allowed("Glob", { pattern: "*.rb", path: repo })).toBe(true)
+    expect(allowed("Grep", { pattern: "/api/v1", glob: "*.rb" })).toBe(true)
+    expect(allowed("Grep", { pattern: "x", path: packet })).toBe(true)
   })
 
   it("leaves Skill and unknown tools to the permission rules", () => {
