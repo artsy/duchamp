@@ -36,7 +36,6 @@ export interface GitHubIssue {
   number: number
   title: string
   state?: string
-  labels?: { name: string }[]
 }
 
 const DD_KEY = /\(dd:([A-Za-z0-9-]+)\)/
@@ -371,7 +370,7 @@ export const parseScanReport = (output: string): Map<string, ScanFinding[]> => {
   return suspicious
 }
 
-const screenReason = (findings: ScanFinding[]): string =>
+export const screenReason = (findings: ScanFinding[]): string =>
   `screen: suspicious (${findings.map(f => `${f.field}: ${f.check}`).join(", ")})`
 
 export interface Dropped {
@@ -399,7 +398,7 @@ export interface SelectOptions extends Thresholds {
 
 /**
  * Window, dedupe and cheap gates first; then, in rank order, the stack and the
- * screen, until `issueLimit` candidates pass.
+ * screen, one issue at a time, until `issueLimit` candidates pass.
  */
 export const select = async (
   issues: ErrorIssue[],
@@ -423,30 +422,20 @@ export const select = async (
   const ranked = rank(eligible)
   let next = 0
   while (selected.length < options.issueLimit && next < ranked.length) {
-    const batch: Candidate[] = []
-    while (
-      selected.length + batch.length < options.issueLimit &&
-      next < ranked.length
-    ) {
-      const issue = ranked[next++]
-      const span = await deps.span(issue)
-      const frames = framesFor(issue, span)
-      const gate = frameGate(frames)
-      if ("reason" in gate) {
-        dropped.push({ id: issue.id, reason: gate.reason })
-        continue
-      }
-      batch.push({ issue, span, frames, top: gate.top })
+    const issue = ranked[next++]
+    const span = await deps.span(issue)
+    const frames = framesFor(issue, span)
+    const gate = frameGate(frames)
+    if ("reason" in gate) {
+      dropped.push({ id: issue.id, reason: gate.reason })
+      continue
     }
-    const suspicious =
-      batch.length > 0 ? deps.screen(batch) : new Map<string, ScanFinding[]>()
-    for (const candidate of batch) {
-      const findings = suspicious.get(candidate.issue.id)
-      if (findings) {
-        dropped.push({ id: candidate.issue.id, reason: screenReason(findings) })
-      } else {
-        selected.push(candidate)
-      }
+    const candidate = { issue, span, frames, top: gate.top }
+    const findings = deps.screen([candidate]).get(issue.id)
+    if (findings) {
+      dropped.push({ id: issue.id, reason: screenReason(findings) })
+    } else {
+      selected.push(candidate)
     }
   }
   return { selected, dropped, notAttempted: ranked.slice(next) }
@@ -488,7 +477,7 @@ export const summaryMarkdown = (
 
 // ---- CLI ---------------------------------------------------------------
 
-const required = (name: string): string => {
+export const required = (name: string): string => {
   const value = process.env[name]
   if (!value) throw new Error(`${name} is required`)
   return value
@@ -601,7 +590,7 @@ const listDeploys = (repository: string): Deploy[] =>
     ])
   )
 
-const listIssues = (repository: string, label: string): GitHubIssue[] =>
+export const listIssues = (repository: string, label: string): GitHubIssue[] =>
   JSON.parse(
     run("gh", [
       "issue",
@@ -615,43 +604,50 @@ const listIssues = (repository: string, label: string): GitHubIssue[] =>
       "--limit",
       "1000",
       "--json",
-      "number,title,state,labels",
+      "number,title,state",
     ])
   )
 
-const screenWith =
-  (scanScript: string) =>
-  (candidates: Candidate[]): Map<string, ScanFinding[]> => {
-    const input = candidates
-      .map(({ issue, span }) =>
-        JSON.stringify({
-          id: issue.id,
-          error_message: issue.errorMessage,
-          endpoint: span?.resourceName ?? "",
-          url: span?.url ?? "",
-        })
-      )
-      .join("\n")
-    const output = execFileSync(
+/** scan_text.py over `fields` of each record. Suspicious records come back by `id`. */
+export const scan = (
+  scanScript: string,
+  source: string,
+  fields: string[],
+  records: Record<string, string>[]
+): Map<string, ScanFinding[]> =>
+  parseScanReport(
+    execFileSync(
       "python3",
       [
         "-I",
         scanScript,
         "--source",
-        "datadog",
+        source,
         "--label",
         "id",
-        "--field",
-        "error_message",
-        "--field",
-        "endpoint",
-        "--field",
-        "url",
+        ...fields.flatMap(field => ["--field", field]),
       ],
-      { input, encoding: "utf8" }
+      {
+        input: records.map(record => JSON.stringify(record)).join("\n"),
+        encoding: "utf8",
+      }
     )
-    return parseScanReport(output)
-  }
+  )
+
+const screenWith =
+  (scanScript: string) =>
+  (candidates: Candidate[]): Map<string, ScanFinding[]> =>
+    scan(
+      scanScript,
+      "datadog",
+      ["error_message", "endpoint", "url"],
+      candidates.map(({ issue, span }) => ({
+        id: issue.id,
+        error_message: issue.errorMessage,
+        endpoint: span?.resourceName ?? "",
+        url: span?.url ?? "",
+      }))
+    )
 
 const setOutput = (name: string, value: string): void => {
   if (process.env.GITHUB_OUTPUT) {
