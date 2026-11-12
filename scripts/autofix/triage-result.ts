@@ -20,13 +20,16 @@ import { isDdIssueId, stripHidden } from "./text"
 
 export const ROOT_CAUSE_MAX = 600
 export const SUSPECT_FILE_MAX = 200
+export const FAILURE_REASON_MAX = 200
 
 /** The schema passed to the triage run with --json-schema. Mirrors the datadog-triage skill's reference/structured-result.md. */
 export const TRIAGE_SCHEMA = {
   type: "object",
-  required: ["issues"],
+  required: ["status", "issues"],
   additionalProperties: false,
   properties: {
+    status: { enum: ["ok", "failed"] },
+    failure_reason: { type: "string", maxLength: FAILURE_REASON_MAX },
     issues: {
       type: "array",
       items: {
@@ -70,9 +73,8 @@ export interface Rejected {
 }
 
 /**
- * Parse the action's structured_output. Missing or malformed output throws: the skill
- * returns nothing when its preflight fails, and that must fail the job, not read as
- * "nothing to fix".
+ * Parse the action's structured_output. Missing or malformed output, or a status other
+ * than "ok", throws: a failed triage must fail the job, not read as "nothing to fix".
  */
 export const parseStructuredOutput = (raw: string | undefined): unknown[] => {
   if (!raw || !raw.trim()) {
@@ -86,7 +88,23 @@ export const parseStructuredOutput = (raw: string | undefined): unknown[] => {
   } catch {
     throw new Error("triage structured result is not JSON")
   }
-  if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.issues)) {
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("triage structured result is not an object")
+  }
+  if (parsed.status !== "ok") {
+    const reason =
+      typeof parsed.failure_reason === "string"
+        ? JSON.stringify(
+            stripHidden(parsed.failure_reason).slice(0, FAILURE_REASON_MAX)
+          )
+        : "(none given)"
+    throw new Error(
+      parsed.status === "failed"
+        ? `triage reported failure: ${reason}`
+        : 'triage structured result has no status "ok"'
+    )
+  }
+  if (!Array.isArray(parsed.issues)) {
     throw new Error("triage structured result has no issues array")
   }
   return parsed.issues

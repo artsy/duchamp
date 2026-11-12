@@ -42,13 +42,38 @@ describe("parseStructuredOutput", () => {
 
   it("fails on malformed output", () => {
     expect(() => parseStructuredOutput("TRIAGE FAILED")).toThrow(/not JSON/)
-    expect(() => parseStructuredOutput('{"issue": []}')).toThrow(
-      /no issues array/
+    expect(() => parseStructuredOutput("null")).toThrow(/not an object/)
+    expect(() =>
+      parseStructuredOutput('{"status": "ok", "issue": []}')
+    ).toThrow(/no issues array/)
+  })
+
+  it("fails when status is missing or unknown", () => {
+    expect(() => parseStructuredOutput('{"issues": []}')).toThrow(
+      /no status "ok"/
+    )
+    expect(() =>
+      parseStructuredOutput('{"status": "done", "issues": []}')
+    ).toThrow(/no status "ok"/)
+  })
+
+  it("fails on a failed status whatever issues holds", () => {
+    expect(() =>
+      parseStructuredOutput(
+        JSON.stringify({
+          status: "failed",
+          failure_reason: "Datadog MCP\nunreachable",
+          issues: [entry()],
+        })
+      )
+    ).toThrow('triage reported failure: "Datadog MCP\\nunreachable"')
+    expect(() => parseStructuredOutput('{"status": "failed"}')).toThrow(
+      /reported failure: \(none given\)/
     )
   })
 
   it("accepts a verified empty run", () => {
-    expect(parseStructuredOutput('{"issues": []}')).toEqual([])
+    expect(parseStructuredOutput('{"status": "ok", "issues": []}')).toEqual([])
   })
 })
 
@@ -148,6 +173,12 @@ describe("findTriageIssue", () => {
 })
 
 it("matches the schema in the datadog-triage skill", () => {
+  expect(TRIAGE_SCHEMA.required).toEqual(["status", "issues"])
+  expect(TRIAGE_SCHEMA.properties.status).toEqual({ enum: ["ok", "failed"] })
+  expect(TRIAGE_SCHEMA.properties.failure_reason).toEqual({
+    type: "string",
+    maxLength: 200,
+  })
   expect(TRIAGE_SCHEMA.properties.issues.items.required).toEqual([
     "dd_issue_id",
     "issue_number",
