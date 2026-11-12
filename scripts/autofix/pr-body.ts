@@ -110,18 +110,19 @@ const sanitizeProse = (text: string): string =>
     .replace(/<!--[\s\S]*?(-->|$)/g, "")
     .replace(/<\/?[A-Za-z][A-Za-z0-9-]*(?:\s[^>]*)?\/?>/g, "")
     .replace(CLOSING_KEYWORD, "see")
-    .replace(/(^|[^\w`])@(?=[A-Za-z0-9])/g, "$1")
+    .replace(/(^|[^\w])@(?=[A-Za-z0-9])/g, "$1")
     .replace(/(?:\b[\w.-]+\/[\w.-]+)?#(\d+)\b/g, "$1")
     .replace(/\bGH-(\d+)\b/gi, "$1")
 
 /**
  * Split into code (fenced blocks and inline spans) and prose. An unclosed fence runs
- * to the end, as GitHub renders it.
+ * to the end, as GitHub renders it. A backtick fence's info string has no backtick,
+ * and an inline span stays within one paragraph (CommonMark 4.5, 6.1).
  */
 export const splitCode = (text: string): { code: boolean; text: string }[] => {
   const parts: { code: boolean; text: string }[] = []
   const pattern =
-    /^( {0,3})(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:\n {0,3}\2[`~]*[ \t]*(?=\n|$)|$(?![\s\S]))|(`+)(?!`)[\s\S]*?[^`]\3(?!`)/gm
+    /^( {0,3})(`{3,}(?=[^`\n]*\n)|~{3,})[^\n]*\n[\s\S]*?(?:\n {0,3}\2[`~]*[ \t]*(?=\n|$)|$(?![\s\S]))|(?<!`)(`+)(?!`)(?:[^\n]|\n(?![ \t]*\n))*?(?:[^`\n]|\n(?![ \t]*\n))\3(?!`)/gm
   let last = 0
   for (const match of text.matchAll(pattern)) {
     if (match.index! > last) {

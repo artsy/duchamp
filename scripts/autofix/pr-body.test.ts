@@ -143,6 +143,17 @@ describe("sanitizeMarkdown", () => {
     expect(sanitize(text)).toBe("intro a\n```\n@b #1")
   })
 
+  it.each([
+    "`a\n\n@x Fixes #1\n\nb`",
+    "```x`\n@x Fixes #1",
+    "cc `@octocat Fixes #1",
+  ])("treats text GitHub renders as prose as prose: %p", text => {
+    const out = sanitize(text)
+    expect(out).not.toMatch(/@/)
+    expect(out).not.toMatch(/fixes/i)
+    expect(out).not.toMatch(/#\d/)
+  })
+
   it("cuts to length", () => {
     expect(sanitizeMarkdown("x".repeat(50), 10)).toHaveLength(10)
   })
