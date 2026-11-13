@@ -1,4 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk"
 import { execFileSync } from "child_process"
 import * as fs from "fs"
 import * as os from "os"
@@ -22,6 +21,8 @@ import { sendToVolley, type VolleyMetric } from "./review-usage"
  */
 
 const JUDGE_MODEL = "claude-haiku-5-5"
+const JUDGE_URL = "https://api.anthropic.com/v1/messages"
+const JUDGE_TIMEOUT_MS = 120_000
 const MAX_FINDINGS = 50
 const MAX_BODY_CHARS = 1_500
 const MAX_HUNK_CHARS = 1_500
@@ -280,32 +281,65 @@ export const mergeVerdicts = (findings: Finding[], raw: unknown): Verdict[] => {
   })
 }
 
-export const judge = async (
-  findings: Finding[],
-  changes: ChangeSince[],
-  client: Anthropic
-): Promise<Verdict[]> => {
-  const response = await client.messages.create({
-    model: JUDGE_MODEL,
-    max_tokens: 16_000,
-    system: JUDGE_SYSTEM,
-    messages: [{ role: "user", content: judgeInput(findings, changes) }],
-    output_config: { format: { type: "json_schema", schema: VERDICTS_SCHEMA } },
-  })
+interface JudgeResponse {
+  stop_reason?: string
+  content?: { type: string; text?: string }[]
+}
 
-  if (response.stop_reason !== "end_turn") {
-    console.log(`::warning::The judge stopped early: ${response.stop_reason}`)
-    return mergeVerdicts(findings, null)
+/**
+ * One structured answer from the judge model, or null when it stopped early or wasn't
+ * JSON. A plain request, not the SDK: other repos install this tooling under their own
+ * Yarn settings, and a new package can fail their minimum-age rule.
+ */
+export const askJudge = async (
+  system: string,
+  content: string,
+  schema: Record<string, unknown>
+): Promise<unknown> => {
+  const response = await fetch(JUDGE_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-api-key": process.env.ANTHROPIC_API_KEY ?? "",
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: JUDGE_MODEL,
+      max_tokens: 16_000,
+      system,
+      messages: [{ role: "user", content }],
+      output_config: { format: { type: "json_schema", schema } },
+    }),
+    signal: AbortSignal.timeout(JUDGE_TIMEOUT_MS),
+  })
+  if (!response.ok) {
+    throw new Error(`The judge request failed: HTTP ${response.status}`)
   }
 
-  const text = response.content.find(block => block.type === "text")?.text
+  const message = (await response.json()) as JudgeResponse
+  if (message.stop_reason !== "end_turn") {
+    console.log(`::warning::The judge stopped early: ${message.stop_reason}`)
+    return null
+  }
+
   try {
-    return mergeVerdicts(findings, JSON.parse(text ?? ""))
+    return JSON.parse(
+      message.content?.find(block => block.type === "text")?.text ?? ""
+    )
   } catch {
     console.log("::warning::The judge's answer was not JSON")
-    return mergeVerdicts(findings, null)
+    return null
   }
 }
+
+export const judge = async (
+  findings: Finding[],
+  changes: ChangeSince[]
+): Promise<Verdict[]> =>
+  mergeVerdicts(
+    findings,
+    await askJudge(JUDGE_SYSTEM, judgeInput(findings, changes), VERDICTS_SCHEMA)
+  )
 
 export const formatMetrics = (
   repo: string,
@@ -379,7 +413,7 @@ const main = async (): Promise<void> => {
   const changes = findings.map(finding =>
     fetchChange(repo, finding.path, finding.commit, pr.head.sha)
   )
-  const verdicts = await judge(findings, changes, new Anthropic())
+  const verdicts = await judge(findings, changes)
   const table = formatTable(findings, verdicts)
   console.log(table)
 
