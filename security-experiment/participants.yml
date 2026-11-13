@@ -20,3 +20,6 @@ participants:
 repos:
   - artsy/gravity
   - artsy/metaphysics
+  - artsy/exchange
+  - artsy/artsy-agent
+  - artsy/logic-core-manager-product

@@ -12,7 +12,8 @@ neither.
    shared workflow. Case does not matter.
 2. **Per repo.** Add the repo's full name, such as `artsy/gravity`, under `repos` in
    `participants.yml`. Every PR in it then gets the pass on the same terms as an
-   enrolled author's. gravity and metaphysics are in.
+   enrolled author's. gravity, metaphysics, exchange, artsy-agent and
+   logic-core-manager-product are in.
 3. **Per PR.** Add the `security-review` label to a single PR. Adding it starts a full
    review straight away, and the pass covers every file the PR changes, not only
    sensitive ones.
