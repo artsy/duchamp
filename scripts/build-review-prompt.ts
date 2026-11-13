@@ -82,6 +82,9 @@ export const REPLIES_LABEL = "ai-review-replies"
 /** Label that opts a single PR into the outcome experiment. */
 export const OUTCOME_LABEL = "ai-review-outcome"
 
+/** Label that opts a single PR into the missed-findings experiment. */
+export const MISSED_FINDINGS_LABEL = "ai-review-missed-findings"
+
 /** Label that opts a single PR into the merge risk experiment. */
 export const MERGE_RISK_LABEL = "ai-review-merge-risk"
 
@@ -295,6 +298,21 @@ export const inOutcome = (
   enrolsEveryone("outcome-experiment") ||
   (!!author &&
     loadParticipants("outcome-experiment").includes(author.toLowerCase()))
+
+/**
+ * Whether a merged PR is in the missed-findings experiment: every PR when participants.yml
+ * sets `everyone: true`, otherwise listed authors and labelled PRs.
+ */
+export const inMissedFindings = (
+  author: string | undefined,
+  labels: string[]
+): boolean =>
+  labels.some(label => label.toLowerCase() === MISSED_FINDINGS_LABEL) ||
+  enrolsEveryone("missed-findings-experiment") ||
+  (!!author &&
+    loadParticipants("missed-findings-experiment").includes(
+      author.toLowerCase()
+    ))
 
 /** Whether this review is in the merge risk experiment: listed authors and labelled PRs. */
 export const inMergeRisk = (

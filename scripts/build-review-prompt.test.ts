@@ -20,6 +20,7 @@ import {
   inCodex,
   inLeanReviews,
   inMergeRisk,
+  inMissedFindings,
   inOutcome,
   inRelatedReposExperiment,
   inReplies,
@@ -799,6 +800,41 @@ describe("inOutcome", () => {
     mockFiles({ "participants.yml": "everyone: true\nparticipants: []\n" })
 
     expect(inOutcome("someone-else", [])).toBe(true)
+  })
+})
+
+describe("inMissedFindings", () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it("is true for an enrolled author, from its own list", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+
+    expect(inMissedFindings("mounirdhahri", [])).toBe(true)
+    expect(
+      mockFs.readFileSync.mock.calls.map(([p]) => String(p))
+    ).toContainEqual(
+      expect.stringContaining(
+        path.join("missed-findings-experiment", "participants.yml")
+      )
+    )
+  })
+
+  it("is true for a labelled PR, and false otherwise", () => {
+    mockFs.existsSync.mockReturnValue(false)
+
+    expect(
+      inMissedFindings("someone-else", ["AI-Review-Missed-Findings"])
+    ).toBe(true)
+    expect(inMissedFindings("someone-else", [LEAN_LABEL])).toBe(false)
+    expect(inMissedFindings(undefined, [])).toBe(false)
+  })
+
+  it("is true for every PR when participants.yml sets everyone", () => {
+    mockFiles({ "participants.yml": "everyone: true\nparticipants: []\n" })
+
+    expect(inMissedFindings("someone-else", [])).toBe(true)
   })
 })
 

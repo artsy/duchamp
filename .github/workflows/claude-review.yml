@@ -35,8 +35,9 @@ jobs:
     steps:
       - run: echo "in-progress label added, cancelled any running review"
 
-  # What happened to the review's findings, for the outcome experiment. Runs only where
-  # the caller lists `closed` in its pull_request types. See outcome-experiment/README.md.
+  # What happened to the review's findings, and what people caught that it missed, for the
+  # outcome and missed-findings experiments. Runs only where the caller lists `closed` in
+  # its pull_request types. See outcome-experiment/README.md.
   outcome:
     if: github.event.action == 'closed' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
@@ -73,6 +74,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ANTHROPIC_API_KEY: ${{ secrets.anthropic-api-key }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
+          VOLLEY_URL: https://volley.artsy.net/report
+
+      - name: Find what the review missed
+        if: ${{ !cancelled() }}
+        run: npx ts-node .tooling/scripts/review-missed.ts
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.anthropic-api-key }}
           VOLLEY_URL: https://volley.artsy.net/report
 
   check:

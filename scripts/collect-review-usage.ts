@@ -24,7 +24,7 @@ const execFileAsync = promisify(execFile)
 const LOG_CONCURRENCY = 6
 
 /** GitHub returns at most 1,000 runs for a filtered list, newest first. */
-const RUN_LIST_LIMIT = 1000
+export const RUN_LIST_LIMIT = 1000
 
 const USAGE =
   "Usage: collect-review-usage.ts --repos eigen,force --since YYYY-MM-DD [--split YYYY-MM-DD]... [--workflow file.yml]"
@@ -192,14 +192,14 @@ export const summarize = (
   ].join("\n")
 }
 
-const gh = async (args: string[]): Promise<string> => {
+export const gh = async (args: string[]): Promise<string> => {
   const { stdout } = await execFileAsync("gh", args, {
     maxBuffer: 256 * 1024 * 1024,
   })
   return stdout
 }
 
-const listRuns = async (
+export const listRuns = async (
   repo: string,
   options: Options
 ): Promise<{ databaseId: number; createdAt: string }[]> => {
@@ -223,7 +223,7 @@ const listRuns = async (
 }
 
 /** Runs fn over items with at most `limit` in flight. */
-const mapLimit = async <T, R>(
+export const mapLimit = async <T, R>(
   items: T[],
   limit: number,
   fn: (item: T) => Promise<R>
