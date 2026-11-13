@@ -528,7 +528,7 @@
           {
             "definition": {
               "type": "note",
-              "content": "**How to compare now.** Lean reviews went to every PR on 12 Nov 2026, so `group` is `experiment` for every new review and `standard` is history only. Compare an experiment by its own tag instead: each widget here splits reviews by whether that experiment **ran** on them. `N/A` is reviews from before the tag existed. Experiments run in different repos, so pick one repo in the filter above to compare like with like. Quality is in the two sections below: whether findings were addressed, and what reviewers caught that the review missed.",
+              "content": "**How to compare now.** Lean reviews went to every PR on 12 Nov 2026, so `group` is `experiment` for every new review and `standard` is history only. Compare an experiment by its own tag instead: each widget here splits reviews by whether that experiment **ran** on them. `N/A` is reviews from before the tag existed. Replies only happen on re-reviews, so that widget counts re-reviews only. Experiments run in different repos, so pick one repo in the filter above to compare like with like. Quality is in the two sections below: whether findings were addressed, and what reviewers caught that the review missed.",
               "background_color": "white",
               "font_size": "14",
               "text_align": "left",
@@ -737,7 +737,7 @@
           {
             "definition": {
               "type": "toplist",
-              "title": "Cost per review (USD): re-review read a reply (true) or not",
+              "title": "Cost per re-review (USD): read a reply (true) or not",
               "requests": [
                 {
                   "response_format": "scalar",
@@ -745,13 +745,13 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {replies}.as_count()",
+                      "query": "sum:ai_pr_review.cost_cents{mode:rereview,$repo,$group,$model,$pr} by {replies}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {replies}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{mode:rereview,$repo,$group,$model,$pr} by {replies}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
