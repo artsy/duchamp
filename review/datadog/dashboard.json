@@ -1,6 +1,6 @@
 {
   "title": "AI PR review",
-  "description": "Cost, turns, speed and cache use of the Claude PR review, by repo, group (experiment or standard) and mode. Metrics come through volley. Source: artsy/duchamp review/datadog/dashboard.json; edit there, not in the UI.",
+  "description": "Cost, speed and usefulness of the AI PR review. Lean reviews are on for every PR since 12 Nov 2026, so reviews are split by mode (full or re-review), not by group; the group filter is kept for history. Each experiment is compared by its own tag. Metrics come through volley. Source: artsy/duchamp review/datadog/dashboard.json; edit there, not in the UI.",
   "layout_type": "ordered",
   "template_variables": [
     {
@@ -37,791 +37,1088 @@
   "widgets": [
     {
       "definition": {
-        "type": "query_value",
-        "title": "Reviews",
-        "precision": 0,
-        "requests": [
+        "type": "group",
+        "layout_type": "ordered",
+        "title": "Overview",
+        "widgets": [
           {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "r",
-                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "r"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "query_value",
-        "title": "Spend (USD)",
-        "precision": 2,
-        "requests": [
-          {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "c",
-                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "c / 100"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "query_value",
-        "title": "Average cost per review (USD)",
-        "precision": 2,
-        "requests": [
-          {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "c",
-                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr}.as_count()",
-                "aggregator": "sum"
-              },
-              {
-                "data_source": "metrics",
-                "name": "r",
-                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "c / r / 100"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "query_value",
-        "title": "Median turns",
-        "precision": 0,
-        "requests": [
-          {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "t",
-                "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model,$pr}",
-                "aggregator": "avg"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "t"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Reviews per day, by group",
-        "show_legend": true,
-        "requests": [
-          {
-            "response_format": "timeseries",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "r",
-                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {group}.as_count().rollup(sum, 86400)"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "r"
-              }
-            ],
-            "display_type": "bars"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Spend per day (USD), by repo",
-        "show_legend": true,
-        "requests": [
-          {
-            "response_format": "timeseries",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "c",
-                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {repo}.as_count().rollup(sum, 86400)"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "c / 100"
-              }
-            ],
-            "display_type": "bars"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Average cost per review (USD), by group and mode",
-        "show_legend": true,
-        "requests": [
-          {
-            "response_format": "timeseries",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "c",
-                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {group,mode}.as_count().rollup(sum, 86400)"
-              },
-              {
-                "data_source": "metrics",
-                "name": "r",
-                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {group,mode}.as_count().rollup(sum, 86400)"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "c / r / 100"
-              }
-            ],
-            "display_type": "line"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Cost per review (USD), median and p95 by group",
-        "show_legend": true,
-        "requests": [
-          {
-            "response_format": "timeseries",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "p50",
-                "query": "avg:ai_pr_review.cost_usd.median{$repo,$group,$mode,$model,$pr} by {group}"
-              },
-              {
-                "data_source": "metrics",
-                "name": "p95",
-                "query": "avg:ai_pr_review.cost_usd.95percentile{$repo,$group,$mode,$model,$pr} by {group}"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "p50",
-                "alias": "median"
-              },
-              {
-                "formula": "p95",
-                "alias": "p95"
-              }
-            ],
-            "display_type": "line"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Turns per review, median by group and mode",
-        "show_legend": true,
-        "requests": [
-          {
-            "response_format": "timeseries",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "t",
-                "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model,$pr} by {group,mode}"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "t"
-              }
-            ],
-            "display_type": "line"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Duration per review (minutes), median by group and mode",
-        "show_legend": true,
-        "requests": [
-          {
-            "response_format": "timeseries",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "d",
-                "query": "avg:ai_pr_review.duration_ms.median{$repo,$group,$mode,$model,$pr} by {group,mode}"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "d / 60000"
-              }
-            ],
-            "display_type": "line"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Cache hit rate (%), median by group",
-        "show_legend": true,
-        "requests": [
-          {
-            "response_format": "timeseries",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "h",
-                "query": "avg:ai_pr_review.cache_hit_rate.median{$repo,$group,$mode,$model,$pr} by {group}"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "h * 100"
-              }
-            ],
-            "display_type": "line"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Success rate (%), by group",
-        "show_legend": true,
-        "requests": [
-          {
-            "response_format": "timeseries",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "ok",
-                "query": "sum:ai_pr_review.reviews{outcome:success,$repo,$group,$mode,$model} by {group}.as_count().rollup(sum, 86400)"
-              },
-              {
-                "data_source": "metrics",
-                "name": "all",
-                "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {group}.as_count().rollup(sum, 86400)"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "ok / all * 100"
-              }
-            ],
-            "display_type": "line"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Denied tool calls per day, by repo",
-        "show_legend": true,
-        "requests": [
-          {
-            "response_format": "timeseries",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "d",
-                "query": "sum:ai_pr_review.denied_tool_calls{$repo,$group,$mode,$model,$pr} by {repo}.as_count().rollup(sum, 86400)"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "d"
-              }
-            ],
-            "display_type": "bars"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "toplist",
-        "title": "Spend by repo (USD)",
-        "requests": [
-          {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "c",
-                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {repo}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "c / 100",
-                "limit": {
-                  "count": 20,
-                  "order": "desc"
+            "definition": {
+              "type": "query_value",
+              "title": "Reviews",
+              "precision": 0,
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "r"
+                    }
+                  ]
                 }
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Tokens per day, by kind",
-        "show_legend": true,
-        "requests": [
+              ]
+            }
+          },
           {
-            "response_format": "timeseries",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "t",
-                "query": "sum:ai_pr_review.tokens{$repo,$group,$mode,$model,$pr} by {kind}.as_count().rollup(sum, 86400)"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "t"
-              }
-            ],
-            "display_type": "bars"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Inline comments per review, average by group and mode",
-        "show_legend": true,
-        "requests": [
-          {
-            "response_format": "timeseries",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "i",
-                "query": "avg:ai_pr_review.inline_comments.avg{$repo,$group,$mode,$model,$pr} by {group,mode}"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "i"
-              }
-            ],
-            "display_type": "line"
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "toplist",
-        "title": "Spend by PR (USD)",
-        "requests": [
-          {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "c",
-                "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {repo,pr}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "c / 100",
-                "limit": {
-                  "count": 20,
-                  "order": "desc"
+            "definition": {
+              "type": "query_value",
+              "title": "Spend (USD)",
+              "precision": 2,
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c / 100"
+                    }
+                  ]
                 }
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "query_value",
-        "title": "Findings measured at merge",
-        "precision": 0,
-        "requests": [
+              ]
+            }
+          },
           {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "f",
-                "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "f"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "query_value",
-        "title": "Findings addressed (%)",
-        "precision": 0,
-        "requests": [
-          {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "y",
-                "query": "sum:ai_pr_review.findings{addressed:yes,$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              },
-              {
-                "data_source": "metrics",
-                "name": "f",
-                "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "y / f * 100"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "query_value",
-        "title": "Findings agreed with in a reply or 👍 (%)",
-        "precision": 0,
-        "requests": [
-          {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "r",
-                "query": "sum:ai_pr_review.findings{reply:agreed,$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              },
-              {
-                "data_source": "metrics",
-                "name": "t",
-                "query": "sum:ai_pr_review.findings{reaction:up,$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              },
-              {
-                "data_source": "metrics",
-                "name": "b",
-                "query": "sum:ai_pr_review.findings{reply:agreed,reaction:up,$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              },
-              {
-                "data_source": "metrics",
-                "name": "f",
-                "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "(default_zero(r) + default_zero(t) - default_zero(b)) / f * 100"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "query_value",
-        "title": "Findings dismissed in a reply or 👎 (%)",
-        "precision": 0,
-        "requests": [
-          {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "r",
-                "query": "sum:ai_pr_review.findings{reply:dismissed,$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              },
-              {
-                "data_source": "metrics",
-                "name": "t",
-                "query": "sum:ai_pr_review.findings{reaction:down,$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              },
-              {
-                "data_source": "metrics",
-                "name": "b",
-                "query": "sum:ai_pr_review.findings{reply:dismissed,reaction:down,$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              },
-              {
-                "data_source": "metrics",
-                "name": "f",
-                "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "(default_zero(r) + default_zero(t) - default_zero(b)) / f * 100"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "timeseries",
-        "title": "Findings per week, by addressed",
-        "show_legend": true,
-        "requests": [
-          {
-            "response_format": "timeseries",
-            "display_type": "bars",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "f",
-                "query": "sum:ai_pr_review.findings{$repo,$pr} by {addressed}.as_count().rollup(sum, 604800)"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "f"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "toplist",
-        "title": "Findings addressed (%), by severity",
-        "requests": [
-          {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "y",
-                "query": "sum:ai_pr_review.findings{addressed:yes,$repo,$pr} by {severity}.as_count()",
-                "aggregator": "sum"
-              },
-              {
-                "data_source": "metrics",
-                "name": "f",
-                "query": "sum:ai_pr_review.findings{$repo,$pr} by {severity}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "y / f * 100",
-                "limit": {
-                  "count": 20,
-                  "order": "desc"
+            "definition": {
+              "type": "query_value",
+              "title": "Average cost per review (USD)",
+              "precision": 2,
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c / r / 100"
+                    }
+                  ]
                 }
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "toplist",
-        "title": "Findings addressed (%), by repo",
-        "requests": [
+              ]
+            }
+          },
           {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "y",
-                "query": "sum:ai_pr_review.findings{addressed:yes,$repo,$pr} by {repo}.as_count()",
-                "aggregator": "sum"
-              },
-              {
-                "data_source": "metrics",
-                "name": "f",
-                "query": "sum:ai_pr_review.findings{$repo,$pr} by {repo}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "y / f * 100",
-                "limit": {
-                  "count": 20,
-                  "order": "desc"
+            "definition": {
+              "type": "query_value",
+              "title": "Median turns",
+              "precision": 0,
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "t",
+                      "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model,$pr}",
+                      "aggregator": "avg"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "t"
+                    }
+                  ]
                 }
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "toplist",
-        "title": "Findings, by addressed and reply",
-        "requests": [
+              ]
+            }
+          },
           {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "f",
-                "query": "sum:ai_pr_review.findings{$repo,$pr} by {addressed,reply}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "f",
-                "limit": {
-                  "count": 20,
-                  "order": "desc"
+            "definition": {
+              "type": "timeseries",
+              "title": "Reviews per day, by mode",
+              "show_legend": true,
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {mode}.as_count().rollup(sum, 86400)"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "r"
+                    }
+                  ],
+                  "display_type": "bars"
                 }
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "definition": {
-        "type": "toplist",
-        "title": "Human review comments, by category and caught",
-        "requests": [
+              ]
+            }
+          },
           {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "h",
-                "query": "sum:ai_pr_review.human_comments{$repo,$pr} by {category,caught}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "h",
-                "limit": {
-                  "count": 20,
-                  "order": "desc"
+            "definition": {
+              "type": "timeseries",
+              "title": "Success rate (%), by mode",
+              "show_legend": true,
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "ok",
+                      "query": "sum:ai_pr_review.reviews{outcome:success,$repo,$group,$mode,$model} by {mode}.as_count().rollup(sum, 86400)"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "all",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {mode}.as_count().rollup(sum, 86400)"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "ok / all * 100"
+                    }
+                  ],
+                  "display_type": "line"
                 }
-              }
-            ]
+              ]
+            }
           }
         ]
       }
     },
     {
       "definition": {
-        "type": "query_value",
-        "title": "Bug and security comments the review missed (%)",
-        "precision": 0,
-        "requests": [
+        "type": "group",
+        "layout_type": "ordered",
+        "title": "Cost",
+        "widgets": [
           {
-            "response_format": "scalar",
-            "queries": [
-              {
-                "data_source": "metrics",
-                "name": "mb",
-                "query": "sum:ai_pr_review.human_comments{caught:false,category:bug,$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              },
-              {
-                "data_source": "metrics",
-                "name": "ms",
-                "query": "sum:ai_pr_review.human_comments{caught:false,category:security,$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              },
-              {
-                "data_source": "metrics",
-                "name": "ab",
-                "query": "sum:ai_pr_review.human_comments{category:bug,$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              },
-              {
-                "data_source": "metrics",
-                "name": "as",
-                "query": "sum:ai_pr_review.human_comments{category:security,$repo,$pr}.as_count()",
-                "aggregator": "sum"
-              }
-            ],
-            "formulas": [
-              {
-                "formula": "(default_zero(mb) + default_zero(ms)) / (default_zero(ab) + default_zero(as)) * 100"
-              }
-            ]
+            "definition": {
+              "type": "timeseries",
+              "title": "Spend per day (USD), by repo",
+              "show_legend": true,
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {repo}.as_count().rollup(sum, 86400)"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c / 100"
+                    }
+                  ],
+                  "display_type": "bars"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Average cost per review (USD), by mode",
+              "show_legend": true,
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {mode}.as_count().rollup(sum, 86400)"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {mode}.as_count().rollup(sum, 86400)"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c / r / 100"
+                    }
+                  ],
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Cost per review (USD), median and p95 by mode",
+              "show_legend": true,
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "p50",
+                      "query": "avg:ai_pr_review.cost_usd.median{$repo,$group,$mode,$model,$pr} by {mode}"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "p95",
+                      "query": "avg:ai_pr_review.cost_usd.95percentile{$repo,$group,$mode,$model,$pr} by {mode}"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "p50",
+                      "alias": "median"
+                    },
+                    {
+                      "formula": "p95",
+                      "alias": "p95"
+                    }
+                  ],
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Spend by repo (USD)",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {repo}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c / 100",
+                      "limit": {
+                        "count": 20,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Spend by PR (USD)",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {repo,pr}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c / 100",
+                      "limit": {
+                        "count": 20,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Tokens per day, by kind",
+              "show_legend": true,
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "t",
+                      "query": "sum:ai_pr_review.tokens{$repo,$group,$mode,$model,$pr} by {kind}.as_count().rollup(sum, 86400)"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "t"
+                    }
+                  ],
+                  "display_type": "bars"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Cache hit rate (%), median by mode",
+              "show_legend": true,
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "h",
+                      "query": "avg:ai_pr_review.cache_hit_rate.median{$repo,$group,$mode,$model,$pr} by {mode}"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "h * 100"
+                    }
+                  ],
+                  "display_type": "line"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "group",
+        "layout_type": "ordered",
+        "title": "Turns, speed and comments",
+        "widgets": [
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Turns per review, median by mode",
+              "show_legend": true,
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "t",
+                      "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model,$pr} by {mode}"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "t"
+                    }
+                  ],
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Duration per review (minutes), median by mode",
+              "show_legend": true,
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "d",
+                      "query": "avg:ai_pr_review.duration_ms.median{$repo,$group,$mode,$model,$pr} by {mode}"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "d / 60000"
+                    }
+                  ],
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Inline comments per review, average by mode",
+              "show_legend": true,
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "i",
+                      "query": "avg:ai_pr_review.inline_comments.avg{$repo,$group,$mode,$model,$pr} by {mode}"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "i"
+                    }
+                  ],
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Denied tool calls per day, by repo",
+              "show_legend": true,
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "d",
+                      "query": "sum:ai_pr_review.denied_tool_calls{$repo,$group,$mode,$model,$pr} by {repo}.as_count().rollup(sum, 86400)"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "d"
+                    }
+                  ],
+                  "display_type": "bars"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "group",
+        "layout_type": "ordered",
+        "title": "Experiments: reviews where each one ran, and what they cost",
+        "widgets": [
+          {
+            "definition": {
+              "type": "note",
+              "content": "**How to compare now.** Lean reviews went to every PR on 12 Nov 2026, so `group` is `experiment` for every new review and `standard` is history only. Compare an experiment by its own tag instead: each widget here splits reviews by whether that experiment **ran** on them. `N/A` is reviews from before the tag existed. Experiments run in different repos, so pick one repo in the filter above to compare like with like. Quality is in the two sections below: whether findings were addressed, and what reviewers caught that the review missed.",
+              "background_color": "white",
+              "font_size": "14",
+              "text_align": "left",
+              "show_tick": false,
+              "has_padding": true
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Reviews per week where each experiment ran",
+              "show_legend": true,
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "display_type": "bars",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "q0",
+                      "query": "sum:ai_pr_review.reviews{security:true,$repo,$group,$mode,$model,$pr}.as_count().rollup(sum, 604800)"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "q1",
+                      "query": "sum:ai_pr_review.reviews{related_repos:true,$repo,$group,$mode,$model,$pr}.as_count().rollup(sum, 604800)"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "q2",
+                      "query": "sum:ai_pr_review.reviews{best_practices:true,$repo,$group,$mode,$model,$pr}.as_count().rollup(sum, 604800)"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "q3",
+                      "query": "sum:ai_pr_review.reviews{merge_risk:true,$repo,$group,$mode,$model,$pr}.as_count().rollup(sum, 604800)"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "q4",
+                      "query": "sum:ai_pr_review.reviews{replies:true,$repo,$group,$mode,$model,$pr}.as_count().rollup(sum, 604800)"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q0",
+                      "alias": "security"
+                    },
+                    {
+                      "formula": "q1",
+                      "alias": "related_repos"
+                    },
+                    {
+                      "formula": "q2",
+                      "alias": "best_practices"
+                    },
+                    {
+                      "formula": "q3",
+                      "alias": "merge_risk"
+                    },
+                    {
+                      "formula": "q4",
+                      "alias": "replies"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Cost per review (USD): security pass ran (true) or not",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {security}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {security}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c / r / 100",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Cost per review (USD): read a related repo (true) or not",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {related_repos}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {related_repos}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c / r / 100",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Cost per review (USD): ran a stack skill (true) or not",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {best_practices}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {best_practices}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c / r / 100",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Cost per review (USD): Merge Risk block asked for (true) or not",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {merge_risk}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {merge_risk}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c / r / 100",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Cost per review (USD): re-review read a reply (true) or not",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {replies}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {replies}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c / r / 100",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "group",
+        "layout_type": "ordered",
+        "title": "Outcome: what happened to the review's comments (measured at merge)",
+        "widgets": [
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Findings measured at merge",
+              "precision": 0,
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "f",
+                      "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "f"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Findings addressed (%)",
+              "precision": 0,
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "y",
+                      "query": "sum:ai_pr_review.findings{addressed:yes,$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "f",
+                      "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "y / f * 100"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Findings agreed with in a reply or 👍 (%)",
+              "precision": 0,
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.findings{reply:agreed,$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "t",
+                      "query": "sum:ai_pr_review.findings{reaction:up,$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "b",
+                      "query": "sum:ai_pr_review.findings{reply:agreed,reaction:up,$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "f",
+                      "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "(default_zero(r) + default_zero(t) - default_zero(b)) / f * 100"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Findings dismissed in a reply or 👎 (%)",
+              "precision": 0,
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.findings{reply:dismissed,$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "t",
+                      "query": "sum:ai_pr_review.findings{reaction:down,$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "b",
+                      "query": "sum:ai_pr_review.findings{reply:dismissed,reaction:down,$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "f",
+                      "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "(default_zero(r) + default_zero(t) - default_zero(b)) / f * 100"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Findings per week, by addressed",
+              "show_legend": true,
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "display_type": "bars",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "f",
+                      "query": "sum:ai_pr_review.findings{$repo,$pr} by {addressed}.as_count().rollup(sum, 604800)"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "f"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Findings addressed (%), by severity",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "y",
+                      "query": "sum:ai_pr_review.findings{addressed:yes,$repo,$pr} by {severity}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "f",
+                      "query": "sum:ai_pr_review.findings{$repo,$pr} by {severity}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "y / f * 100",
+                      "limit": {
+                        "count": 20,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Findings addressed (%), by repo",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "y",
+                      "query": "sum:ai_pr_review.findings{addressed:yes,$repo,$pr} by {repo}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "f",
+                      "query": "sum:ai_pr_review.findings{$repo,$pr} by {repo}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "y / f * 100",
+                      "limit": {
+                        "count": 20,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Findings, by addressed and reply",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "f",
+                      "query": "sum:ai_pr_review.findings{$repo,$pr} by {addressed,reply}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "f",
+                      "limit": {
+                        "count": 20,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "group",
+        "layout_type": "ordered",
+        "title": "Missed findings: what reviewers caught that the review did not",
+        "widgets": [
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Bug and security comments the review missed (%)",
+              "precision": 0,
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "mb",
+                      "query": "sum:ai_pr_review.human_comments{caught:false,category:bug,$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "ms",
+                      "query": "sum:ai_pr_review.human_comments{caught:false,category:security,$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "ab",
+                      "query": "sum:ai_pr_review.human_comments{category:bug,$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "as",
+                      "query": "sum:ai_pr_review.human_comments{category:security,$repo,$pr}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "(default_zero(mb) + default_zero(ms)) / (default_zero(ab) + default_zero(as)) * 100"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Human review comments, by category and caught",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "h",
+                      "query": "sum:ai_pr_review.human_comments{$repo,$pr} by {category,caught}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "h",
+                      "limit": {
+                        "count": 20,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
           }
         ]
       }
