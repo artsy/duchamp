@@ -13,15 +13,33 @@ review works, see [`review/README.md`](../review/README.md).
 
 1. Copy [`templates/run-claude-review.yml`](../templates/run-claude-review.yml) to
    `.github/workflows/run-claude-review.yml` in the repo. Keep it as is.
-2. Check the repo can read the `ANTHROPIC_API_KEY` secret. Artsy sets it for the whole
-   org, so most repos need nothing. See
-   [Setting Up the API Key](./actions.md#run-claude-reviewyml) if it is missing.
+2. Check the repo has the keys it needs (see [The keys](#the-keys) below). Artsy sets
+   them for the whole org, so most repos need nothing.
 3. Optional: add a `.claude-review.yml` at the repo root with the repo's own focus
    areas, ignored paths and context. The review works without it, and is better with
    it. See [Repo Configuration](./actions.md#run-claude-reviewyml).
 4. Open a PR with those files. The review runs on that PR too, so it is the first
    test. `.claude-review.yml` takes effect from the PR that adds it, except
    `related_repos`, which is read from the default branch and so applies once merged.
+
+## The keys
+
+The workflow reads these from GitHub Actions secrets and variables. Check them under
+the repo's **Settings → Secrets and variables → Actions**. Org-level ones show there
+as "Organization secrets".
+
+| Name | Kind | Needed |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | secret | Always. Without it the review fails |
+| `REVIEW_APP_PRIVATE_KEY` | secret | Only when `.claude-review.yml` lists a private repo in `related_repos` |
+| `REVIEW_APP_ID` | variable | With `REVIEW_APP_PRIVATE_KEY`. It is an org variable, so there is nothing to add |
+| `OPENAI_API_KEY` | secret | Only for the Codex experiment |
+
+If one is missing, an org admin can share the org secret with the repo, or you can
+add it as a repository secret with **New repository secret**, using the same name.
+
+Use Actions secrets, not a GitHub **Environment**. The review job doesn't declare an
+environment, so it never sees secrets stored in one.
 
 ## Or let Claude Code do it
 
@@ -38,10 +56,14 @@ https://github.com/artsy/duchamp/blob/main/docs/actions.md#run-claude-reviewyml
    (fetch it with `gh api repos/artsy/duchamp/contents/templates/run-claude-review.yml`).
    Keep it as is. If the repo already has this file, stop and tell me.
 
-2. Check that the ANTHROPIC_API_KEY secret reaches this repo:
-   `gh api repos/{owner}/{repo}/actions/organization-secrets` and
-   `gh secret list`. If it is missing, or you cannot tell, say so in the PR
-   description. Never ask me for the key and never print one.
+2. Check which keys reach this repo, with
+   `gh api repos/{owner}/{repo}/actions/organization-secrets` and `gh secret list`:
+   ANTHROPIC_API_KEY (always needed), and REVIEW_APP_PRIVATE_KEY if you add a
+   private repo to related_repos in step 3. For each one that is missing, or that
+   you cannot check, tell me its exact name and that it goes under the repo's
+   Settings > Secrets and variables > Actions, as an Actions secret and not in a
+   GitHub Environment. Put the same list in the PR description. Never ask me for
+   a key's value and never print one.
 
 3. Write a .claude-review.yml at the repo root. Read AGENTS.md, CLAUDE.md, the
    README and enough of the code to know the stack and its conventions first.
