@@ -24,7 +24,7 @@ const execFileAsync = promisify(execFile)
 const LOG_CONCURRENCY = 6
 
 /** GitHub returns at most 1,000 runs for a filtered list, newest first. */
-const RUN_LIST_LIMIT = 1000
+export const RUN_LIST_LIMIT = 1000
 
 const USAGE =
   "Usage: collect-review-usage.ts --repos eigen,force --since YYYY-MM-DD [--split YYYY-MM-DD]... [--workflow file.yml]"

@@ -1,4 +1,4 @@
-import { gh, listRuns, mapLimit } from "./collect-review-usage"
+import { gh, listRuns, mapLimit, RUN_LIST_LIMIT } from "./collect-review-usage"
 import { MISSED_LOG_PREFIX } from "./review-missed"
 
 /**
@@ -13,6 +13,8 @@ import { MISSED_LOG_PREFIX } from "./review-missed"
 
 const LOG_CONCURRENCY = 6
 const WORKFLOW = "run-claude-review.yml"
+const OUTCOME_JOBS_FILTER =
+  '.jobs[] | select(.name | endswith("outcome")) | select(.conclusion != "skipped") | .id'
 const USAGE =
   "Usage: collect-missed-findings.ts --repos gravity,volt --since YYYY-MM-DD"
 
@@ -96,20 +98,33 @@ const main = async (): Promise<void> => {
     })
     runs.push(...repoRuns.map(run => ({ repo, databaseId: run.databaseId })))
     console.error(`${repo}: ${repoRuns.length} runs`)
+    if (repoRuns.length >= RUN_LIST_LIMIT) {
+      const earliest = repoRuns.map(run => run.createdAt).sort()[0]
+      console.error(
+        `${repo}: hit GitHub's ${RUN_LIST_LIMIT}-run limit, so runs before ${earliest} are missing. Move --since later.`
+      )
+    }
   }
 
   const missed = await mapLimit(runs, LOG_CONCURRENCY, async run => {
     try {
-      return parseMissedLines(
+      // Most runs are reviews. Only a run whose outcome job ran can hold these lines.
+      const jobIds = (
         await gh([
-          "run",
-          "view",
-          String(run.databaseId),
-          "-R",
-          `artsy/${run.repo}`,
-          "--log",
+          "api",
+          `repos/artsy/${run.repo}/actions/runs/${run.databaseId}/jobs`,
+          "--jq",
+          OUTCOME_JOBS_FILTER,
         ])
       )
+        .split("\n")
+        .filter(Boolean)
+      const logs = await Promise.all(
+        jobIds.map(id =>
+          gh(["run", "view", "-R", `artsy/${run.repo}`, "--job", id, "--log"])
+        )
+      )
+      return logs.flatMap(parseMissedLines)
     } catch {
       console.error(`${run.repo} run ${run.databaseId}: could not read log`)
       return []

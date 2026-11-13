@@ -15,6 +15,7 @@ catch themselves?
 1. **Enable it in the repo.** Add `closed` to the trigger in the repo's
    `run-claude-review.yml`, as for the outcome experiment. Without it the job never
    runs there.
+
 With `everyone: true` in `participants.yml`, every merged PR in such a repo is
 checked, whoever wrote it, and there is nothing else to join. It is still an
 experiment: the numbers and the judge are being checked, and it can be turned off in

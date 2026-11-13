@@ -584,7 +584,7 @@
             ],
             "formulas": [
               {
-                "formula": "(r + t - b) / f * 100"
+                "formula": "(default_zero(r) + default_zero(t) - default_zero(b)) / f * 100"
               }
             ]
           }
@@ -627,7 +627,7 @@
             ],
             "formulas": [
               {
-                "formula": "(r + t - b) / f * 100"
+                "formula": "(default_zero(r) + default_zero(t) - default_zero(b)) / f * 100"
               }
             ]
           }
@@ -819,7 +819,7 @@
             ],
             "formulas": [
               {
-                "formula": "(mb + ms) / (ab + as) * 100"
+                "formula": "(default_zero(mb) + default_zero(ms)) / (default_zero(ab) + default_zero(as)) * 100"
               }
             ]
           }
