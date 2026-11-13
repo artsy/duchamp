@@ -98,6 +98,26 @@ describe("findingsFrom", () => {
     ])
   })
 
+  it("counts 👍 ❤️ 🎉 🚀 as up, and other reactions as none", () => {
+    const reactionFor = (content: string): string =>
+      findingsFrom([
+        thread(
+          bot("🟠 x", {
+            reactionGroups: [{ content, reactors: { totalCount: 1 } }],
+          })
+        ),
+      ])[0].reaction
+
+    expect(["THUMBS_UP", "HEART", "HOORAY", "ROCKET"].map(reactionFor)).toEqual(
+      ["up", "up", "up", "up"]
+    )
+    expect(["EYES", "LAUGH", "CONFUSED"].map(reactionFor)).toEqual([
+      "none",
+      "none",
+      "none",
+    ])
+  })
+
   it("keeps the end of a long hunk, where the commented line is", () => {
     const [found] = findingsFrom([
       thread(bot("🟠 x", { diffHunk: `${"a".repeat(3000)}LAST` })),

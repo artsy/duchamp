@@ -58,9 +58,9 @@ METRIC_NAME_ALLOWLIST` and the same for `METRIC_TAG_ALLOWLIST` in artsy/volley.
 `dashboard.json` is the "AI PR review" dashboard: reviews, spend, cost per review,
 turns, duration, cache hit rate, success rate, denied tool calls, tokens, inline
 comments and the most expensive PRs, split by group and mode, with filters for repo,
-group, mode, model and PR. The last seven widgets are the outcome experiment's: findings
-measured, the share addressed (overall, by severity and by repo), the share
-dismissed, and a graph of findings per week split by whether they were addressed. They follow only the repo and PR filters. Edit the file rather than the
+group, mode, model and PR. The last eight widgets are the outcome experiment's: findings
+measured, the share addressed (overall, by severity and by repo), the shares
+agreed with and dismissed, and a graph of findings per week split by whether they were addressed. They follow only the repo and PR filters. Edit the file rather than the
 dashboard in the UI, then apply it again.
 
 To create it, use Dashboards → New Dashboard → the gear menu → Import dashboard JSON,

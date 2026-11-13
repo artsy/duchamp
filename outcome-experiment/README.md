@@ -34,8 +34,8 @@ tags:
 | Tag | Values | Source |
 | --- | --- | --- |
 | `addressed` | yes, no, unclear | the code: a judge compares the comment with how its file changed between the review and the merge |
-| `reaction` | up, down, none | 👍/👎 on the comment. A 👎 wins over a 👍 |
-| `reply` | dismissed, agreed, other, none | what people replied, labelled by the judge. "This is not a problem" is `dismissed` |
+| `reaction` | up, down, none | Emoji on the comment: 👍 ❤️ 🎉 🚀 count as up, 👎 as down. A 👎 wins over the others |
+| `reply` | dismissed, agreed, other, none | what people replied, labelled by the judge. "This is not a problem" is `dismissed`, "good find" is `agreed` |
 | `severity` | blocking, required, nit, question, none | the comment's marker (🔴 🟠 🔵 ⚪) |
 | `reviewer` | claude, codex | who posted it |
 

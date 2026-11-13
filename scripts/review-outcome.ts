@@ -12,7 +12,7 @@ import { sendToVolley, type VolleyMetric } from "./review-usage"
  * experiment; see outcome-experiment/README.md.
  *
  * Each inline comment the reviewer left becomes one `ai_pr_review.findings` count,
- * tagged with whether the code it pointed at changed (`addressed`), the 👍/👎 on it
+ * tagged with whether the code it pointed at changed (`addressed`), the reactions on it
  * (`reaction`) and what a person answered (`reply`). Numbers only: no comment text
  * leaves the job.
  */
@@ -29,6 +29,9 @@ const CLAUDE_LOGIN = "claude"
 const ACTIONS_LOGIN = "github-actions"
 // Starts every inline comment Codex posts; see scripts/post-side-by-side.ts
 const CODEX_PREFIX = "**Codex:**"
+
+/** 👍 ❤️ 🎉 🚀 */
+const POSITIVE_REACTIONS = ["THUMBS_UP", "HEART", "HOORAY", "ROCKET"]
 
 const SEVERITIES: Record<string, string> = {
   "🔴": "blocking",
@@ -78,7 +81,7 @@ const reactionOf = (
   if (count("THUMBS_DOWN") > 0) {
     return "down"
   }
-  return count("THUMBS_UP") > 0 ? "up" : "none"
+  return POSITIVE_REACTIONS.some(content => count(content) > 0) ? "up" : "none"
 }
 
 /** The inline comments Claude and Codex opened, with what people did on each. */

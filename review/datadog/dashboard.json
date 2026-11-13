@@ -551,6 +551,49 @@
     {
       "definition": {
         "type": "query_value",
+        "title": "Findings agreed with in a reply or 👍 (%)",
+        "precision": 0,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "r",
+                "query": "sum:ai_pr_review.findings{reply:agreed,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "t",
+                "query": "sum:ai_pr_review.findings{reaction:up,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "b",
+                "query": "sum:ai_pr_review.findings{reply:agreed,reaction:up,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "f",
+                "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "(r + t - b) / f * 100"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
         "title": "Findings dismissed in a reply or 👎 (%)",
         "precision": 0,
         "requests": [
@@ -571,6 +614,12 @@
               },
               {
                 "data_source": "metrics",
+                "name": "b",
+                "query": "sum:ai_pr_review.findings{reply:dismissed,reaction:down,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
                 "name": "f",
                 "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
                 "aggregator": "sum"
@@ -578,7 +627,7 @@
             ],
             "formulas": [
               {
-                "formula": "(r + t) / f * 100"
+                "formula": "(r + t - b) / f * 100"
               }
             ]
           }
