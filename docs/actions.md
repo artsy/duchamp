@@ -356,7 +356,8 @@ that introduced it:
 ```yaml
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, labeled, unlabeled]
+    # closed is for the outcome experiments; it never starts a review
+    types: [opened, synchronize, ready_for_review, labeled, unlabeled, closed]
     # Optional: skip docs-only PRs to reduce costs
     paths-ignore:
       - "**.md"
