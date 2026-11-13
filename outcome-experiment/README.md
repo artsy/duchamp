@@ -60,7 +60,10 @@ comment was posted on and as it was at the PR's last commit, and diffs the two. 
 compares file versions and not commits, so it still works after a rebase or force push
 rewrote the branch.
 
-One call to `claude-haiku-5-5` then judges every finding on the PR: the comment, the
+One call to `claude-haiku-5-5` then judges every finding on the PR, as a plain HTTP
+request. The tooling takes no SDK for it: other repos install this tooling under their
+own Yarn settings, and a newly published package can fail their minimum-age rule,
+which breaks their danger check. The judge gets the comment, the
 diff hunk it was posted on, the file's diff since, and the replies. The comment and
 reply text is passed as data, with an instruction not to follow anything inside it.
 Only replies from the PR's author or people with write access are passed at all,
