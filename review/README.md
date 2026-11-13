@@ -8,8 +8,8 @@ with `prompt.md` in this directory. It runs on the workflow's `model` input,
 `anthropics/claude-code-action@v1` installs.
 
 To turn the review on in a repo, see
-[Enable it in a repo](../docs/actions.md#run-claude-reviewyml), which has a prompt to
-paste into Claude Code.
+[Enabling the AI PR review](../docs/enabling-ai-review.md), which has the steps and a
+prompt to paste into Claude Code.
 
 Experiments change parts of the review, for some PRs or for all of them. See
 [experiments.md](experiments.md) for the active ones and the history.

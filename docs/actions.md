@@ -210,57 +210,8 @@ secrets:
   openai-api-key: ${{ secrets.OPENAI_API_KEY }} # Optional, for the Codex experiment
 ```
 
-**Enable it in a repo:**
-
-1. Copy [`templates/run-claude-review.yml`](../templates/run-claude-review.yml) to
-   `.github/workflows/run-claude-review.yml` in the repo.
-2. Check the repo can read the `ANTHROPIC_API_KEY` secret (see
-   [Setting Up the API Key](#run-claude-reviewyml) below). Artsy sets it for the whole
-   org, so most repos need nothing.
-3. Optional: add a `.claude-review.yml` at the repo root with the repo's own focus
-   areas, ignored paths and context (see Repo Configuration below). The review works
-   without it, and is better with it.
-4. Open a PR with those files. The review runs on that PR too, so it is the first
-   test. `.claude-review.yml` takes effect from the PR that adds it, except
-   `related_repos`, which is read from the default branch and so applies once merged.
-
-**Or paste this prompt into Claude Code**, from the root of the repo to enable:
-
-```text
-Enable Artsy's shared AI PR review in this repo. The docs are at
-https://github.com/artsy/duchamp/blob/main/docs/actions.md#run-claude-reviewyml
-
-1. Add .github/workflows/run-claude-review.yml with the content of
-   https://github.com/artsy/duchamp/blob/main/templates/run-claude-review.yml
-   (fetch it with `gh api repos/artsy/duchamp/contents/templates/run-claude-review.yml`).
-   Keep it as is. If the repo already has this file, stop and tell me.
-
-2. Check that the ANTHROPIC_API_KEY secret reaches this repo:
-   `gh api repos/{owner}/{repo}/actions/organization-secrets` and
-   `gh secret list`. If it is missing, or you cannot tell, say so in the PR
-   description. Never ask me for the key and never print one.
-
-3. Write a .claude-review.yml at the repo root. Read AGENTS.md, CLAUDE.md, the
-   README and enough of the code to know the stack and its conventions first.
-   - context: 3 to 6 lines on what the repo is, its stack, and which checks CI
-     already runs, so the review doesn't repeat them.
-   - focus_areas: 3 to 6 rules a reviewer can check against a diff, taken from
-     conventions the repo documents or clearly follows. Say what to flag and
-     what not to flag. Leave out anything a linter or the type checker catches.
-   - ignore_paths: generated files, lockfiles the default doesn't cover, vendored
-     code and snapshots.
-   - related_repos: only if this repo plainly serves or consumes another Artsy
-     repo (for example a client of metaphysics). At most 3, as artsy/<name>. If
-     you add any and this repo is private, also pass
-     `review-app-private-key: ${{ secrets.REVIEW_APP_PRIVATE_KEY }}` in the workflow.
-   If the repo is public, keep internal details out of this file.
-
-4. Open a PR titled "chore: enable the AI PR review", following the repo's PR
-   template if it has one. Say what the review will do here, list the focus areas
-   you chose and why, and note anything you could not verify. Do not merge it.
-
-Change nothing else in the repo.
-```
+**Enable it in a repo:** see [Enabling the AI PR review](./enabling-ai-review.md) for
+the steps, and a prompt to paste into Claude Code that does them.
 
 **Features:**
 
