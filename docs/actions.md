@@ -206,6 +206,60 @@ with:
   timeout-minutes: 30 # Maximum review time (default: 30)
 secrets:
   anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }} # Required
+  review-app-private-key: ${{ secrets.REVIEW_APP_PRIVATE_KEY }} # Optional, for private related_repos
+  openai-api-key: ${{ secrets.OPENAI_API_KEY }} # Optional, for the Codex experiment
+```
+
+**Enable it in a repo:**
+
+1. Copy [`templates/run-claude-review.yml`](../templates/run-claude-review.yml) to
+   `.github/workflows/run-claude-review.yml` in the repo.
+2. Check the repo can read the `ANTHROPIC_API_KEY` secret (see
+   [Setting Up the API Key](#run-claude-reviewyml) below). Artsy sets it for the whole
+   org, so most repos need nothing.
+3. Optional: add a `.claude-review.yml` at the repo root with the repo's own focus
+   areas, ignored paths and context (see Repo Configuration below). The review works
+   without it, and is better with it.
+4. Open a PR with those files. The review runs on that PR too, so it is the first
+   test. `.claude-review.yml` takes effect from the PR that adds it, except
+   `related_repos`, which is read from the default branch and so applies once merged.
+
+**Or paste this prompt into Claude Code**, from the root of the repo to enable:
+
+```text
+Enable Artsy's shared AI PR review in this repo. The docs are at
+https://github.com/artsy/duchamp/blob/main/docs/actions.md#run-claude-reviewyml
+
+1. Add .github/workflows/run-claude-review.yml with the content of
+   https://github.com/artsy/duchamp/blob/main/templates/run-claude-review.yml
+   (fetch it with `gh api repos/artsy/duchamp/contents/templates/run-claude-review.yml`).
+   Keep it as is. If the repo already has this file, stop and tell me.
+
+2. Check that the ANTHROPIC_API_KEY secret reaches this repo:
+   `gh api repos/{owner}/{repo}/actions/organization-secrets` and
+   `gh secret list`. If it is missing, or you cannot tell, say so in the PR
+   description. Never ask me for the key and never print one.
+
+3. Write a .claude-review.yml at the repo root. Read AGENTS.md, CLAUDE.md, the
+   README and enough of the code to know the stack and its conventions first.
+   - context: 3 to 6 lines on what the repo is, its stack, and which checks CI
+     already runs, so the review doesn't repeat them.
+   - focus_areas: 3 to 6 rules a reviewer can check against a diff, taken from
+     conventions the repo documents or clearly follows. Say what to flag and
+     what not to flag. Leave out anything a linter or the type checker catches.
+   - ignore_paths: generated files, lockfiles the default doesn't cover, vendored
+     code and snapshots.
+   - related_repos: only if this repo plainly serves or consumes another Artsy
+     repo (for example a client of metaphysics). At most 3, as artsy/<name>. If
+     you add any and this repo is private, also pass
+     `review-app-private-key: ${{ secrets.REVIEW_APP_PRIVATE_KEY }}` in the workflow.
+   If the repo is public, keep internal details out of this file.
+
+4. Open a PR titled "chore: enable the AI PR review", following the repo's PR
+   template if it has one. Say what the review will do here, list the focus areas
+   you chose and why, and note anything you could not verify. Do not merge it.
+
+Change nothing else in the repo.
 ```
 
 **Features:**
@@ -215,6 +269,10 @@ secrets:
   (`blocking:` / `required:` / `nit:` / `q:`) and a Request Changes / Needs Discussion
   / Approve verdict (see `review/README.md`)
 - Customizable review focus via `.claude-review.yml` config file
+- After the first review, re-reviews of only what changed since, with the earlier
+  findings checked against the new code (see [Re-reviews](../review/README.md#re-reviews))
+- A summary comment with a collapsed "Review stats" block: model, cost, turns and
+  duration
 - Add the `security-review` label for a security pass by a dedicated subagent (see
   `security-experiment/README.md`)
 - Configurable PR exclusions (see below)
@@ -229,8 +287,8 @@ secrets:
 **Inputs:**
 
 - `model` (optional): Claude model to use for the review (default `claude-opus-5-5`).
-  Small experiment PRs run on a lighter model unless you set this; see
-  [Model routing](../review/README.md#model-routing)
+  Docs-only and small PRs away from sensitive code run on a lighter model unless you
+  set this; see [Model routing](../review/README.md#model-routing)
 - `timeout-minutes` (optional): Maximum time for the review job
 
 **Secrets:**
@@ -323,17 +381,19 @@ prompt: |
 
 **Experiments:**
 
-Opt-in groups, each with a `participants.yml` and a label for single PRs.
-`review/experiments.md` lists them with past experiments, who created each and the PR
-that introduced it:
+Changes to the review ship as experiments first. Each has a `participants.yml` that
+says who gets it (listed authors, listed repos, or everyone) and a label for trying it
+on one PR. [`review/experiments.md`](../review/experiments.md) is the current list,
+with who each one is on for, past experiments and the PR that introduced each:
 
-- Lean reviews (`ai-review-lean`): AGENTS.md and the diff in the prompt,
-  re-reviews, model routing, fewer inline comments. See
+- Lean reviews (`ai-review-lean`), on for every PR: AGENTS.md and the diff in the
+  prompt, re-reviews, model routing, fewer inline comments. See
   `lean-reviews-experiment/README.md`.
-- Related-repos experiment (`ai-review-related-repos`): reads the other Artsy repos in
-  the repo's `related_repos`, such as metaphysics when reviewing eigen. See
-  `related-repos-experiment/README.md`.
-- Security experiment (`security-review`): a security pass by a subagent. See
+- Related-repos experiment (`ai-review-related-repos`), on for every PR in volt and
+  gravity: reads the other Artsy repos in the repo's `related_repos`, such as
+  metaphysics when reviewing eigen. See `related-repos-experiment/README.md`.
+- Security experiment (`security-review`), on for every PR in the repos its
+  `participants.yml` lists: a security pass by a subagent. See
   `security-experiment/README.md`.
 - Best-practices experiment (`ai-review-best-practices`): stack skills such as
   React Native best practices. See `best-practices-experiment/README.md`.
@@ -341,15 +401,22 @@ that introduced it:
   rating in the summary. See `merge-risk-experiment/README.md`.
 - Replies experiment (`ai-review-replies`): re-reviews read the replies to the
   reviewer's earlier inline comments. See `replies-experiment/README.md`.
-- Outcome experiment (`ai-review-outcome`): when a PR merges, records whether each
-  inline comment was addressed. Needs `closed` in the trigger's types. See
-  `outcome-experiment/README.md`.
+- Outcome experiment (`ai-review-outcome`), on for every merged PR in repos that list
+  `closed` in the trigger's types: records whether each inline comment was addressed.
+  See `outcome-experiment/README.md`.
+- Codex experiment (`ai-review-codex`): a second review from OpenAI Codex, shown next
+  to Claude's. Needs the repo to pass `openai-api-key`. See
+  `codex-experiment/README.md`.
 
 **Security Notes:**
 
-- Requires approval for external contributors to prevent prompt injection
-- Read-only code access - Claude comments but cannot push changes
-- Works with branch protection rules
+- It only reviews PRs whose author has write access to the repo (admin, maintain or
+  write). PRs from outside contributors are skipped, which keeps untrusted diffs away
+  from the prompt
+- The reviewer can read the code and comment. Its allowed tools include no way to
+  push or edit files. The job's token has `contents: write` only because GitHub
+  requires it to resolve review threads
+- It is not a merge gate, and works with branch protection rules
 
 **Trigger Recommendations:**
 
@@ -364,7 +431,7 @@ on:
       - "docs/**"
 ```
 
-`labeled`/`unlabeled` are required for the `in-progress` label exclusion below to take effect as soon as the label is added or removed, rather than waiting for the next push.
+`labeled`/`unlabeled` are required for the `in-progress` label exclusion to take effect as soon as the label is added or removed, rather than waiting for the next push. `closed` lets the outcome experiment measure a PR when it merges.
 
 ---
 
