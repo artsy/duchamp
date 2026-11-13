@@ -19,6 +19,7 @@ import {
   renderDiff,
 } from "./review-diff"
 import {
+  fetchAnsweredThreads,
   formatRereviewSection,
   type ReviewMode,
   resolveReviewMode,
@@ -662,7 +663,12 @@ export const formatContextSection = (
         reviewMode.previous,
         baseRef,
         ignorePaths,
-        diffBytes
+        diffBytes,
+        fetchAnsweredThreads(
+          process.env.GITHUB_REPOSITORY,
+          process.env.PR_NUMBER,
+          process.env.PR_AUTHOR
+        )
       )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
