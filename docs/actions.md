@@ -355,6 +355,9 @@ with who each one is on for, past experiments and the PR that introduced each:
 - Outcome experiment (`ai-review-outcome`), on for every merged PR in repos that list
   `closed` in the trigger's types: records whether each inline comment was addressed.
   See `outcome-experiment/README.md`.
+- Missed-findings experiment (`ai-review-missed-findings`), on for every merged PR in
+  repos that list `closed`: records what human reviewers caught that the AI review
+  missed. See `missed-findings-experiment/README.md`.
 - Codex experiment (`ai-review-codex`): a second review from OpenAI Codex, shown next
   to Claude's. Needs the repo to pass `openai-api-key`. See
   `codex-experiment/README.md`.

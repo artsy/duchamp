@@ -192,14 +192,14 @@ export const summarize = (
   ].join("\n")
 }
 
-const gh = async (args: string[]): Promise<string> => {
+export const gh = async (args: string[]): Promise<string> => {
   const { stdout } = await execFileAsync("gh", args, {
     maxBuffer: 256 * 1024 * 1024,
   })
   return stdout
 }
 
-const listRuns = async (
+export const listRuns = async (
   repo: string,
   options: Options
 ): Promise<{ databaseId: number; createdAt: string }[]> => {
@@ -223,7 +223,7 @@ const listRuns = async (
 }
 
 /** Runs fn over items with at most `limit` in flight. */
-const mapLimit = async <T, R>(
+export const mapLimit = async <T, R>(
   items: T[],
   limit: number,
   fn: (item: T) => Promise<R>

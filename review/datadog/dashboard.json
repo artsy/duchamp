@@ -754,6 +754,77 @@
           }
         ]
       }
+    },
+    {
+      "definition": {
+        "type": "toplist",
+        "title": "Human review comments, by category and caught",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "h",
+                "query": "sum:ai_pr_review.human_comments{$repo,$pr} by {category,caught}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "h",
+                "limit": {
+                  "count": 20,
+                  "order": "desc"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Bug and security comments the review missed (%)",
+        "precision": 0,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "mb",
+                "query": "sum:ai_pr_review.human_comments{caught:false,category:bug,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "ms",
+                "query": "sum:ai_pr_review.human_comments{caught:false,category:security,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "ab",
+                "query": "sum:ai_pr_review.human_comments{category:bug,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "as",
+                "query": "sum:ai_pr_review.human_comments{category:security,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "(mb + ms) / (ab + as) * 100"
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }

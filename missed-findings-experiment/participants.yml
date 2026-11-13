@@ -1,0 +1,23 @@
+# GitHub logins enrolled in the missed-findings experiment.
+#
+# When a PR by anyone on this list merges, a job compares what human reviewers said in
+# their inline comments with what the AI review said, and records which points the AI
+# missed. It changes nothing in the review. This is separate from the other
+# experiments: a PR can be in any mix of them.
+#
+# It only runs in repos whose `run-claude-review.yml` lists `closed` in its
+# pull_request types.
+#
+# `everyone: true` puts every merged PR in those repos in the experiment, whoever wrote
+# it. Set it to false (or remove it) to go back to the list and the label.
+#
+# To join or leave, add or remove your login and open a PR. Case does not matter.
+# Anyone can also try it on a single PR by adding the `ai-review-missed-findings`
+# label, without being on this list.
+#
+# See README.md in this directory.
+
+everyone: true
+
+participants:
+  - MounirDhahri

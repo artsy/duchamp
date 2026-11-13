@@ -69,7 +69,7 @@ export interface Verdict {
 /** The diff of a finding's file since its comment ("" when unchanged), or null when unknown. */
 export type ChangeSince = string | null
 
-const cut = (text: string, maxChars: number): string =>
+export const cut = (text: string, maxChars: number): string =>
   text.length > maxChars ? `${text.slice(0, maxChars)}…` : text
 
 export const parseSeverity = (body: string): string => {
@@ -129,7 +129,7 @@ export const findingsFrom = (
     .slice(-MAX_FINDINGS)
     .map((finding, id) => ({ id, ...finding }))
 
-const gh = (path: string, raw = false): string =>
+export const gh = (path: string, raw = false): string =>
   execFileSync(
     "gh",
     ["api", ...(raw ? ["-H", "Accept: application/vnd.github.raw"] : []), path],
@@ -375,7 +375,7 @@ export const formatTable = (findings: Finding[], verdicts: Verdict[]): string =>
     "",
   ].join("\n")
 
-interface PullRequest {
+export interface PullRequest {
   merged: boolean
   user: { login: string }
   labels: { name: string }[]
