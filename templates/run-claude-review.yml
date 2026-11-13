@@ -2,7 +2,8 @@ name: AI PR Review
 
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, labeled, unlabeled]
+    # closed is for the review's outcome experiments (outcome-experiment/README.md); it never starts a review.
+    types: [opened, synchronize, ready_for_review, labeled, unlabeled, closed]
 
 jobs:
   claude-review:

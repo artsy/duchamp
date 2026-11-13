@@ -11,6 +11,7 @@ Welcome to the duchamp documentation! This directory contains comprehensive guid
 | **[Getting Started](./getting-started.md)** | Basic setup and integration        | New users setting up duchamp for the first time       |
 | **[Available Actions](./actions.md)**       | Complete reference for all actions | Developers needing detailed action specifications     |
 | **[Usage Examples](./examples.md)**         | Real-world configuration examples  | Teams implementing duchamp in different project types |
+| **[Enabling the AI PR review](./enabling-ai-review.md)** | Turn on the AI review in a repo | Teams adding the review, by hand or with a prompt |
 
 ## 🚀 Quick Start Path
 
@@ -23,6 +24,7 @@ Welcome to the duchamp documentation! This directory contains comprehensive guid
 ### Common Scenarios
 
 - **Setting up Danger.js checks**: [Getting Started → Basic Integration](./getting-started.md#basic-integration)
+- **Turning on the AI PR review**: [Enabling the AI PR review](./enabling-ai-review.md)
 - **Auto-labeling PRs**: [Actions → run-add-version-label.yml](./actions.md#run-add-version-labelyml)
 - **Custom Danger rules**: [Examples → Custom Danger Rules](./examples.md#custom-danger-rules)
 - **Node.js project setup**: [Examples → Basic Node.js Project](./examples.md#basic-nodejs-project)

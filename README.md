@@ -41,6 +41,7 @@ For detailed documentation, see the [docs/](./docs/) directory:
 
 - [Getting Started](./docs/getting-started.md) - Setup and basic usage
 - [Available Actions](./docs/actions.md) - Detailed action reference
+- [Enabling the AI PR review](./docs/enabling-ai-review.md) - Turn on the AI review in a repo, by hand or with a prompt
 - [Examples](./docs/examples.md) - Real-world usage examples
 - [Adopting AGENTS.md tooling](./docs/adopting-agents-md.md) - Add AGENTS.md lint + wrapper auto-sync to a repo
 

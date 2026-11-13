@@ -1,5 +1,6 @@
 {
   "getting-started.md": "Setup and integration guide for using duchamp actions",
   "actions.md": "Detailed reference for all available GitHub Actions",
+  "enabling-ai-review.md": "How to turn on the AI PR review in a repo, with a prompt for Claude Code",
   "examples.md": "Real-world usage patterns and configuration examples"
 }

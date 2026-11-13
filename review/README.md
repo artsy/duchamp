@@ -7,7 +7,11 @@ with `prompt.md` in this directory. It runs on the workflow's `model` input,
 [Model routing](#model-routing). The Claude Code version is whatever
 `anthropics/claude-code-action@v1` installs.
 
-Opt-in experiments change parts of the review for some PRs. See
+To turn the review on in a repo, see
+[Enabling the AI PR review](../docs/enabling-ai-review.md), which has the steps and a
+prompt to paste into Claude Code.
+
+Experiments change parts of the review, for some PRs or for all of them. See
 [experiments.md](experiments.md) for the active ones and the history.
 
 ## How the review works
