@@ -20,6 +20,7 @@ import {
   inCodex,
   inLeanReviews,
   inMergeRisk,
+  inOutcome,
   inRelatedReposExperiment,
   inReplies,
   inSecurityExperiment,
@@ -765,6 +766,33 @@ describe("inLeanReviews", () => {
 
     mockFiles({ "participants.yml": "everyone: false\nparticipants: []\n" })
     expect(inLeanReviews("someone-else", [])).toBe(false)
+  })
+})
+
+describe("inOutcome", () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it("is true for an enrolled author, from its own list", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+
+    expect(inOutcome("mounirdhahri", [])).toBe(true)
+    expect(
+      mockFs.readFileSync.mock.calls.map(([p]) => String(p))
+    ).toContainEqual(
+      expect.stringContaining(
+        path.join("outcome-experiment", "participants.yml")
+      )
+    )
+  })
+
+  it("is true for a labelled PR, and false otherwise", () => {
+    mockFs.existsSync.mockReturnValue(false)
+
+    expect(inOutcome("someone-else", ["AI-Review-Outcome"])).toBe(true)
+    expect(inOutcome("someone-else", [LEAN_LABEL])).toBe(false)
+    expect(inOutcome(undefined, [])).toBe(false)
   })
 })
 

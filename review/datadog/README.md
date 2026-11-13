@@ -17,9 +17,10 @@ using the shared workflow reports.
 | `inline_comments` | histogram | Inline comments the review asked to post, leaving out failed calls, `confirmed: false` calls and repeats. The action drops probe comments after the session, so this can run slightly high |
 | `cache_hit_rate` | histogram | Share of input tokens read from the prompt cache |
 | `skill_calls` | counter | Skill tool calls, with a `skill` tag naming the skill |
+| `findings` | counter | One per inline comment, sent when the PR merges, for the [outcome experiment](../../outcome-experiment/README.md). Its tags are its own: `repo`, `pr`, `reviewer`, `severity`, `addressed`, `reaction` and `reply` |
 | `skill_reference_reads` | counter | Reads of a skill's `references/*.md`, with `skill` and `reference` tags |
 
-All of them carry the tags `repo`, `pr`, `group` (experiment, standard or unknown), `mode`
+All of them but `findings` carry the tags `repo`, `pr`, `group` (experiment, standard or unknown), `mode`
 (full, rereview or unknown), `outcome`, `model` and `effort`. Reviews from after the
 security experiment also carry `security` (true when the
 [security pass](../README.md#security-pass) ran). Reviews from after the best-practices
@@ -57,7 +58,9 @@ METRIC_NAME_ALLOWLIST` and the same for `METRIC_TAG_ALLOWLIST` in artsy/volley.
 `dashboard.json` is the "AI PR review" dashboard: reviews, spend, cost per review,
 turns, duration, cache hit rate, success rate, denied tool calls, tokens, inline
 comments and the most expensive PRs, split by group and mode, with filters for repo,
-group, mode, model and PR. Edit the file rather than the
+group, mode, model and PR. The last six widgets are the outcome experiment's: findings
+measured, the share addressed (overall, by severity and by repo) and the share
+dismissed. They follow only the repo and PR filters. Edit the file rather than the
 dashboard in the UI, then apply it again.
 
 To create it, use Dashboards → New Dashboard → the gear menu → Import dashboard JSON,

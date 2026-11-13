@@ -35,13 +35,55 @@ jobs:
     steps:
       - run: echo "in-progress label added, cancelled any running review"
 
+  # What happened to the review's findings, for the outcome experiment. Runs only where
+  # the caller lists `closed` in its pull_request types. See outcome-experiment/README.md.
+  outcome:
+    if: github.event.action == 'closed' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout tooling repo
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .tooling
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install tooling dependencies
+        run: yarn install --frozen-lockfile
+        working-directory: .tooling
+        env:
+          YARN_IGNORE_PATH: 1
+
+      - name: Measure review outcome
+        run: npx ts-node .tooling/scripts/review-outcome.ts
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.anthropic-api-key }}
+          # Forwards the metrics to Datadog; see review/datadog/README.md.
+          VOLLEY_URL: https://volley.artsy.net/report
+
   check:
     runs-on: ubuntu-latest
     concurrency:
       group: claude-review-${{ github.repository }}-${{ github.event.pull_request.number }}
       cancel-in-progress: true
-    # Fast-path exclusions: drafts, bots, dependabot, renovate, in-progress label (zero overhead)
+    # Fast-path exclusions: drafts, bots, dependabot, renovate, in-progress label (zero overhead).
+    # `closed` only reaches here from callers in the outcome experiment; it never starts a review.
     if: |
+      github.event.action != 'closed' &&
       github.event.pull_request.draft == false &&
       !contains(github.event.pull_request.user.login, '[bot]') &&
       github.event.pull_request.user.login != 'dependabot' &&

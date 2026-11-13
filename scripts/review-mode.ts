@@ -48,10 +48,13 @@ const MAX_REPLIES_BYTES = 6_000
 const MAX_FINDING_CHARS = 300
 const MAX_REPLY_CHARS = 600
 
-interface ThreadComment {
+export interface ThreadComment {
   author: { __typename: string; login: string } | null
   authorAssociation: string
   body: string
+  diffHunk?: string
+  originalCommit?: { oid: string } | null
+  reactionGroups?: { content: string; reactors: { totalCount: number } }[]
 }
 
 export interface ReviewThread {
@@ -128,6 +131,9 @@ const THREADS_QUERY = `
                 author { __typename login }
                 authorAssociation
                 body
+                diffHunk
+                originalCommit { oid }
+                reactionGroups { content reactors { totalCount } }
               }
             }
           }

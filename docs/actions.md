@@ -341,6 +341,9 @@ that introduced it:
   rating in the summary. See `merge-risk-experiment/README.md`.
 - Replies experiment (`ai-review-replies`): re-reviews read the replies to the
   reviewer's earlier inline comments. See `replies-experiment/README.md`.
+- Outcome experiment (`ai-review-outcome`): when a PR merges, records whether each
+  inline comment was addressed. Needs `closed` in the trigger's types. See
+  `outcome-experiment/README.md`.
 
 **Security Notes:**
 
