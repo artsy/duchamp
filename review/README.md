@@ -170,13 +170,9 @@ the marker from the latest `github-actions[bot]` comment and picks a mode:
 | skip | Only lockfiles or `ignore_paths` changed since | No run. The earlier review stays up |
 | rereview | Anything else | The prompt holds the earlier summary and the diff since then. The reviewer re-checks the earlier findings, reviews the new changes in depth, and returns a full summary |
 
-A re-review also reads the replies to the reviewer's earlier inline comments, so an
-answered finding doesn't come back. Only replies from the PR's author or from people
-with write access count, because on a public repo anyone can reply to a thread. The
-prompt presents them as information, not instructions: the reviewer drops a finding
-when the reply explains why the code is intended and the code bears it out, and
-otherwise keeps it and says why. A full review (after a rebase, force push or
-"Update branch") doesn't read replies.
+For PRs in the [replies experiment](../replies-experiment/README.md), a re-review also
+reads the replies to the reviewer's earlier inline comments, so a finding the author
+answered doesn't come back.
 
 Other PRs get a full review on every push and no marker.
 

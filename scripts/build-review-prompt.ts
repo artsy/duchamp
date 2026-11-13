@@ -19,6 +19,7 @@ import {
   renderDiff,
 } from "./review-diff"
 import {
+  type AnsweredThread,
   fetchAnsweredThreads,
   formatRereviewSection,
   type ReviewMode,
@@ -74,6 +75,9 @@ export const BEST_PRACTICES_LABEL = "ai-review-best-practices"
 
 /** Label that opts a single PR into the security experiment. */
 export const SECURITY_LABEL = "security-review"
+
+/** Label that opts a single PR into the replies experiment. */
+export const REPLIES_LABEL = "ai-review-replies"
 
 /** Label that opts a single PR into the merge risk experiment. */
 export const MERGE_RISK_LABEL = "ai-review-merge-risk"
@@ -266,6 +270,15 @@ export const inBestPractices = (
     loadParticipants("best-practices-experiment").includes(
       author.toLowerCase()
     ))
+
+/** Whether this review is in the replies experiment: listed authors and labelled PRs. */
+export const inReplies = (
+  author: string | undefined,
+  labels: string[]
+): boolean =>
+  labels.some(label => label.toLowerCase() === REPLIES_LABEL) ||
+  (!!author &&
+    loadParticipants("replies-experiment").includes(author.toLowerCase()))
 
 /** Whether this review is in the merge risk experiment: listed authors and labelled PRs. */
 export const inMergeRisk = (
@@ -646,7 +659,8 @@ export const formatContextSection = (
   baseRef: string | undefined,
   ignorePaths: string[],
   promptBytes = 0,
-  reviewMode: ReviewMode = FULL_REVIEW
+  reviewMode: ReviewMode = FULL_REVIEW,
+  answered: AnsweredThread[] = []
 ): { section: string; reviewMode: ReviewMode } => {
   const lead =
     "\n## Context Already Loaded\n\nSkip the steps above to read AGENTS.md or CLAUDE.md and run `git diff`. CLAUDE.md is already in your context, and the sections below give AGENTS.md and the diff, or say what to fetch. When you know several files you need, read them all in one turn rather than one per turn.\n"
@@ -664,11 +678,7 @@ export const formatContextSection = (
         baseRef,
         ignorePaths,
         diffBytes,
-        fetchAnsweredThreads(
-          process.env.GITHUB_REPOSITORY,
-          process.env.PR_NUMBER,
-          process.env.PR_AUTHOR
-        )
+        answered
       )
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -831,6 +841,7 @@ const main = (): void => {
   const labelled = hasSecurityLabel(labels)
   const bestPractices = inBestPractices(process.env.PR_AUTHOR, labels)
   const mergeRisk = inMergeRisk(process.env.PR_AUTHOR, labels)
+  const replies = inReplies(process.env.PR_AUTHOR, labels)
   const codex = inCodex(process.env.PR_AUTHOR, labels)
 
   // Lets the workflow skip minting the related repos token, and size the job for Codex.
@@ -928,14 +939,26 @@ const main = (): void => {
     security +
     formatStackSkillsSection(stack.skills) +
     mergeRiskSection
+  const answered =
+    inLean && replies && reviewMode.mode === "rereview"
+      ? fetchAnsweredThreads(
+          process.env.GITHUB_REPOSITORY,
+          process.env.PR_NUMBER,
+          process.env.PR_AUTHOR
+        )
+      : []
   const context = inLean
     ? formatContextSection(
         process.env.BASE_REF,
         ignorePaths,
         Buffer.byteLength(promptHead),
-        reviewMode
+        reviewMode,
+        answered
       )
     : { section: "", reviewMode }
+  const repliesRead =
+    answered.length > 0 && context.reviewMode.mode === "rereview"
+  console.log(`Replies read: ${answered.length}`)
   const delivery = formatDelivery(
     inLean,
     process.env.PR_NUMBER,
@@ -961,7 +984,7 @@ const main = (): void => {
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\ncodex=${codexFiles !== undefined}\ncodex_prompt_file=${codexFiles?.promptFile ?? ""}\ncodex_pr_file=${codexFiles?.prFile ?? ""}\n${formatReviewModeOutputs(context.reviewMode)}`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\nreplies=${repliesRead}\ncodex=${codexFiles !== undefined}\ncodex_prompt_file=${codexFiles?.promptFile ?? ""}\ncodex_pr_file=${codexFiles?.prFile ?? ""}\n${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {

@@ -339,6 +339,7 @@ jobs:
           BEST_PRACTICES: ${{ steps.prompt.outputs.best_practices }}
           RELATED_REPOS: ${{ steps.prompt.outputs.related_repos_read }}
           MERGE_RISK: ${{ steps.prompt.outputs.merge_risk }}
+          REPLIES: ${{ steps.prompt.outputs.replies }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report
