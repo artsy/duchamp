@@ -339,6 +339,8 @@ that introduced it:
   React Native best practices. See `best-practices-experiment/README.md`.
 - Merge risk experiment (`ai-review-merge-risk`): a low, medium or high merge risk
   rating in the summary. See `merge-risk-experiment/README.md`.
+- Replies experiment (`ai-review-replies`): re-reviews read the replies to the
+  reviewer's earlier inline comments. See `replies-experiment/README.md`.
 
 **Security Notes:**
 

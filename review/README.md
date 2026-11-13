@@ -170,6 +170,10 @@ the marker from the latest `github-actions[bot]` comment and picks a mode:
 | skip | Only lockfiles or `ignore_paths` changed since | No run. The earlier review stays up |
 | rereview | Anything else | The prompt holds the earlier summary and the diff since then. The reviewer re-checks the earlier findings, reviews the new changes in depth, and returns a full summary |
 
+For PRs in the [replies experiment](../replies-experiment/README.md), a re-review also
+reads the replies to the reviewer's earlier inline comments, so a finding the author
+answered doesn't come back.
+
 Other PRs get a full review on every push and no marker.
 
 Anything that posts with the repo's `GITHUB_TOKEN` writes as `github-actions[bot]`,

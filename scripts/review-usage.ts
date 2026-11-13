@@ -247,6 +247,7 @@ export interface MetricsContext {
   bestPractices?: string
   relatedRepos?: string
   mergeRisk?: string
+  replies?: string
 }
 
 type VolleyMetric =
@@ -294,6 +295,7 @@ export const formatVolleyPayload = (
       : []),
     ...(context.relatedRepos ? [`related_repos:${context.relatedRepos}`] : []),
     ...(context.mergeRisk ? [`merge_risk:${context.mergeRisk}`] : []),
+    ...(context.replies ? [`replies:${context.replies}`] : []),
   ]
   const histogram = (name: string, value: number): VolleyMetric => ({
     type: "histogram",
@@ -499,6 +501,7 @@ const main = async (): Promise<void> => {
       bestPractices: process.env.BEST_PRACTICES,
       relatedRepos: process.env.RELATED_REPOS,
       mergeRisk: process.env.MERGE_RISK,
+      replies: process.env.REPLIES,
     }),
     process.env.VOLLEY_URL
   )

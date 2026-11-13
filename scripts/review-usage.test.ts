@@ -424,8 +424,10 @@ describe("formatVolleyPayload", () => {
     const tags = formatVolleyPayload(usage, {
       ...context,
       mergeRisk: "true",
+      replies: "true",
     }).metrics[0].tags
     expect(tags).toContain("merge_risk:true")
+    expect(tags).toContain("replies:true")
   })
 
   it("tags whether the security pass ran, when recorded", () => {
