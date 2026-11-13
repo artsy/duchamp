@@ -250,7 +250,7 @@ export interface MetricsContext {
   replies?: string
 }
 
-type VolleyMetric =
+export type VolleyMetric =
   | { type: "increment"; name: string; tags: string[] }
   | {
       type: "incrementBy" | "histogram"
@@ -376,7 +376,7 @@ const VOLLEY_TIMEOUT_MS = 10_000
  * it drops a metric, so only a failed request is reported, as a warning.
  */
 export const sendToVolley = async (
-  payload: ReturnType<typeof formatVolleyPayload>,
+  payload: { serviceName: string; metrics: VolleyMetric[] },
   url: string | undefined
 ): Promise<void> => {
   if (!url) {

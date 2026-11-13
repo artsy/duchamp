@@ -79,6 +79,9 @@ export const SECURITY_LABEL = "security-review"
 /** Label that opts a single PR into the replies experiment. */
 export const REPLIES_LABEL = "ai-review-replies"
 
+/** Label that opts a single PR into the outcome experiment. */
+export const OUTCOME_LABEL = "ai-review-outcome"
+
 /** Label that opts a single PR into the merge risk experiment. */
 export const MERGE_RISK_LABEL = "ai-review-merge-risk"
 
@@ -279,6 +282,19 @@ export const inReplies = (
   labels.some(label => label.toLowerCase() === REPLIES_LABEL) ||
   (!!author &&
     loadParticipants("replies-experiment").includes(author.toLowerCase()))
+
+/**
+ * Whether a merged PR is in the outcome experiment: every PR when participants.yml sets
+ * `everyone: true`, otherwise listed authors and labelled PRs.
+ */
+export const inOutcome = (
+  author: string | undefined,
+  labels: string[]
+): boolean =>
+  labels.some(label => label.toLowerCase() === OUTCOME_LABEL) ||
+  enrolsEveryone("outcome-experiment") ||
+  (!!author &&
+    loadParticipants("outcome-experiment").includes(author.toLowerCase()))
 
 /** Whether this review is in the merge risk experiment: listed authors and labelled PRs. */
 export const inMergeRisk = (

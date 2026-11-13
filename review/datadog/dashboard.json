@@ -491,6 +491,269 @@
           }
         ]
       }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Findings measured at merge",
+        "precision": 0,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "f",
+                "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "f"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Findings addressed (%)",
+        "precision": 0,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "y",
+                "query": "sum:ai_pr_review.findings{addressed:yes,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "f",
+                "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "y / f * 100"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Findings agreed with in a reply or 👍 (%)",
+        "precision": 0,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "r",
+                "query": "sum:ai_pr_review.findings{reply:agreed,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "t",
+                "query": "sum:ai_pr_review.findings{reaction:up,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "b",
+                "query": "sum:ai_pr_review.findings{reply:agreed,reaction:up,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "f",
+                "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "(r + t - b) / f * 100"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Findings dismissed in a reply or 👎 (%)",
+        "precision": 0,
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "r",
+                "query": "sum:ai_pr_review.findings{reply:dismissed,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "t",
+                "query": "sum:ai_pr_review.findings{reaction:down,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "b",
+                "query": "sum:ai_pr_review.findings{reply:dismissed,reaction:down,$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "f",
+                "query": "sum:ai_pr_review.findings{$repo,$pr}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "(r + t - b) / f * 100"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Findings per week, by addressed",
+        "show_legend": true,
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "display_type": "bars",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "f",
+                "query": "sum:ai_pr_review.findings{$repo,$pr} by {addressed}.as_count().rollup(sum, 604800)"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "f"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "toplist",
+        "title": "Findings addressed (%), by severity",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "y",
+                "query": "sum:ai_pr_review.findings{addressed:yes,$repo,$pr} by {severity}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "f",
+                "query": "sum:ai_pr_review.findings{$repo,$pr} by {severity}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "y / f * 100",
+                "limit": {
+                  "count": 20,
+                  "order": "desc"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "toplist",
+        "title": "Findings addressed (%), by repo",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "y",
+                "query": "sum:ai_pr_review.findings{addressed:yes,$repo,$pr} by {repo}.as_count()",
+                "aggregator": "sum"
+              },
+              {
+                "data_source": "metrics",
+                "name": "f",
+                "query": "sum:ai_pr_review.findings{$repo,$pr} by {repo}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "y / f * 100",
+                "limit": {
+                  "count": 20,
+                  "order": "desc"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "toplist",
+        "title": "Findings, by addressed and reply",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "f",
+                "query": "sum:ai_pr_review.findings{$repo,$pr} by {addressed,reply}.as_count()",
+                "aggregator": "sum"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "f",
+                "limit": {
+                  "count": 20,
+                  "order": "desc"
+                }
+              }
+            ]
+          }
+        ]
+      }
     }
   ]
 }
