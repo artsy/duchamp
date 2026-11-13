@@ -4,7 +4,11 @@ import * as fs from "fs"
 import * as os from "os"
 import * as nodePath from "path"
 import { inOutcome } from "./build-review-prompt"
-import { fetchReviewThreads, type ReviewThread } from "./review-mode"
+import {
+  fetchReviewThreads,
+  isTrustedComment,
+  type ReviewThread,
+} from "./review-mode"
 import { sendToVolley, type VolleyMetric } from "./review-usage"
 
 /**
@@ -84,8 +88,14 @@ const reactionOf = (
   return POSITIVE_REACTIONS.some(content => count(content) > 0) ? "up" : "none"
 }
 
-/** The inline comments Claude and Codex opened, with what people did on each. */
-export const findingsFrom = (threads: ReviewThread[]): Finding[] =>
+/**
+ * The inline comments Claude and Codex opened, with what people did on each. Only replies
+ * from the PR's author or people with write access are kept.
+ */
+export const findingsFrom = (
+  threads: ReviewThread[],
+  prAuthor: string | undefined
+): Finding[] =>
   threads
     .map(thread => {
       const [first, ...rest] = thread.comments.nodes
@@ -110,7 +120,7 @@ export const findingsFrom = (threads: ReviewThread[]): Finding[] =>
         commit: first.originalCommit?.oid ?? "",
         reaction: reactionOf(first.reactionGroups),
         replies: rest
-          .filter(comment => comment.author?.__typename === "User")
+          .filter(comment => isTrustedComment(comment, prAuthor))
           .map(comment => cut(comment.body, MAX_REPLY_CHARS)),
       }
     })
@@ -128,6 +138,10 @@ const gh = (path: string, raw = false): string =>
       maxBuffer: 64 * 1024 * 1024,
     }
   )
+
+/** A filename can hold `?` or `#`, which would otherwise change the request. */
+export const encodePath = (path: string): string =>
+  path.split("/").map(encodeURIComponent).join("/")
 
 /** `diff -u` exits 1 when the files differ, which execFileSync reports as a failure. */
 export const unifiedDiff = (
@@ -167,7 +181,7 @@ export const fetchChange = (
   head: string
 ): ChangeSince => {
   const fileAt = (ref: string): string =>
-    gh(`repos/${repo}/contents/${encodeURI(path)}?ref=${ref}`, true)
+    gh(`repos/${repo}/contents/${encodePath(path)}?ref=${ref}`, true)
 
   try {
     const before = fileAt(commit)
@@ -353,7 +367,10 @@ const main = async (): Promise<void> => {
     return
   }
 
-  const findings = findingsFrom(fetchReviewThreads(repo, prNumber))
+  const findings = findingsFrom(
+    fetchReviewThreads(repo, prNumber),
+    pr.user.login
+  )
   console.log(`Findings: ${findings.length}`)
   if (findings.length === 0) {
     return

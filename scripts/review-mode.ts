@@ -168,6 +168,19 @@ export const fetchReviewThreads = (
   return JSON.parse(output).data.repository.pullRequest.reviewThreads.nodes
 }
 
+/**
+ * Whether a comment's text may reach a model: written by a person who is the PR's author
+ * or has write access. On a public repo anyone can comment, so everyone else is left out.
+ */
+export const isTrustedComment = (
+  comment: ThreadComment,
+  prAuthor: string | undefined
+): boolean =>
+  !!comment.author &&
+  comment.author.__typename !== "Bot" &&
+  (WRITE_ASSOCIATIONS.includes(comment.authorAssociation) ||
+    comment.author.login.toLowerCase() === prAuthor?.toLowerCase())
+
 const oneLine = (text: string, maxChars: number): string => {
   const flat = text.replace(/\s+/g, " ").trim()
   return flat.length > maxChars ? `${flat.slice(0, maxChars)}…` : flat
@@ -192,13 +205,7 @@ export const answeredThreads = (
       }
 
       const replies = rest
-        .filter(
-          comment =>
-            !!comment.author &&
-            comment.author.__typename !== "Bot" &&
-            (WRITE_ASSOCIATIONS.includes(comment.authorAssociation) ||
-              comment.author.login.toLowerCase() === prAuthor?.toLowerCase())
-        )
+        .filter(comment => isTrustedComment(comment, prAuthor))
         .map(comment => ({
           author: comment.author?.login ?? "",
           body: oneLine(comment.body, MAX_REPLY_CHARS),

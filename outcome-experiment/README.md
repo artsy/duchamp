@@ -58,6 +58,8 @@ rewrote the branch.
 One call to `claude-haiku-5-5` then judges every finding on the PR: the comment, the
 diff hunk it was posted on, the file's diff since, and the replies. The comment and
 reply text is passed as data, with an instruction not to follow anything inside it.
+Only replies from the PR's author or people with write access are passed at all,
+because on a public repo anyone can reply to a thread.
 
 ## Limits
 
