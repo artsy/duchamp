@@ -56,16 +56,29 @@ METRIC_NAME_ALLOWLIST` and the same for `METRIC_TAG_ALLOWLIST` in artsy/volley.
 
 ## The dashboard
 
-`dashboard.json` is the "AI PR review" dashboard: reviews, spend, cost per review,
-turns, duration, cache hit rate, success rate, denied tool calls, tokens, inline
-comments and the most expensive PRs, split by group and mode, with filters for repo,
-group, mode, model and PR. Eight widgets are the outcome experiment's: findings
-measured, the share addressed (overall, by severity and by repo), the shares
-agreed with and dismissed, and a graph of findings per week split by whether they
-were addressed. The last two are the missed-findings experiment's: human comments by
-category and whether the review caught them, and the share of bug and security
-comments it missed. These ten follow only the repo and PR filters. Edit the file rather than the
-dashboard in the UI, then apply it again.
+`dashboard.json` is the "AI PR review" dashboard, in six sections:
+
+| Section | What it shows |
+| --- | --- |
+| Overview | Reviews, spend, cost per review, turns and success rate |
+| Cost | Spend by day, repo and PR, cost per review, tokens and cache hit rate |
+| Turns, speed and comments | Turns, duration, inline comments and denied tool calls |
+| Experiments | Reviews where each experiment ran, and cost per review with and without it |
+| Outcome | Findings measured at merge: the share addressed, agreed with and dismissed |
+| Missed findings | Human review comments by category, and the share the review missed |
+
+Reviews are split by mode (full or re-review). They used to be split by group, but
+lean reviews went to every PR on 12 Nov 2026, so every new review is `group:experiment`
+and `standard` is history. The group filter is still there for looking back.
+
+Each experiment is compared by its own tag: a widget splits reviews by whether that
+experiment ran on them, with `N/A` for reviews from before the tag existed.
+Experiments run in different repos, so pick one repo in the filter to compare like
+with like. The Outcome and Missed findings sections follow only the repo and PR
+filters, and their metrics carry no experiment tags, so compare those by date or by
+repo.
+
+Edit the file rather than the dashboard in the UI, then apply it again.
 
 To create it, use Dashboards → New Dashboard → the gear menu → Import dashboard JSON,
 or the API with an application key that can write dashboards:
