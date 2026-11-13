@@ -587,6 +587,31 @@
     },
     {
       "definition": {
+        "type": "timeseries",
+        "title": "Findings per week, by addressed",
+        "show_legend": true,
+        "requests": [
+          {
+            "response_format": "timeseries",
+            "display_type": "bars",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "f",
+                "query": "sum:ai_pr_review.findings{$repo,$pr} by {addressed}.as_count().rollup(sum, 604800)"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "f"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
         "type": "toplist",
         "title": "Findings addressed (%), by severity",
         "requests": [
