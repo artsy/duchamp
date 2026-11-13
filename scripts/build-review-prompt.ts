@@ -283,12 +283,16 @@ export const inReplies = (
   (!!author &&
     loadParticipants("replies-experiment").includes(author.toLowerCase()))
 
-/** Whether a merged PR is in the outcome experiment: listed authors and labelled PRs. */
+/**
+ * Whether a merged PR is in the outcome experiment: every PR when participants.yml sets
+ * `everyone: true`, otherwise listed authors and labelled PRs.
+ */
 export const inOutcome = (
   author: string | undefined,
   labels: string[]
 ): boolean =>
   labels.some(label => label.toLowerCase() === OUTCOME_LABEL) ||
+  enrolsEveryone("outcome-experiment") ||
   (!!author &&
     loadParticipants("outcome-experiment").includes(author.toLowerCase()))
 

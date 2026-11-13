@@ -19,6 +19,11 @@ useful. This gives every later change to the review a number to be judged by.
        types: [opened, synchronize, ready_for_review, labeled, unlabeled, closed]
    ```
 
+With `everyone: true` in `participants.yml`, every merged PR in such a repo is
+measured, whoever wrote it, and there is nothing else to join. It is still an
+experiment: the numbers and the judge are being checked, and it can be turned off in
+one line. Setting `everyone` to false makes it opt-in again, with two ways in:
+
 2. **Enrol.** Add your GitHub login to `participants.yml` and open a PR. Every PR you
    author is then measured when it merges, in any repo that lists `closed`. Case does
    not matter.

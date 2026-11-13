@@ -794,6 +794,12 @@ describe("inOutcome", () => {
     expect(inOutcome("someone-else", [LEAN_LABEL])).toBe(false)
     expect(inOutcome(undefined, [])).toBe(false)
   })
+
+  it("is true for every PR when participants.yml sets everyone", () => {
+    mockFiles({ "participants.yml": "everyone: true\nparticipants: []\n" })
+
+    expect(inOutcome("someone-else", [])).toBe(true)
+  })
 })
 
 describe("inReplies", () => {
