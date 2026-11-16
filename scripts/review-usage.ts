@@ -248,6 +248,8 @@ export interface MetricsContext {
   relatedRepos?: string
   mergeRisk?: string
   replies?: string
+  repliesArm?: string
+  repliesAvailable?: string
 }
 
 export type VolleyMetric =
@@ -296,6 +298,10 @@ export const formatVolleyPayload = (
     ...(context.relatedRepos ? [`related_repos:${context.relatedRepos}`] : []),
     ...(context.mergeRisk ? [`merge_risk:${context.mergeRisk}`] : []),
     ...(context.replies ? [`replies:${context.replies}`] : []),
+    ...(context.repliesArm ? [`replies_arm:${context.repliesArm}`] : []),
+    ...(context.repliesAvailable
+      ? [`replies_available:${context.repliesAvailable}`]
+      : []),
   ]
   const histogram = (name: string, value: number): VolleyMetric => ({
     type: "histogram",
@@ -502,6 +508,8 @@ const main = async (): Promise<void> => {
       relatedRepos: process.env.RELATED_REPOS,
       mergeRisk: process.env.MERGE_RISK,
       replies: process.env.REPLIES,
+      repliesArm: process.env.REPLIES_ARM,
+      repliesAvailable: process.env.REPLIES_AVAILABLE,
     }),
     process.env.VOLLEY_URL
   )

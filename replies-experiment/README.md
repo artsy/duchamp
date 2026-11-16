@@ -14,7 +14,45 @@ from the other [experiments](../review/experiments.md): a PR can be in any mix o
 
 Leaving is the same in reverse: remove your login, or drop the label.
 
+3. **A/B, through Unleash.** Everyone else can be split at random by the
+   `ai-review-replies` flag in [Unleash](https://unleash.artsy.net). See below.
+
 Datadog tags each review `replies:true` when the re-review read at least one reply.
+
+## A/B test
+
+Opting in tells us whether the people who chose it liked it, not whether it helps. To
+compare like with like, Unleash splits the remaining PRs at random:
+
+- **Flag.** `ai-review-replies`, with a gradual rollout on `sessionId` stickiness and two
+  variants, `treatment` and `control`. The rollout percentage sets how many PRs are in
+  the test; the variant weights set the split inside it.
+- **Unit.** The PR. `sessionId` is `<repo>#<number>`, such as `artsy/eigen#123`, so
+  every review of a PR lands in the same arm. One author can have PRs in both.
+- **Arms.** `treatment` reads replies, `control` doesn't. Opting in, by the list or the
+  label, wins over Unleash and is tagged `opt-in`, so it stays out of the comparison.
+  Anything else, including Unleash being down or the flag off, is `none`: the review
+  runs as before.
+- **Fair comparison.** Replies only matter on a re-review where someone answered a
+  finding. The control arm looks those threads up too, without putting them in the
+  prompt, so `replies_available:true` marks the same kind of re-review in both arms.
+- **Datadog.** Every review carries `replies_arm` (`treatment`, `control`, `opt-in` or
+  `none`) and `replies_available`. Compare `replies_arm:treatment` with
+  `replies_arm:control`, filtered to `mode:rereview` and `replies_available:true`. For
+  quality, compare the [outcome experiment](../outcome-experiment/README.md)'s
+  `ai_pr_review.findings` by PR.
+
+### Setup
+
+`scripts/unleash.ts` asks the Unleash proxy for the variant before the prompt is built.
+It reads two org-level Actions variables, so calling repos need no change:
+
+- `UNLEASH_PROXY_URL`: the proxy's endpoint, such as `https://unleashprx.artsy.net/proxy`
+  for production, or the staging proxy while trying it out.
+- `UNLEASH_PROXY_KEY`: a frontend (proxy) key. These are the keys web apps already send
+  to browsers, so a variable is fine; never put a server-side key here.
+
+Without them, or if the request fails or takes over 5 seconds, every PR is `none`.
 
 ## How it works
 

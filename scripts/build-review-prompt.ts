@@ -286,6 +286,29 @@ export const inReplies = (
   (!!author &&
     loadParticipants("replies-experiment").includes(author.toLowerCase()))
 
+/** Which arm of the replies experiment a review is in. */
+export type RepliesArm = "opt-in" | "treatment" | "control" | "none"
+
+/**
+ * The replies arm. Opting in, through participants.yml or the label, wins and stays out
+ * of the A/B comparison. Otherwise Unleash's variant decides: `treatment` reads replies,
+ * `control` doesn't, and anything else leaves the PR out of the test.
+ */
+export const resolveRepliesArm = (
+  author: string | undefined,
+  labels: string[],
+  variant: string | undefined
+): RepliesArm => {
+  if (inReplies(author, labels)) {
+    return "opt-in"
+  }
+  return variant === "treatment" || variant === "control" ? variant : "none"
+}
+
+/** Whether the replies arm puts the replies in the prompt. */
+export const readsReplies = (arm: RepliesArm): boolean =>
+  arm === "opt-in" || arm === "treatment"
+
 /**
  * Whether a merged PR is in the outcome experiment: every PR when participants.yml sets
  * `everyone: true`, otherwise listed authors and labelled PRs.
@@ -875,7 +898,11 @@ const main = (): void => {
   const labelled = hasSecurityLabel(labels)
   const bestPractices = inBestPractices(process.env.PR_AUTHOR, labels)
   const mergeRisk = inMergeRisk(process.env.PR_AUTHOR, labels)
-  const replies = inReplies(process.env.PR_AUTHOR, labels)
+  const repliesArm = resolveRepliesArm(
+    process.env.PR_AUTHOR,
+    labels,
+    process.env.REPLIES_VARIANT
+  )
   const codex = inCodex(process.env.PR_AUTHOR, labels)
 
   // Lets the workflow skip minting the related repos token, and size the job for Codex.
@@ -973,8 +1000,10 @@ const main = (): void => {
     security +
     formatStackSkillsSection(stack.skills) +
     mergeRiskSection
+  // The control arm looks the replies up too, without using them, so the A/B test can
+  // compare re-reviews that had replies to read in both arms.
   const answered =
-    inLean && replies && reviewMode.mode === "rereview"
+    inLean && repliesArm !== "none" && reviewMode.mode === "rereview"
       ? fetchAnsweredThreads(
           process.env.GITHUB_REPOSITORY,
           process.env.PR_NUMBER,
@@ -987,12 +1016,15 @@ const main = (): void => {
         ignorePaths,
         Buffer.byteLength(promptHead),
         reviewMode,
-        answered
+        readsReplies(repliesArm) ? answered : []
       )
     : { section: "", reviewMode }
-  const repliesRead =
+  const repliesAvailable =
     answered.length > 0 && context.reviewMode.mode === "rereview"
-  console.log(`Replies read: ${answered.length}`)
+  const repliesRead = repliesAvailable && readsReplies(repliesArm)
+  console.log(
+    `Replies arm: ${repliesArm}, answered threads: ${answered.length}, read: ${repliesRead}`
+  )
   const delivery = formatDelivery(
     inLean,
     process.env.PR_NUMBER,
@@ -1018,7 +1050,7 @@ const main = (): void => {
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\nreplies=${repliesRead}\ncodex=${codexFiles !== undefined}\ncodex_prompt_file=${codexFiles?.promptFile ?? ""}\ncodex_pr_file=${codexFiles?.prFile ?? ""}\n${formatReviewModeOutputs(context.reviewMode)}`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\nreplies=${repliesRead}\nreplies_arm=${repliesArm}\nreplies_available=${repliesAvailable}\ncodex=${codexFiles !== undefined}\ncodex_prompt_file=${codexFiles?.promptFile ?? ""}\ncodex_pr_file=${codexFiles?.prFile ?? ""}\n${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {

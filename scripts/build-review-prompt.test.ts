@@ -38,6 +38,8 @@ import {
   MAX_PROMPT_BYTES,
   parseLabels,
   pickReviewMode,
+  readsReplies,
+  resolveRepliesArm,
   REVIEW_EFFORT,
   resolveModelArgs,
   resolveRelatedRepos,
@@ -862,6 +864,45 @@ describe("inReplies", () => {
     expect(inReplies("someone-else", ["AI-Review-Replies"])).toBe(true)
     expect(inReplies("someone-else", [LEAN_LABEL])).toBe(false)
     expect(inReplies(undefined, [])).toBe(false)
+  })
+})
+
+describe("resolveRepliesArm", () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it("puts opted-in PRs in their own arm, whatever Unleash says", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+
+    expect(resolveRepliesArm("MounirDhahri", [], "control")).toBe("opt-in")
+    expect(
+      resolveRepliesArm("someone-else", ["ai-review-replies"], "control")
+    ).toBe("opt-in")
+  })
+
+  it("uses the Unleash variant otherwise", () => {
+    mockFs.existsSync.mockReturnValue(false)
+
+    expect(resolveRepliesArm("someone-else", [], "treatment")).toBe("treatment")
+    expect(resolveRepliesArm("someone-else", [], "control")).toBe("control")
+  })
+
+  it("leaves the PR out on any other variant or none", () => {
+    mockFs.existsSync.mockReturnValue(false)
+
+    expect(resolveRepliesArm("someone-else", [], "none")).toBe("none")
+    expect(resolveRepliesArm("someone-else", [], "disabled")).toBe("none")
+    expect(resolveRepliesArm("someone-else", [], undefined)).toBe("none")
+  })
+})
+
+describe("readsReplies", () => {
+  it("reads replies for opt-in and treatment only", () => {
+    expect(readsReplies("opt-in")).toBe(true)
+    expect(readsReplies("treatment")).toBe(true)
+    expect(readsReplies("control")).toBe(false)
+    expect(readsReplies("none")).toBe(false)
   })
 })
 

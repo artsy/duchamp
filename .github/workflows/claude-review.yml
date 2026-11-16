@@ -296,10 +296,22 @@ jobs:
           owner: artsy
           permission-contents: read
 
+      # Random A/B arms from Unleash. Without the org variables every PR gets `none`
+      # and the experiments run on opt-in only. See replies-experiment/README.md.
+      - name: Assign Unleash variants
+        id: unleash
+        continue-on-error: true
+        run: npx ts-node .tooling/scripts/unleash.ts
+        env:
+          UNLEASH_PROXY_URL: ${{ vars.UNLEASH_PROXY_URL }}
+          UNLEASH_PROXY_KEY: ${{ vars.UNLEASH_PROXY_KEY }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+
       - name: Build review prompt
         id: prompt
         run: npx ts-node .tooling/scripts/build-review-prompt.ts
         env:
+          REPLIES_VARIANT: ${{ steps.unleash.outputs.replies_variant }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
           DEFAULT_MODEL: ${{ inputs.model }}
@@ -392,6 +404,8 @@ jobs:
           RELATED_REPOS: ${{ steps.prompt.outputs.related_repos_read }}
           MERGE_RISK: ${{ steps.prompt.outputs.merge_risk }}
           REPLIES: ${{ steps.prompt.outputs.replies }}
+          REPLIES_ARM: ${{ steps.prompt.outputs.replies_arm }}
+          REPLIES_AVAILABLE: ${{ steps.prompt.outputs.replies_available }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report

@@ -430,6 +430,23 @@ describe("formatVolleyPayload", () => {
     expect(tags).toContain("replies:true")
   })
 
+  it("tags the replies A/B arm and whether there were replies to read", () => {
+    const tags = formatVolleyPayload(usage, {
+      ...context,
+      replies: "false",
+      repliesArm: "control",
+      repliesAvailable: "true",
+    }).metrics[0].tags
+    expect(tags).toContain("replies_arm:control")
+    expect(tags).toContain("replies_available:true")
+  })
+
+  it("leaves the replies A/B tags off when not recorded", () => {
+    const tags = formatVolleyPayload(usage, context).metrics[0].tags
+    expect(tags.some(tag => tag.startsWith("replies_arm:"))).toBe(false)
+    expect(tags.some(tag => tag.startsWith("replies_available:"))).toBe(false)
+  })
+
   it("tags whether the security pass ran, when recorded", () => {
     const tagsFor = (overrides: Partial<MetricsContext>) =>
       formatVolleyPayload(usage, { ...context, ...overrides }).metrics[0].tags
