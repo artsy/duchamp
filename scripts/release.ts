@@ -3,9 +3,10 @@
  * `vX.Y.Z` tag on the commit and notes naming the PR and the areas it touched.
  * The version comes from the PR title. See README.md, "Releases".
  *
- * Usage: npx ts-node scripts/release.ts [--apply] [--from-start]
+ * Usage: npx ts-node scripts/release.ts [--apply] [--from-start | --rewrite]
  * Without --apply it prints what it would release. --from-start releases from
- * the first commit when no tag exists yet (the one-off backfill).
+ * the first commit when no tag exists yet (the one-off backfill). --rewrite
+ * redoes the notes of every existing release in the current format.
  */
 
 import { execFileSync } from "child_process"
@@ -21,12 +22,18 @@ export interface Version {
 
 export type Bump = "major" | "minor" | "patch"
 
+export interface Author {
+  login: string
+  name?: string
+}
+
 export interface Merge {
   sha: string
   title: string
   body: string
   date: string
   files: string[]
+  author?: Author
 }
 
 export interface Release {
@@ -138,31 +145,87 @@ export const areasFor = (files: string[]): string[] => {
   )
 }
 
+/** auto's section names, picked from the PR title instead of a label. */
+export const sectionFor = (title: string, body = ""): string => {
+  if (bumpFor(title, body) === "major") {
+    return "💥  Breaking Change"
+  }
+  const type = title.match(CONVENTIONAL)?.[1]
+  if (type === "feat") {
+    return "🚀  Enhancement"
+  }
+  if (type === "fix" || type === "perf" || /^revert\b/i.test(title)) {
+    return "🐛  Bug Fix"
+  }
+  if (type === "docs") {
+    return "📝  Documentation"
+  }
+  return "🏠  Internal"
+}
+
+const AREA_ICONS: Record<string, string> = {
+  Releases: "🏷️",
+  "AI review experiments": "🧪",
+  "AI review": "🤖",
+  "Incidents and on-call": "🚨",
+  "Datadog triage": "🐶",
+  Notion: "🗒️",
+  "Agent wrappers": "🧩",
+  "Danger and PR checks": "✅",
+  Docs: "📝",
+  Tooling: "🔧",
+}
+
+const profile = (login: string): string =>
+  `[@${login}](https://github.com/${login})`
+
+/** Laid out like the release notes `auto` writes for Artsy's npm packages. */
 export const formatRelease = (
   version: Version,
   merge: Merge,
-  repo: string
+  repo: string,
+  previous?: Version
 ): Release => {
   const tag = formatVersion(version)
   const pr = prNumber(merge.title)
   const title = merge.title.replace(/\s*\(#\d+\)\s*$/, "")
-  const areas = areasFor(merge.files)
   const link = pr
     ? `[#${pr}](https://github.com/${repo}/pull/${pr})`
     : `[\`${merge.sha.slice(0, 7)}\`](https://github.com/${repo}/commit/${merge.sha})`
+  const by = merge.author ? ` (${profile(merge.author.login)})` : ""
+  const areas = areasFor(merge.files)
+  const date = merge.date.slice(0, 10)
+  const compare = previous
+    ? `[${formatVersion(previous)}...${tag}](https://github.com/${repo}/compare/${formatVersion(previous)}...${tag})`
+    : undefined
+
   const notes = [
-    ...(bumpFor(merge.title, merge.body) === "major"
+    `#### ${sectionFor(merge.title, merge.body)}`,
+    "",
+    `- ${title} ${link}${by}`,
+    ...(sectionFor(merge.title, merge.body).startsWith("💥")
+      ? ["", "Callers on `@main` already run this. Check their workflows."]
+      : []),
+    ...(areas.length > 0
       ? [
-          "**Breaking change.** Callers on `@main` already run this; check their workflows.",
           "",
+          "#### 🗂️  Areas",
+          "",
+          ...areas.map(area => `- ${AREA_ICONS[area] ?? "•"} ${area}`),
         ]
       : []),
-    `${title} (${link})`,
+    ...(merge.author
+      ? [
+          "",
+          "#### Authors: 1",
+          "",
+          `- ${merge.author.name ? `${merge.author.name} (${profile(merge.author.login)})` : profile(merge.author.login)}`,
+        ]
+      : []),
     "",
-    ...(areas.length > 0 ? [`Areas: ${areas.join(", ")}`] : []),
-    `Merged ${merge.date.slice(0, 10)}`,
+    `Merged ${date}${compare ? ` · ${compare}` : ""}`,
   ].join("\n")
-  return { tag, name: `${tag}: ${title}`, notes, sha: merge.sha }
+  return { tag, name: tag, notes, sha: merge.sha }
 }
 
 /** Each merge gets the next version after the one before it. */
@@ -174,10 +237,11 @@ export const planReleases = (
   const releases: Release[] = []
   let version = latest
   for (const merge of merges) {
-    version = version
-      ? nextVersion(version, bumpFor(merge.title, merge.body))
+    const previous = version
+    version = previous
+      ? nextVersion(previous, bumpFor(merge.title, merge.body))
       : FIRST_VERSION
-    releases.push(formatRelease(version, merge, repo))
+    releases.push(formatRelease(version, merge, repo, previous))
   }
   return releases
 }
@@ -242,7 +306,51 @@ export const readMerges = (since: string | undefined): Merge[] => {
     })
 }
 
-const createRelease = (release: Release, repo: string): void => {
+const names = new Map<string, string | undefined>()
+
+const nameOf = (login: string): string | undefined => {
+  if (!names.has(login)) {
+    try {
+      names.set(
+        login,
+        run("gh", ["api", `users/${login}`, "--jq", ".name // empty"]).trim() ||
+          undefined
+      )
+    } catch {
+      names.set(login, undefined)
+    }
+  }
+  return names.get(login)
+}
+
+/**
+ * The PR's author, or the commit's when the title names no PR. Squash merges are
+ * authored by the PR's author, but old merge commits by whoever merged. Undefined
+ * when GitHub can't say.
+ */
+export const authorOf = (merge: Merge, repo: string): Author | undefined => {
+  const pr = prNumber(merge.title)
+  try {
+    const login = run("gh", [
+      "api",
+      pr ? `repos/${repo}/pulls/${pr}` : `repos/${repo}/commits/${merge.sha}`,
+      "--jq",
+      pr ? ".user.login" : ".author.login // empty",
+    ]).trim()
+    if (!login) {
+      return undefined
+    }
+    return login.endsWith("[bot]") ? { login } : { login, name: nameOf(login) }
+  } catch {
+    return undefined
+  }
+}
+
+const createRelease = (
+  release: Release,
+  repo: string,
+  rewrite = false
+): void => {
   const notesPath = path.join(
     fs.mkdtempSync(path.join(os.tmpdir(), "release-")),
     "notes.md"
@@ -250,12 +358,11 @@ const createRelease = (release: Release, repo: string): void => {
   fs.writeFileSync(notesPath, release.notes)
   run("gh", [
     "release",
-    "create",
-    release.tag,
+    ...(rewrite
+      ? ["edit", release.tag]
+      : ["create", release.tag, "--target", release.sha]),
     "--repo",
     repo,
-    "--target",
-    release.sha,
     "--title",
     release.name,
     "--notes-file",
@@ -266,22 +373,28 @@ const createRelease = (release: Release, repo: string): void => {
 const main = (): void => {
   const apply = process.argv.includes("--apply")
   const fromStart = process.argv.includes("--from-start")
+  const rewrite = process.argv.includes("--rewrite")
   const repo = process.env.GITHUB_REPOSITORY || "artsy/duchamp"
 
   if (apply) {
     // Tags made by an earlier run, here or in CI, so a rerun picks up where it stopped.
     run("git", ["fetch", "--tags", "--quiet"])
   }
-  const tag = latestTag()
+  // --rewrite redoes the notes of every release so far, with the current format.
+  const tag = rewrite ? undefined : latestTag()
   const latest = tag ? parseVersion(tag) : undefined
-  if (!latest && !fromStart) {
+  if (!latest && !fromStart && !rewrite) {
     console.log(
       "No vX.Y.Z tag yet. Run the backfill first: npx ts-node scripts/release.ts --from-start --apply"
     )
     return
   }
 
-  const releases = planReleases(latest, readMerges(tag), repo)
+  const merges = readMerges(tag).map(merge => ({
+    ...merge,
+    author: authorOf(merge, repo),
+  }))
+  const releases = planReleases(latest, merges, repo)
   if (releases.length === 0) {
     console.log(`Nothing to release after ${tag}.`)
     return
@@ -290,13 +403,14 @@ const main = (): void => {
   for (const release of releases) {
     console.log(`${release.sha.slice(0, 7)} ${release.name}`)
     if (apply) {
-      createRelease(release, repo)
+      createRelease(release, repo, rewrite)
     }
   }
+  const verb = rewrite ? "Rewrote" : "Created"
   console.log(
     apply
-      ? `Created ${releases.length} release(s).`
-      : `Dry run: ${releases.length} release(s). Pass --apply to create them.`
+      ? `${verb} ${releases.length} release(s).`
+      : `Dry run: ${releases.length} release(s). Pass --apply to write them.`
   )
 }
 
