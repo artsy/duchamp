@@ -75,7 +75,8 @@ uses: artsy/duchamp/.github/workflows/YOUR-WORKFLOW.yml@YOUR-BRANCH
 ## 🏷 Releases
 
 Every merge to `main` gets a [release](https://github.com/artsy/duchamp/releases): a
-`vX.Y.Z` tag on the merge commit, and notes with the PR, its merge date and the areas it
+`vX.Y.Z` tag on the merge commit, and notes laid out like the ones `auto` writes for our
+npm packages (🚀 Enhancement, 🐛 Bug Fix, 🏠 Internal, and so on), plus the areas the PR
 touched (AI review, Danger and PR checks, incidents and on-call, and so on). Callers run
 `@main`, so each release is live in every caller from the moment it merges, and the list
 of releases is the list of what shipped.
@@ -91,6 +92,7 @@ The PR title picks the version:
 The [Release workflow](.github/workflows/release.yml) runs `scripts/release.ts`, which
 releases every merge on `main` since the latest tag, so a skipped run is caught up by the
 next one. To see what it would create, run `npx ts-node scripts/release.ts` locally.
+After a format change, `--rewrite --apply` redoes the notes of every existing release.
 
 One version covers the whole repo. A caller's ref applies to every file in duchamp, and
 the workflows share `scripts/`, so a version per action would not match what callers run.

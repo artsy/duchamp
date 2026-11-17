@@ -10,6 +10,7 @@ import {
   parseVersion,
   planReleases,
   prNumber,
+  sectionFor,
 } from "./release"
 
 const merge = (overrides: Partial<Merge> = {}): Merge => ({
@@ -138,48 +139,99 @@ describe("areasFor", () => {
   })
 })
 
+describe("sectionFor", () => {
+  it.each([
+    ["feat: a thing", "🚀  Enhancement"],
+    ["fix: a bug", "🐛  Bug Fix"],
+    ["perf: faster", "🐛  Bug Fix"],
+    ['Revert "feat: a thing" (#115)', "🐛  Bug Fix"],
+    ["revert: undo danger upgrades", "🐛  Bug Fix"],
+    ["docs: words", "📝  Documentation"],
+    ["chore: tidy", "🏠  Internal"],
+    ["ci: a job", "🏠  Internal"],
+    ["Add someone to participants list", "🏠  Internal"],
+    ["feat!: drop an input", "💥  Breaking Change"],
+  ])("%s goes under %s", (title, section) => {
+    expect(sectionFor(title)).toBe(section)
+  })
+})
+
 describe("formatRelease", () => {
-  it("names the release after its version and title, and links the PR", () => {
+  it("lays the notes out like auto, with areas, author and a compare link", () => {
     const release = formatRelease(
       { major: 1, minor: 67, patch: 0 },
-      merge(),
-      "artsy/duchamp"
+      merge({ author: { login: "MounirDhahri", name: "Mounir Dhahri" } }),
+      "artsy/duchamp",
+      { major: 1, minor: 66, patch: 0 }
     )
 
     expect(release.tag).toBe("v1.67.0")
-    expect(release.name).toBe("v1.67.0: feat: Fable experiment")
+    expect(release.name).toBe("v1.67.0")
     expect(release.sha).toBe("a".repeat(40))
     expect(release.notes).toBe(
       [
-        "feat: Fable experiment ([#175](https://github.com/artsy/duchamp/pull/175))",
+        "#### 🚀  Enhancement",
         "",
-        "Areas: AI review experiments, AI review",
-        "Merged 2026-11-17",
+        "- feat: Fable experiment [#175](https://github.com/artsy/duchamp/pull/175) ([@MounirDhahri](https://github.com/MounirDhahri))",
+        "",
+        "#### 🗂️  Areas",
+        "",
+        "- 🧪 AI review experiments",
+        "- 🤖 AI review",
+        "",
+        "#### Authors: 1",
+        "",
+        "- Mounir Dhahri ([@MounirDhahri](https://github.com/MounirDhahri))",
+        "",
+        "Merged 2026-11-17 · [v1.66.0...v1.67.0](https://github.com/artsy/duchamp/compare/v1.66.0...v1.67.0)",
       ].join("\n")
     )
   })
 
-  it("links the commit when the title names no PR", () => {
+  it("links the commit, and leaves out areas, authors and compare when unknown", () => {
     const release = formatRelease(
       FIRST_VERSION,
       merge({ title: "Initial commit", files: [] }),
       "artsy/duchamp"
     )
 
-    expect(release.notes).toContain(
-      `Initial commit ([\`aaaaaaa\`](https://github.com/artsy/duchamp/commit/${"a".repeat(40)}))`
+    expect(release.notes).toBe(
+      [
+        "#### 🏠  Internal",
+        "",
+        `- Initial commit [\`aaaaaaa\`](https://github.com/artsy/duchamp/commit/${"a".repeat(40)})`,
+        "",
+        "Merged 2026-11-17",
+      ].join("\n")
     )
-    expect(release.notes).not.toContain("Areas:")
   })
 
-  it("flags a breaking change first", () => {
+  it("lists a bot by login only", () => {
+    const release = formatRelease(
+      FIRST_VERSION,
+      merge({ author: { login: "dependabot[bot]" } }),
+      "artsy/duchamp"
+    )
+
+    expect(release.notes).toContain(
+      "- [@dependabot[bot]](https://github.com/dependabot[bot])"
+    )
+  })
+
+  it("warns about a breaking change under its section", () => {
     const release = formatRelease(
       { major: 2, minor: 0, patch: 0 },
       merge({ title: "feat!: drop an input (#200)" }),
       "artsy/duchamp"
     )
 
-    expect(release.notes.split("\n")[0]).toContain("**Breaking change.**")
+    expect(release.notes.split("\n").slice(0, 5)).toEqual([
+      "#### 💥  Breaking Change",
+      "",
+      "- feat!: drop an input [#200](https://github.com/artsy/duchamp/pull/200)",
+      "",
+      "Callers on `@main` already run this. Check their workflows.",
+    ])
   })
 })
 
