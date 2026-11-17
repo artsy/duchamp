@@ -1,7 +1,7 @@
 # GitHub logins enrolled in the Fable experiment.
 #
-# Deep reviews of PRs by anyone on this list run on Claude Fable 5.2 where they would
-# have used the default model. A review is deep when it touches a sensitive file or
+# Deep reviews of PRs by anyone on this list, and of every PR in a repo under `repos`,
+# run on Claude Fable 5.2 where they would have used the default model. A review is deep when it touches a sensitive file or
 # changes more than 400 lines. This is separate from the other experiments: a PR can
 # be in any mix of them. It needs lean reviews, which every PR has.
 #
@@ -13,3 +13,6 @@
 
 participants:
   - MounirDhahri
+
+repos:
+  - artsy/gravity

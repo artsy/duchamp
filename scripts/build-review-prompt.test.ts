@@ -923,6 +923,14 @@ describe("inFable", () => {
     expect(inFable("someone-else", [LEAN_LABEL])).toBe(false)
     expect(inFable(undefined, [])).toBe(false)
   })
+
+  it("is true for every PR in a listed repo, whoever wrote it", () => {
+    mockFiles({ "participants.yml": "repos:\n  - artsy/gravity\n" })
+
+    expect(inFable("someone-else", [], "Artsy/Gravity")).toBe(true)
+    expect(inFable("someone-else", [], "artsy/eigen")).toBe(false)
+    expect(inFable("someone-else", [])).toBe(false)
+  })
 })
 
 describe("inRelatedReposExperiment", () => {

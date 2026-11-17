@@ -338,14 +338,20 @@ export const inCodex = (
   (!!author &&
     loadParticipants("codex-experiment").includes(author.toLowerCase()))
 
-/** Whether this review is in the Fable experiment: listed authors and labelled PRs. */
+/**
+ * Whether this review is in the Fable experiment: listed authors, every PR in a listed
+ * repo, and labelled PRs.
+ */
 export const inFable = (
   author: string | undefined,
-  labels: string[]
+  labels: string[],
+  repo?: string
 ): boolean =>
   labels.some(label => label.toLowerCase() === FABLE_LABEL) ||
   (!!author &&
-    loadParticipants("fable-experiment").includes(author.toLowerCase()))
+    loadParticipants("fable-experiment").includes(author.toLowerCase())) ||
+  (!!repo &&
+    loadEnrolment("fable-experiment", "repos").includes(repo.toLowerCase()))
 
 /**
  * Claude Code CLI flags that select the model for this review. A deep review in the
@@ -902,7 +908,11 @@ const main = (): void => {
   const mergeRisk = inMergeRisk(process.env.PR_AUTHOR, labels)
   const replies = inReplies(process.env.PR_AUTHOR, labels)
   const codex = inCodex(process.env.PR_AUTHOR, labels)
-  const fable = inFable(process.env.PR_AUTHOR, labels)
+  const fable = inFable(
+    process.env.PR_AUTHOR,
+    labels,
+    process.env.GITHUB_REPOSITORY
+  )
 
   // Lets the workflow skip minting the related repos token, and size the job for Codex.
   if (process.argv.includes("--check-experiment")) {
