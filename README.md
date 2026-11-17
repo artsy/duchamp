@@ -91,7 +91,8 @@ The PR title picks the version:
 
 The [Release workflow](.github/workflows/release.yml) runs `scripts/release.ts`, which
 releases every merge on `main` since the latest tag, so a skipped run is caught up by the
-next one. To see what it would create, run `npx ts-node scripts/release.ts` locally.
+next one. It only releases commits on `origin/main`, whatever branch you run it from. To
+see what it would create, run `npx ts-node scripts/release.ts` locally.
 After a format change, `--rewrite --apply` redoes the notes of every existing release.
 
 One version covers the whole repo. A caller's ref applies to every file in duchamp, and
