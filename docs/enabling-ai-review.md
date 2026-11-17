@@ -18,9 +18,12 @@ review works, see [`review/README.md`](../review/README.md).
 3. Optional: add a `.claude-review.yml` at the repo root with the repo's own focus
    areas, ignored paths and context. The review works without it, and is better with
    it. See [Repo Configuration](./actions.md#run-claude-reviewyml).
-4. Open a PR with those files. The review runs on that PR too, so it is the first
-   test. `.claude-review.yml` takes effect from the PR that adds it, except
-   `related_repos`, which is read from the default branch and so applies once merged.
+4. Open a PR with those files and merge it. The review does not run on that PR: the
+   Claude action skips a PR whose workflow file differs from the default branch's,
+   and the `review` check passes without posting anything. The next PR opened after
+   the merge gets the first review. After that, a change to `.claude-review.yml` takes
+   effect from the PR that makes it, except `related_repos`, which is read from the
+   default branch and so applies once merged.
 
 ## The keys
 
@@ -82,7 +85,9 @@ https://github.com/artsy/duchamp/blob/main/docs/actions.md#run-claude-reviewyml
 
 4. Open a PR titled "chore: enable the AI PR review", following the repo's PR
    template if it has one. Say what the review will do here, list the focus areas
-   you chose and why, and note anything you could not verify. Do not merge it.
+   you chose and why, and note anything you could not verify. Say that the review
+   will not run on this PR, and that the first one comes on the next PR after it
+   merges. Do not merge it.
 
 Change nothing else in the repo.
 ```
