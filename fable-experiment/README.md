@@ -16,7 +16,7 @@ where a miss costs most, and is that worth about 1.7 times the price?
 2. **Per PR.** Add the `ai-review-fable` label to a single PR. It takes effect on the
    next push.
 3. **Per repo.** Add the repo to `repos` in `participants.yml`. Every PR in it then
-   gets it, whoever wrote it. Gravity is listed.
+   gets it, whoever wrote it. Gravity and metaphysics are listed.
 
 Leaving is the same in reverse: remove your login, or drop the label.
 
