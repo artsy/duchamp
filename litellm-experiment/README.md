@@ -33,8 +33,10 @@ Anthropic key stays required, so leaving the experiment never breaks a review.
 
 ## How it works
 
-- `base_url` in `participants.yml` names the gateway. It must be an https URL; anything
-  else sends reviews to Anthropic. Moving from staging to production is a one-line change.
+- `base_url` in `participants.yml` names the gateway. It must be an https URL on
+  `artsy.net`, with no port or credentials; anything else sends reviews to Anthropic, so
+  an edit can't hand the key and the diffs to another host. Moving from staging to
+  production is a one-line change.
 - The review step sets `ANTHROPIC_BASE_URL` and passes the LiteLLM key as the API key.
   claude-code-action hands both to Claude Code.
 - Through a gateway, Claude Code can't tell a model has a 1M context window and budgets

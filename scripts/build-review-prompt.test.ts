@@ -956,10 +956,10 @@ describe("loadGateway", () => {
   it("reads an https base_url without a trailing slash, and a valid edge header", () => {
     mockFiles({
       "participants.yml":
-        "base_url: https://litellm.example.net/\nedge_header: X-Edge-Token\n",
+        "base_url: https://litellm.artsy.net/\nedge_header: X-Edge-Token\n",
     })
     expect(loadGateway()).toEqual({
-      baseUrl: "https://litellm.example.net",
+      baseUrl: "https://litellm.artsy.net",
       edgeHeader: "X-Edge-Token",
     })
   })
@@ -967,16 +967,21 @@ describe("loadGateway", () => {
   it("leaves out an edge header that isn't a plain header name", () => {
     mockFiles({
       "participants.yml":
-        "base_url: https://litellm.example.net\nedge_header: 'X-Edge: injected'\n",
+        "base_url: https://litellm.artsy.net\nedge_header: 'X-Edge: injected'\n",
     })
-    expect(loadGateway()).toEqual({ baseUrl: "https://litellm.example.net" })
+    expect(loadGateway()).toEqual({ baseUrl: "https://litellm.artsy.net" })
   })
 
   it.each([
     "http://litellm.example.net",
     "litellm.example.net",
     "https://",
-    "https://litellm.example.net/a path",
+    "https://litellm.artsy.net/a path",
+    "https://litellm.example.net",
+    "https://artsy.net.example.com",
+    "https://evilartsy.net",
+    "https://user:pass@litellm.artsy.net",
+    "https://litellm.artsy.net:8443",
   ])("is undefined for %s", url => {
     mockFiles({ "participants.yml": `base_url: "${url}"\n` })
     expect(loadGateway()).toBeUndefined()
@@ -989,7 +994,7 @@ describe("loadGateway", () => {
 })
 
 describe("pickGateway", () => {
-  const gateway = { baseUrl: "https://litellm.example.net" }
+  const gateway = { baseUrl: "https://litellm.artsy.net" }
 
   it("uses the gateway only in the experiment and with the key", () => {
     expect(pickGateway(true, true, gateway)).toEqual(gateway)

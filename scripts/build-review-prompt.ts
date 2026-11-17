@@ -385,9 +385,13 @@ export interface Gateway {
   edgeHeader?: string
 }
 
+/** Hosts the gateway can be on. Enrolled repos send their LiteLLM key and diffs there. */
+const GATEWAY_HOST = /(^|\.)artsy\.net$/
+
 /**
  * The gateway in litellm-experiment/participants.yml. Undefined unless `base_url` is an
- * https URL, so a typo sends reviews to Anthropic instead of somewhere unknown.
+ * https URL on artsy.net, so a typo or a bad edit sends reviews to Anthropic instead of
+ * handing the key to another host.
  */
 export const loadGateway = (): Gateway | undefined => {
   const file = loadParticipantsFile("litellm-experiment")
@@ -396,6 +400,19 @@ export const loadGateway = (): Gateway | undefined => {
       ? file.base_url.trim().replace(/\/+$/, "")
       : ""
   if (!/^https:\/\/[^\s/]+(\/\S*)?$/.test(baseUrl)) {
+    return undefined
+  }
+  let host: string
+  try {
+    const url = new URL(baseUrl)
+    if (url.username || url.password || url.port) {
+      return undefined
+    }
+    host = url.hostname
+  } catch {
+    return undefined
+  }
+  if (!GATEWAY_HOST.test(host)) {
     return undefined
   }
   const edgeHeader =
