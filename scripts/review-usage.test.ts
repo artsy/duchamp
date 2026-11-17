@@ -268,6 +268,17 @@ describe("formatUsageLogLine", () => {
 })
 
 describe("reviewModel", () => {
+  it("tags a gateway review with the model alone, without quotes or [1m]", () => {
+    const gatewayArgs =
+      '--model "claude-fable-5-2[1m]" --fallback-model "claude-opus-5-5[1m]"'
+    expect(reviewModel(gatewayArgs, ["claude-fable-5-2"])).toBe(
+      "claude-fable-5-2"
+    )
+    expect(reviewModel(gatewayArgs, ["claude-opus-5-5"])).toBe(
+      "claude-opus-5-5"
+    )
+  })
+
   const args = "--model claude-fable-5-2 --fallback-model claude-opus-5-5"
 
   it("is the model asked for when it ran", () => {

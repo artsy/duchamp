@@ -6,7 +6,9 @@ import {
   formatMetrics,
   formatTable,
   judgeInput,
+  judgeUrl,
   mergeVerdicts,
+  parseCustomHeaders,
   parseSeverity,
   unifiedDiff,
 } from "./review-outcome"
@@ -250,5 +252,23 @@ describe("formatTable", () => {
       "| `src/app.ts` | claude | required | yes | none | none |"
     )
     expect(table).not.toContain("null check")
+  })
+})
+
+describe("judgeUrl", () => {
+  it("is Anthropic's Messages API by default, and the gateway's when set", () => {
+    expect(judgeUrl("")).toBe("https://api.anthropic.com/v1/messages")
+    expect(judgeUrl("https://litellm.example.net/")).toBe(
+      "https://litellm.example.net/v1/messages"
+    )
+  })
+})
+
+describe("parseCustomHeaders", () => {
+  it("reads one Name: value per line, skipping blanks and empty values", () => {
+    expect(
+      parseCustomHeaders("X-Edge-Token: abc:def\n\nX-Empty:\nnot a header")
+    ).toEqual({ "X-Edge-Token": "abc:def" })
+    expect(parseCustomHeaders("")).toEqual({})
   })
 })

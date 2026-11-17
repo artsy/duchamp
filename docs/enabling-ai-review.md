@@ -37,6 +37,8 @@ as "Organization secrets".
 | `REVIEW_APP_PRIVATE_KEY` | secret | Only when `.claude-review.yml` lists a private repo in `related_repos` |
 | `REVIEW_APP_ID` | variable | With `REVIEW_APP_PRIVATE_KEY`. It is an org variable, so there is nothing to add |
 | `OPENAI_API_KEY` | secret | Only for the Codex experiment |
+| `LITELLM_API_KEY` | secret | Only for the LiteLLM experiment |
+| `LITELLM_EDGE_TOKEN` | secret | Only for the LiteLLM experiment, once the gateway has an edge check |
 
 If one is missing, an org admin can share the org secret with the repo, or you can
 add it as a repository secret with **New repository secret**, using the same name.

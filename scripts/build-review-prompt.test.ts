@@ -21,6 +21,7 @@ import {
   inCodex,
   inFable,
   inLeanReviews,
+  inLiteLLM,
   inMergeRisk,
   inMissedFindings,
   inOutcome,
@@ -33,12 +34,14 @@ import {
   LEAN_SUMMARY_SECTION,
   LIGHT_EFFORT,
   LIGHT_MODEL,
+  loadGateway,
   loadParticipants,
   loadRepoConfig,
   loadReviewPrompt,
   MAX_INSTRUCTIONS_BYTES,
   MAX_PROMPT_BYTES,
   parseLabels,
+  pickGateway,
   pickReviewMode,
   REVIEW_EFFORT,
   resolveModelArgs,
@@ -248,6 +251,18 @@ describe("buildPrompt", () => {
 })
 
 describe("resolveModelArgs", () => {
+  it("quotes the models and adds the [1m] selector through a gateway", () => {
+    expect(resolveModelArgs("claude-opus-5-5", "standard", false, true)).toBe(
+      '--model "claude-opus-5-5[1m]" --effort high'
+    )
+    expect(resolveModelArgs("claude-opus-5-5", "light", false, true)).toBe(
+      `--model "${LIGHT_MODEL}[1m]" --effort ${LIGHT_EFFORT}`
+    )
+    expect(resolveModelArgs("claude-opus-5-5", "deep", true, true)).toBe(
+      `--model "${DEEP_MODEL}[1m]" --fallback-model "claude-opus-5-5[1m]" --effort high`
+    )
+  })
+
   it("passes the model with high effort", () => {
     expect(REVIEW_EFFORT).toBe("high")
     expect(resolveModelArgs("claude-opus-5-5")).toBe(
@@ -904,6 +919,83 @@ describe("inReplies", () => {
     expect(inReplies("someone-else", ["AI-Review-Replies"])).toBe(true)
     expect(inReplies("someone-else", [LEAN_LABEL])).toBe(false)
     expect(inReplies(undefined, [])).toBe(false)
+  })
+})
+
+describe("inLiteLLM", () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it("is true for an enrolled author, a listed repo or the label", () => {
+    mockFiles({
+      "participants.yml":
+        "participants:\n  - MounirDhahri\n  - egdbear\nrepos:\n  - artsy/volt\n",
+    })
+
+    expect(inLiteLLM("EgdBear", [])).toBe(true)
+    expect(inLiteLLM("someone", [], "Artsy/Volt")).toBe(true)
+    expect(inLiteLLM("someone", ["AI-Review-LiteLLM"])).toBe(true)
+    expect(inLiteLLM("someone", [], "artsy/eigen")).toBe(false)
+    expect(inLiteLLM(undefined, [])).toBe(false)
+    expect(
+      mockFs.readFileSync.mock.calls.map(([p]) => String(p))
+    ).toContainEqual(
+      expect.stringContaining(
+        path.join("litellm-experiment", "participants.yml")
+      )
+    )
+  })
+})
+
+describe("loadGateway", () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it("reads an https base_url without a trailing slash, and a valid edge header", () => {
+    mockFiles({
+      "participants.yml":
+        "base_url: https://litellm.example.net/\nedge_header: X-Edge-Token\n",
+    })
+    expect(loadGateway()).toEqual({
+      baseUrl: "https://litellm.example.net",
+      edgeHeader: "X-Edge-Token",
+    })
+  })
+
+  it("leaves out an edge header that isn't a plain header name", () => {
+    mockFiles({
+      "participants.yml":
+        "base_url: https://litellm.example.net\nedge_header: 'X-Edge: injected'\n",
+    })
+    expect(loadGateway()).toEqual({ baseUrl: "https://litellm.example.net" })
+  })
+
+  it.each([
+    "http://litellm.example.net",
+    "litellm.example.net",
+    "https://",
+    "https://litellm.example.net/a path",
+  ])("is undefined for %s", url => {
+    mockFiles({ "participants.yml": `base_url: "${url}"\n` })
+    expect(loadGateway()).toBeUndefined()
+  })
+
+  it("is undefined without the file", () => {
+    mockFs.existsSync.mockReturnValue(false)
+    expect(loadGateway()).toBeUndefined()
+  })
+})
+
+describe("pickGateway", () => {
+  const gateway = { baseUrl: "https://litellm.example.net" }
+
+  it("uses the gateway only in the experiment and with the key", () => {
+    expect(pickGateway(true, true, gateway)).toEqual(gateway)
+    expect(pickGateway(true, false, gateway)).toBeUndefined()
+    expect(pickGateway(false, true, gateway)).toBeUndefined()
+    expect(pickGateway(true, true, undefined)).toBeUndefined()
   })
 })
 

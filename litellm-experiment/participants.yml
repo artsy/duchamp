@@ -1,0 +1,24 @@
+# The LiteLLM experiment: reviews call Claude through Artsy's LiteLLM gateway instead of
+# Anthropic directly, so every call is traced to Phoenix.
+#
+# A review goes through the gateway when the PR is in the experiment (an author on this
+# list, a repo under `repos`, or the `ai-review-litellm` label) AND the repo passes the
+# `litellm-api-key` secret. Without the key, enrolment does nothing and the review calls
+# Anthropic as before.
+#
+# To join or leave, add or remove your login and open a PR. Case does not matter.
+#
+# See README.md in this directory.
+
+# The gateway. Only an https URL counts; anything else sends reviews to Anthropic.
+base_url: https://litellm-staging.artsy.net
+
+# The header the gateway's edge check reads, once it has one. The caller's
+# `litellm-edge-token` secret is its value.
+# edge_header: X-Artsy-Edge-Token
+
+participants:
+  - MounirDhahri
+  - egdbear
+
+repos: []

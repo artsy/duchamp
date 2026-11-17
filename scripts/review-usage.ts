@@ -248,6 +248,7 @@ export interface MetricsContext {
   relatedRepos?: string
   mergeRisk?: string
   replies?: string
+  gateway?: string
 }
 
 export type VolleyMetric =
@@ -271,8 +272,11 @@ const reviewGroup = (experiment: string): string =>
  * Haiku, so this is the one asked for, or the fallback when only the fallback ran.
  */
 export const reviewModel = (modelArgs: string, models: string[]): string => {
-  const asked = modelArgs.match(/--model (\S+)/)?.[1]
-  const fallback = modelArgs.match(/--fallback-model (\S+)/)?.[1]
+  // Gateway reviews quote the model and add the [1m] selector; the tag is the model alone.
+  const clean = (flag?: string): string | undefined =>
+    flag?.replace(/^"|"$/g, "").replace(/\[1m\]$/, "")
+  const asked = clean(modelArgs.match(/--model (\S+)/)?.[1])
+  const fallback = clean(modelArgs.match(/--fallback-model (\S+)/)?.[1])
   const ran = (model: string): boolean =>
     models.some(used => used.startsWith(model))
   if (asked && fallback && !ran(asked) && ran(fallback)) {
@@ -307,6 +311,7 @@ export const formatVolleyPayload = (
     ...(context.relatedRepos ? [`related_repos:${context.relatedRepos}`] : []),
     ...(context.mergeRisk ? [`merge_risk:${context.mergeRisk}`] : []),
     ...(context.replies ? [`replies:${context.replies}`] : []),
+    ...(context.gateway ? [`gateway:${context.gateway}`] : []),
   ]
   const histogram = (name: string, value: number): VolleyMetric => ({
     type: "histogram",
@@ -513,6 +518,7 @@ const main = async (): Promise<void> => {
       relatedRepos: process.env.RELATED_REPOS,
       mergeRisk: process.env.MERGE_RISK,
       replies: process.env.REPLIES,
+      gateway: process.env.GATEWAY,
     }),
     process.env.VOLLEY_URL
   )

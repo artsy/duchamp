@@ -356,6 +356,9 @@ with who each one is on for, past experiments and the PR that introduced each:
 - Fable experiment (`ai-review-fable`), on for every PR in gravity and metaphysics:
   Claude Fable 5.2 for reviews that touch a sensitive file or change more than 400
   lines. See `fable-experiment/README.md`.
+- LiteLLM experiment (`ai-review-litellm`): reviews call Claude through Artsy's LiteLLM
+  gateway, traced to Phoenix. Needs the repo to pass `litellm-api-key`. See
+  `litellm-experiment/README.md`.
 - Outcome experiment (`ai-review-outcome`), on for every merged PR in repos that list
   `closed` in the trigger's types: records whether each inline comment was addressed.
   See `outcome-experiment/README.md`.

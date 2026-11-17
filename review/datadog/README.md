@@ -34,7 +34,9 @@ experiment carry `merge_risk` (true when the prompt asked for a
 replies experiment carry `replies` (true when a re-review read at least one
 [reply](../../replies-experiment/README.md)). The
 [Fable experiment](../../fable-experiment/README.md) has no tag of its own: its reviews
-carry `model:claude-fable-5-2`. `group:experiment` means
+carry `model:claude-fable-5-2`. Reviews from after the
+[LiteLLM experiment](../../litellm-experiment/README.md) carry `gateway` (`litellm` or
+`anthropic`). `group:experiment` means
 [lean reviews](../../lean-reviews-experiment/README.md), which was called the review
 experiment when the tag was added; the value stays so the dashboard's history lines
 up. Before related repos split out, those reviews also read related repos.
