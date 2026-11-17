@@ -1,0 +1,37 @@
+name: Release
+
+# One GitHub release per merge to main. See README.md, "Releases".
+on:
+  push:
+    branches: [main]
+
+# Queued runs wait for the one ahead. If GitHub drops a queued run, the next one
+# still releases every untagged merge, since the script works from the latest tag.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: corepack enable
+      - run: corepack install
+
+      - run: yarn install --immutable
+
+      - name: Create releases
+        run: npx ts-node scripts/release.ts --apply
+        env:
+          GH_TOKEN: ${{ github.token }}

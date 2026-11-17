@@ -72,6 +72,31 @@ To test changes you are adding on a branch, you can reference the workflow elsew
 uses: artsy/duchamp/.github/workflows/YOUR-WORKFLOW.yml@YOUR-BRANCH
 ```
 
+## 🏷 Releases
+
+Every merge to `main` gets a [release](https://github.com/artsy/duchamp/releases): a
+`vX.Y.Z` tag on the merge commit, and notes with the PR, its merge date and the areas it
+touched (AI review, Danger and PR checks, incidents and on-call, and so on). Callers run
+`@main`, so each release is live in every caller from the moment it merges, and the list
+of releases is the list of what shipped.
+
+The PR title picks the version:
+
+| Title | Bump | Example |
+| --- | --- | --- |
+| `feat: …` | minor | v1.4.2 → v1.5.0 |
+| `feat!: …`, `fix!: …`, or a `BREAKING CHANGE:` footer | major | v1.4.2 → v2.0.0 |
+| anything else | patch | v1.4.2 → v1.4.3 |
+
+The [Release workflow](.github/workflows/release.yml) runs `scripts/release.ts`, which
+releases every merge on `main` since the latest tag, so a skipped run is caught up by the
+next one. To see what it would create, run `npx ts-node scripts/release.ts` locally.
+
+One version covers the whole repo. A caller's ref applies to every file in duchamp, and
+the workflows share `scripts/`, so a version per action would not match what callers run.
+To find the releases that changed one area, search the releases page for its name, such
+as "AI review".
+
 ## 📞 Support
 
 For questions or support:
