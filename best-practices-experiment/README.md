@@ -12,6 +12,10 @@ both or neither.
    does not matter.
 2. **Per PR.** Add the `ai-review-best-practices` label to a single PR. It takes
    effect on the next push.
+3. **Per repo.** Add the repo to `repos` in `participants.yml`. Every PR in it then
+   gets the stack skills, whoever wrote it. Eigen, palette-mobile and energy are
+   listed. A repo also needs an entry in `../review/skills.yml`, or there is no skill
+   to run.
 
 Leaving is the same in reverse: remove your login, or drop the label.
 

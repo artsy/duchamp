@@ -484,6 +484,13 @@ describe("inBestPractices", () => {
     expect(inBestPractices("someone", ["bug"])).toBe(false)
     expect(inBestPractices(undefined, [])).toBe(false)
   })
+
+  it("includes every PR in a listed repo, whoever wrote it", () => {
+    mockFiles({ "participants.yml": "repos:\n  - artsy/eigen\n" })
+    expect(inBestPractices("someone", [], "Artsy/Eigen")).toBe(true)
+    expect(inBestPractices("someone", [], "artsy/force")).toBe(false)
+    expect(inBestPractices("someone", [])).toBe(false)
+  })
 })
 
 describe("inMergeRisk", () => {

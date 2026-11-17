@@ -272,15 +272,23 @@ export const inSecurityExperiment = (
   (!!repo &&
     loadEnrolment("security-experiment", "repos").includes(repo.toLowerCase()))
 
-/** Whether this review is in the best-practices experiment: listed authors and labelled PRs. */
+/**
+ * Whether this review is in the best-practices experiment: listed authors, every PR in a
+ * listed repo, and labelled PRs.
+ */
 export const inBestPractices = (
   author: string | undefined,
-  labels: string[]
+  labels: string[],
+  repo?: string
 ): boolean =>
   labels.some(label => label.toLowerCase() === BEST_PRACTICES_LABEL) ||
   (!!author &&
     loadParticipants("best-practices-experiment").includes(
       author.toLowerCase()
+    )) ||
+  (!!repo &&
+    loadEnrolment("best-practices-experiment", "repos").includes(
+      repo.toLowerCase()
     ))
 
 /** Whether this review is in the replies experiment: listed authors and labelled PRs. */
@@ -904,7 +912,11 @@ const main = (): void => {
     process.env.GITHUB_REPOSITORY
   )
   const labelled = hasSecurityLabel(labels)
-  const bestPractices = inBestPractices(process.env.PR_AUTHOR, labels)
+  const bestPractices = inBestPractices(
+    process.env.PR_AUTHOR,
+    labels,
+    process.env.GITHUB_REPOSITORY
+  )
   const mergeRisk = inMergeRisk(process.env.PR_AUTHOR, labels)
   const replies = inReplies(process.env.PR_AUTHOR, labels)
   const codex = inCodex(process.env.PR_AUTHOR, labels)
