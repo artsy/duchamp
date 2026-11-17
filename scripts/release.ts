@@ -253,7 +253,13 @@ const run = (command: string, args: string[]): string =>
     stdio: ["ignore", "pipe", "pipe"],
   })
 
-/** The newest `vX.Y.Z` tag reachable from HEAD, if any. */
+/**
+ * Only commits on the remote's main are released. A local branch's commits don't
+ * exist on GitHub, so a release can't point at them.
+ */
+export const RELEASE_REF = "origin/main"
+
+/** The newest `vX.Y.Z` tag reachable from RELEASE_REF, if any. */
 export const latestTag = (): string | undefined => {
   try {
     return (
@@ -263,7 +269,7 @@ export const latestTag = (): string | undefined => {
         "--abbrev=0",
         "--match",
         "v[0-9]*.[0-9]*.[0-9]*",
-        "HEAD",
+        RELEASE_REF,
       ]).trim() || undefined
     )
   } catch {
@@ -279,9 +285,9 @@ const changedFiles = (sha: string, parents: string[]): string[] => {
   return run("git", args).split("\n").filter(Boolean)
 }
 
-/** First-parent merges after `since` (or from the first commit), oldest first. */
+/** First-parent merges on RELEASE_REF after `since` (or from the first commit), oldest first. */
 export const readMerges = (since: string | undefined): Merge[] => {
-  const range = since ? `${since}..HEAD` : "HEAD"
+  const range = since ? `${since}..${RELEASE_REF}` : RELEASE_REF
   const log = run("git", [
     "log",
     "--first-parent",
@@ -376,10 +382,9 @@ const main = (): void => {
   const rewrite = process.argv.includes("--rewrite")
   const repo = process.env.GITHUB_REPOSITORY || "artsy/duchamp"
 
-  if (apply) {
-    // Tags made by an earlier run, here or in CI, so a rerun picks up where it stopped.
-    run("git", ["fetch", "--tags", "--quiet"])
-  }
+  // The latest main, and tags made by an earlier run here or in CI, so a rerun
+  // picks up where it stopped.
+  run("git", ["fetch", "--tags", "--quiet", "origin", "main"])
   // --rewrite redoes the notes of every release so far, with the current format.
   const tag = rewrite ? undefined : latestTag()
   const latest = tag ? parseVersion(tag) : undefined
