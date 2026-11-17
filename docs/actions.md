@@ -346,8 +346,9 @@ with who each one is on for, past experiments and the PR that introduced each:
 - Security experiment (`security-review`), on for every PR in the repos its
   `participants.yml` lists: a security pass by a subagent. See
   `security-experiment/README.md`.
-- Best-practices experiment (`ai-review-best-practices`): stack skills such as
-  React Native best practices. See `best-practices-experiment/README.md`.
+- Best-practices experiment (`ai-review-best-practices`), on for every PR in eigen,
+  palette-mobile and energy: stack skills such as React Native best practices. See
+  `best-practices-experiment/README.md`.
 - Merge risk experiment (`ai-review-merge-risk`): a low, medium or high merge risk
   rating in the summary. See `merge-risk-experiment/README.md`.
 - Replies experiment (`ai-review-replies`): re-reviews read the replies to the
