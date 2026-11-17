@@ -2,17 +2,21 @@ import { diffPathspec, git } from "./review-diff"
 
 /**
  * How much review a diff needs. Light diffs (docs only, or small and away from
- * sensitive code) get a cheaper model; see review/README.md, "Model routing".
+ * sensitive code) get a cheaper model. Deep diffs (sensitive code, or large) get a
+ * stronger one for PRs in the Fable experiment. See review/README.md, "Model routing".
  */
 
-export type ReviewTier = "light" | "standard"
+export type ReviewTier = "light" | "standard" | "deep"
 
 /** At or under this many changed lines, a diff with no sensitive file is light. */
 export const MAX_LIGHT_LINES = 40
 
+/** Over this many changed lines, a diff that isn't docs only is deep. */
+export const MAX_STANDARD_LINES = 400
+
 /**
  * Paths where a small change can still do real damage. Matched against the lowercased
- * path. A false match only keeps a PR on the standard model, so these lean broad.
+ * path. A false match only costs a stronger model than needed, so these lean broad.
  */
 export const SENSITIVE_PATTERNS: RegExp[] = [
   /^\.github\/(workflows|actions)\//,
@@ -62,7 +66,7 @@ export const classifyFiles = (files: ChangedFile[]): DiffRisk => {
 
   if (sensitive.length > 0) {
     return {
-      tier: "standard",
+      tier: "deep",
       reason: `${sensitive.length} sensitive file(s), such as ${sensitive[0]}`,
       sensitive,
     }
@@ -74,6 +78,13 @@ export const classifyFiles = (files: ChangedFile[]): DiffRisk => {
     return {
       tier: "light",
       reason: `${lines} changed lines, at most ${MAX_LIGHT_LINES}`,
+      sensitive,
+    }
+  }
+  if (lines > MAX_STANDARD_LINES) {
+    return {
+      tier: "deep",
+      reason: `${lines} changed lines, over ${MAX_STANDARD_LINES}`,
       sensitive,
     }
   }
