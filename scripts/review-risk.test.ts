@@ -5,6 +5,7 @@ import {
   isDocsPath,
   isSensitivePath,
   MAX_LIGHT_LINES,
+  MAX_STANDARD_LINES,
   parseNumstat,
 } from "./review-risk"
 
@@ -105,14 +106,32 @@ describe("classifyFiles", () => {
     ).toMatchObject({ tier: "standard" })
   })
 
-  it("is standard for a one-line change to a sensitive file", () => {
+  it("is deep for a one-line change to a sensitive file", () => {
     const risk = classifyFiles([
       { path: "src/a.ts", lines: 1 },
       { path: ".github/workflows/ci.yml", lines: 1 },
     ])
-    expect(risk.tier).toBe("standard")
+    expect(risk.tier).toBe("deep")
     expect(risk.sensitive).toEqual([".github/workflows/ci.yml"])
     expect(risk.reason).toContain(".github/workflows/ci.yml")
+  })
+
+  it("is deep over the standard line limit, and standard at it", () => {
+    expect(
+      classifyFiles([{ path: "src/a.ts", lines: MAX_STANDARD_LINES }])
+    ).toMatchObject({ tier: "standard" })
+    expect(
+      classifyFiles([{ path: "src/a.ts", lines: MAX_STANDARD_LINES + 1 }])
+    ).toMatchObject({
+      tier: "deep",
+      reason: `${MAX_STANDARD_LINES + 1} changed lines, over ${MAX_STANDARD_LINES}`,
+    })
+  })
+
+  it("stays light for a large docs-only change", () => {
+    expect(
+      classifyFiles([{ path: "docs/guide.md", lines: MAX_STANDARD_LINES + 1 }])
+    ).toMatchObject({ tier: "light" })
   })
 
   it("is light when nothing changed outside lockfiles and ignored paths", () => {

@@ -102,12 +102,13 @@ For PRs in the [lean reviews experiment](../lean-reviews-experiment/README.md),
 | --- | --- | --- |
 | light | Every changed file is docs (`*.md`, `*.mdx`, `*.txt`, images, `docs/`, `LICENSE`), or at most 40 changed lines and no sensitive file | `claude-sonnet-5-5`, `medium` |
 | standard | Anything else | the workflow's `model` input, `high` |
+| deep | A sensitive file changed, or more than 400 changed lines that aren't all docs | the same as standard. For PRs in the [Fable experiment](../fable-experiment/README.md): `claude-fable-5-2`, `high`, falling back to the standard model |
 
-- A sensitive file keeps a PR on standard however small the change. `SENSITIVE_PATTERNS`
+- A sensitive file makes a review deep however small the change. `SENSITIVE_PATTERNS`
   lists them: workflows and actions, paths naming auth, sessions, tokens, secrets,
   permissions, policies, payments, checkout, billing or orders, migrations,
   `Dockerfile`, `.tf` and `.sql` files. The list leans broad, because a false match
-  only costs a standard review.
+  only costs a stronger model than the change needed.
 - Lockfiles and `ignore_paths` don't count, as in the diff.
 - A full review counts the whole PR. A [re-review](#re-reviews) counts the changes
   since the earlier review.

@@ -44,7 +44,7 @@ import { formatStackSkillsSection, resolveStackSkills } from "./stack-skills"
  * only what changed since the last review. A PR is in it when its author is listed in
  * lean-reviews-experiment/participants.yml, or when it carries the LEAN_LABEL. See
  * lean-reviews-experiment/README.md. Related repos, security, best practices, merge
- * risk and Codex are their own experiments; see review/experiments.md.
+ * risk, Codex and Fable are their own experiments; see review/experiments.md.
  */
 
 interface ExcludeConfig {
@@ -91,6 +91,9 @@ export const MERGE_RISK_LABEL = "ai-review-merge-risk"
 /** Label that opts a single PR into the Codex experiment. */
 export const CODEX_LABEL = "ai-review-codex"
 
+/** Label that opts a single PR into the Fable experiment. */
+export const FABLE_LABEL = "ai-review-fable"
+
 export const DEFAULT_MODEL = "claude-opus-5-5"
 
 export const REVIEW_EFFORT = "high"
@@ -99,6 +102,9 @@ export const REVIEW_EFFORT = "high"
 export const LIGHT_MODEL = "claude-sonnet-5-5"
 
 export const LIGHT_EFFORT = "medium"
+
+/** Fable experiment reviews of deep diffs: sensitive files, or many changed lines. */
+export const DEEP_MODEL = "claude-fable-5-2"
 
 /**
  * Prompt and experiment files live in this repo's checkout, never in the PR under
@@ -332,14 +338,32 @@ export const inCodex = (
   (!!author &&
     loadParticipants("codex-experiment").includes(author.toLowerCase()))
 
-/** Claude Code CLI flags that select the model for this review. */
+/** Whether this review is in the Fable experiment: listed authors and labelled PRs. */
+export const inFable = (
+  author: string | undefined,
+  labels: string[]
+): boolean =>
+  labels.some(label => label.toLowerCase() === FABLE_LABEL) ||
+  (!!author &&
+    loadParticipants("fable-experiment").includes(author.toLowerCase()))
+
+/**
+ * Claude Code CLI flags that select the model for this review. A deep review in the
+ * Fable experiment falls back to `model` when Fable is overloaded or unavailable.
+ */
 export const resolveModelArgs = (
   model: string,
-  tier: ReviewTier = "standard"
-): string =>
-  tier === "light"
-    ? `--model ${LIGHT_MODEL} --effort ${LIGHT_EFFORT}`
-    : `--model ${model} --effort ${REVIEW_EFFORT}`
+  tier: ReviewTier = "standard",
+  fable = false
+): string => {
+  if (tier === "light") {
+    return `--model ${LIGHT_MODEL} --effort ${LIGHT_EFFORT}`
+  }
+  if (tier === "deep" && fable) {
+    return `--model ${DEEP_MODEL} --fallback-model ${model} --effort ${REVIEW_EFFORT}`
+  }
+  return `--model ${model} --effort ${REVIEW_EFFORT}`
+}
 
 const FULL_REVIEW: ReviewMode = { mode: "full", reason: "" }
 
@@ -353,8 +377,9 @@ export const reviewRange = (
     : baseRef && `origin/${baseRef}...HEAD`
 
 /**
- * Reads the diff once for the experiments that need it. Lean reviews of
- * light diffs get LIGHT_MODEL, unless the caller set its own model. Security-experiment
+ * Reads the diff once for the experiments that need it. Lean reviews of light diffs
+ * get LIGHT_MODEL, and Fable-experiment reviews of deep diffs get DEEP_MODEL, unless
+ * the caller set its own model. Security-experiment
  * reviews use the sensitive files. Any failure to read the diff means standard, with no
  * sensitive files.
  */
@@ -877,6 +902,7 @@ const main = (): void => {
   const mergeRisk = inMergeRisk(process.env.PR_AUTHOR, labels)
   const replies = inReplies(process.env.PR_AUTHOR, labels)
   const codex = inCodex(process.env.PR_AUTHOR, labels)
+  const fable = inFable(process.env.PR_AUTHOR, labels)
 
   // Lets the workflow skip minting the related repos token, and size the job for Codex.
   if (process.argv.includes("--check-experiment")) {
@@ -890,6 +916,7 @@ const main = (): void => {
     console.log(`Lean reviews experiment: ${inLean}`)
     console.log(`Related repos: ${inRelatedRepos}`)
     console.log(`Codex: ${codex}`)
+    console.log(`Fable: ${fable}`)
     return
   }
 
@@ -1006,7 +1033,10 @@ const main = (): void => {
     },
     inLean
   )
-  const modelArgs = [resolveModelArgs(model, changes.tier), addDirArgs(related)]
+  const modelArgs = [
+    resolveModelArgs(model, changes.tier, fable),
+    addDirArgs(related),
+  ]
     .filter(Boolean)
     .join(" ")
   const codexFiles = codex ? writeCodexPrompt(prompt) : undefined

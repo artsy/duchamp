@@ -352,6 +352,8 @@ with who each one is on for, past experiments and the PR that introduced each:
   rating in the summary. See `merge-risk-experiment/README.md`.
 - Replies experiment (`ai-review-replies`): re-reviews read the replies to the
   reviewer's earlier inline comments. See `replies-experiment/README.md`.
+- Fable experiment (`ai-review-fable`): Claude Fable 5.2 for reviews that touch a
+  sensitive file or change more than 400 lines. See `fable-experiment/README.md`.
 - Outcome experiment (`ai-review-outcome`), on for every merged PR in repos that list
   `closed` in the trigger's types: records whether each inline comment was addressed.
   See `outcome-experiment/README.md`.
