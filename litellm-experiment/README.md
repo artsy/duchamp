@@ -72,7 +72,7 @@ the key's page shows its spend against the budget.
 From your own terminal, not a shared session, so the key stays private:
 
 ```sh
-read -s "LITELLM_KEY?LiteLLM key: "; export LITELLM_KEY; echo
+printf "LiteLLM key: "; read -rs LITELLM_KEY; export LITELLM_KEY; echo
 ANTHROPIC_BASE_URL=https://litellm-staging.artsy.net ANTHROPIC_API_KEY=$LITELLM_KEY \
   claude -p "Say hi" --model "claude-opus-5-5[1m]" --output-format json |
   jq '{result, total_cost_usd, usage}'
