@@ -420,6 +420,8 @@ export interface TraceContext {
   job: "review" | "judge"
   tier?: ReviewTier
   runUrl?: string
+  /** The gateway's edge header. Its name ends the block; the workflow appends the token. */
+  edgeHeader?: string
 }
 
 /**
@@ -433,6 +435,7 @@ export const gatewayHeaders = ({
   job,
   tier,
   runUrl,
+  edgeHeader,
 }: TraceContext): string => {
   const safeRepo = repo && /^[\w.-]+\/[\w.-]+$/.test(repo) ? repo : undefined
   const metadata = {
@@ -447,7 +450,8 @@ export const gatewayHeaders = ({
     `job:${job}`,
     ...(safeRepo ? [`repo:${safeRepo}`] : []),
   ]
-  return `x-litellm-tags: ${tags.join(",")}\nx-litellm-spend-logs-metadata: ${JSON.stringify(metadata)}`
+  const edge = edgeHeader ? `\n${edgeHeader}: ` : ""
+  return `x-litellm-tags: ${tags.join(",")}\nx-litellm-spend-logs-metadata: ${JSON.stringify(metadata)}${edge}`
 }
 
 const runUrl = (): string | undefined => {
@@ -457,7 +461,10 @@ const runUrl = (): string | undefined => {
     : undefined
 }
 
-/** The `litellm_headers` step output: gatewayHeaders through a gateway, else empty. */
+/**
+ * The `litellm_headers` step output: gatewayHeaders through a gateway, else empty, so a
+ * review that calls Anthropic directly gets the same empty ANTHROPIC_CUSTOM_HEADERS.
+ */
 const headersOutput = (
   gateway: Gateway | undefined,
   job: TraceContext["job"],
@@ -470,6 +477,7 @@ const headersOutput = (
         job,
         tier,
         runUrl: runUrl(),
+        edgeHeader: gateway.edgeHeader,
       })
     : ""
   const delimiter = `EOF_${randomUUID()}`
@@ -477,8 +485,9 @@ const headersOutput = (
 }
 
 /**
- * Claude Code CLI flags that select the model for this review. Through a gateway, Claude Code can't tell the model has a 1M context window and
- * budgets 200K, so the model names carry the `[1m]` selector.
+ * Claude Code CLI flags that select the model for this review. Through a gateway,
+ * Claude Code can't tell the model has a 1M context window and budgets 200K, so the
+ * model names carry the `[1m]` selector.
  */
 export const resolveModelArgs = (
   model: string,

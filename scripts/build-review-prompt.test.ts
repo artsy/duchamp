@@ -972,6 +972,16 @@ describe("gatewayHeaders", () => {
     )
   })
 
+  it("ends with the edge header's name, for the workflow to append the token", () => {
+    expect(
+      gatewayHeaders({ job: "review", edgeHeader: "X-Edge-Token" }).split("\n")
+    ).toEqual([
+      "x-litellm-tags: ai-review,job:review",
+      'x-litellm-spend-logs-metadata: {"job":"review"}',
+      "X-Edge-Token: ",
+    ])
+  })
+
   it("leaves out values that could break a header", () => {
     const headers = gatewayHeaders({
       repo: "artsy/duchamp\nx-evil: 1",
