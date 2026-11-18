@@ -12,7 +12,7 @@
 
 # The gateway. Only an https URL on artsy.net counts; anything else sends reviews to
 # Anthropic, so a bad edit can't hand the key to another host.
-base_url: https://litellm-staging.artsy.net
+base_url: https://litellm.artsy.net
 
 # The header the gateway's edge check reads, once it has one. The caller's
 # `litellm-edge-token` secret is its value.
