@@ -269,35 +269,20 @@ describe("formatUsageLogLine", () => {
 
 describe("reviewModel", () => {
   it("tags a gateway review with the model alone, without quotes or [1m]", () => {
-    const gatewayArgs =
-      '--model "claude-fable-5-2[1m]" --fallback-model "claude-opus-5-5[1m]"'
-    expect(reviewModel(gatewayArgs, ["claude-fable-5-2"])).toBe(
-      "claude-fable-5-2"
-    )
-    expect(reviewModel(gatewayArgs, ["claude-opus-5-5"])).toBe(
+    expect(
+      reviewModel('--model "claude-opus-5-5[1m]" --effort high', [
+        "claude-haiku-5-5",
+        "claude-opus-5-5",
+      ])
+    ).toBe("claude-opus-5-5")
+  })
+
+  it("is the model asked for, or the first that ran without one", () => {
+    expect(reviewModel("--model claude-opus-5-5", ["claude-haiku-5-5"])).toBe(
       "claude-opus-5-5"
     )
-  })
-
-  const args = "--model claude-fable-5-2 --fallback-model claude-opus-5-5"
-
-  it("is the model asked for when it ran", () => {
-    expect(reviewModel(args, ["claude-haiku-5-5", "claude-fable-5-2"])).toBe(
-      "claude-fable-5-2"
-    )
-    expect(reviewModel(args, ["claude-fable-5-2", "claude-opus-5-5"])).toBe(
-      "claude-fable-5-2"
-    )
-  })
-
-  it("is the fallback when only the fallback ran", () => {
-    expect(reviewModel(args, ["claude-haiku-5-5", "claude-opus-5-5"])).toBe(
-      "claude-opus-5-5"
-    )
-  })
-
-  it("is the model asked for when the run lists no models", () => {
-    expect(reviewModel(args, [])).toBe("claude-fable-5-2")
+    expect(reviewModel("", ["claude-sonnet-5-5"])).toBe("claude-sonnet-5-5")
+    expect(reviewModel("", [])).toBe("unknown")
   })
 })
 

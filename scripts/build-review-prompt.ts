@@ -44,7 +44,7 @@ import { formatStackSkillsSection, resolveStackSkills } from "./stack-skills"
  * only what changed since the last review. A PR is in it when its author is listed in
  * lean-reviews-experiment/participants.yml, or when it carries the LEAN_LABEL. See
  * lean-reviews-experiment/README.md. Related repos, security, best practices, merge
- * risk, Codex and Fable are their own experiments; see review/experiments.md.
+ * risk and Codex are their own experiments; see review/experiments.md.
  */
 
 interface ExcludeConfig {
@@ -91,9 +91,6 @@ export const MERGE_RISK_LABEL = "ai-review-merge-risk"
 /** Label that opts a single PR into the Codex experiment. */
 export const CODEX_LABEL = "ai-review-codex"
 
-/** Label that opts a single PR into the Fable experiment. */
-export const FABLE_LABEL = "ai-review-fable"
-
 /** Label that opts a single PR into the LiteLLM experiment, in a repo that passes the key. */
 export const LITELLM_LABEL = "ai-review-litellm"
 
@@ -105,9 +102,6 @@ export const REVIEW_EFFORT = "high"
 export const LIGHT_MODEL = "claude-sonnet-5-5"
 
 export const LIGHT_EFFORT = "medium"
-
-/** Fable experiment reviews of deep diffs: sensitive files, or many changed lines. */
-export const DEEP_MODEL = "claude-fable-5-2"
 
 /**
  * Prompt and experiment files live in this repo's checkout, never in the PR under
@@ -350,21 +344,6 @@ export const inCodex = (
     loadParticipants("codex-experiment").includes(author.toLowerCase()))
 
 /**
- * Whether this review is in the Fable experiment: listed authors, every PR in a listed
- * repo, and labelled PRs.
- */
-export const inFable = (
-  author: string | undefined,
-  labels: string[],
-  repo?: string
-): boolean =>
-  labels.some(label => label.toLowerCase() === FABLE_LABEL) ||
-  (!!author &&
-    loadParticipants("fable-experiment").includes(author.toLowerCase())) ||
-  (!!repo &&
-    loadEnrolment("fable-experiment", "repos").includes(repo.toLowerCase()))
-
-/**
  * Whether this review is in the LiteLLM experiment: listed authors, every PR in a listed
  * repo, and labelled PRs. It goes through the gateway only when pickGateway agrees.
  */
@@ -436,23 +415,17 @@ export const pickGateway = (
 ): Gateway | undefined => (inExperiment && hasKey ? gateway : undefined)
 
 /**
- * Claude Code CLI flags that select the model for this review. A deep review in the
- * Fable experiment falls back to `model` when Fable is overloaded or unavailable.
- * Through a gateway, Claude Code can't tell the model has a 1M context window and
+ * Claude Code CLI flags that select the model for this review. Through a gateway, Claude Code can't tell the model has a 1M context window and
  * budgets 200K, so the model names carry the `[1m]` selector.
  */
 export const resolveModelArgs = (
   model: string,
   tier: ReviewTier = "standard",
-  fable = false,
   gateway = false
 ): string => {
   const name = (id: string): string => (gateway ? `"${id}[1m]"` : id)
   if (tier === "light") {
     return `--model ${name(LIGHT_MODEL)} --effort ${LIGHT_EFFORT}`
-  }
-  if (tier === "deep" && fable) {
-    return `--model ${name(DEEP_MODEL)} --fallback-model ${name(model)} --effort ${REVIEW_EFFORT}`
   }
   return `--model ${name(model)} --effort ${REVIEW_EFFORT}`
 }
@@ -469,9 +442,8 @@ export const reviewRange = (
     : baseRef && `origin/${baseRef}...HEAD`
 
 /**
- * Reads the diff once for the experiments that need it. Lean reviews of light diffs
- * get LIGHT_MODEL, and Fable-experiment reviews of deep diffs get DEEP_MODEL, unless
- * the caller set its own model. Security-experiment
+ * Reads the diff once for the experiments that need it. Lean reviews of
+ * light diffs get LIGHT_MODEL, unless the caller set its own model. Security-experiment
  * reviews use the sensitive files. Any failure to read the diff means standard, with no
  * sensitive files.
  */
@@ -998,11 +970,6 @@ const main = (): void => {
   const mergeRisk = inMergeRisk(process.env.PR_AUTHOR, labels)
   const replies = inReplies(process.env.PR_AUTHOR, labels)
   const codex = inCodex(process.env.PR_AUTHOR, labels)
-  const fable = inFable(
-    process.env.PR_AUTHOR,
-    labels,
-    process.env.GITHUB_REPOSITORY
-  )
   const litellm = inLiteLLM(
     process.env.PR_AUTHOR,
     labels,
@@ -1023,7 +990,6 @@ const main = (): void => {
     console.log(`Lean reviews experiment: ${inLean}`)
     console.log(`Related repos: ${inRelatedRepos}`)
     console.log(`Codex: ${codex}`)
-    console.log(`Fable: ${fable}`)
     console.log(
       `LiteLLM: ${gateway ? gateway.baseUrl : litellm ? "in the experiment, but no litellm-api-key or base_url" : false}`
     )
@@ -1144,7 +1110,7 @@ const main = (): void => {
     inLean
   )
   const modelArgs = [
-    resolveModelArgs(model, changes.tier, fable, gateway !== undefined),
+    resolveModelArgs(model, changes.tier, gateway !== undefined),
     addDirArgs(related),
   ]
     .filter(Boolean)

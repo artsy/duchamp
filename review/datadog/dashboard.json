@@ -528,7 +528,7 @@
           {
             "definition": {
               "type": "note",
-              "content": "**How to compare now.** Lean reviews went to every PR on 12 Nov 2026, so `group` is `experiment` for every new review and `standard` is history only. Compare an experiment by its own tag instead: each widget here splits reviews by whether that experiment **ran** on them. `N/A` is reviews from before the tag existed. Replies only happen on re-reviews, so that widget counts re-reviews only. Fable is compared by `model`, and only runs on deep reviews (sensitive files or over 400 changed lines), so its cost per review is not like for like with Opus. Experiments run in different repos, so pick one repo in the filter above to compare like with like. Quality is in the two sections below: whether findings were addressed, and what reviewers caught that the review missed.",
+              "content": "**How to compare now.** Lean reviews went to every PR on 12 Nov 2026, so `group` is `experiment` for every new review and `standard` is history only. Compare an experiment by its own tag instead: each widget here splits reviews by whether that experiment **ran** on them. `N/A` is reviews from before the tag existed. Replies only happen on re-reviews, so that widget counts re-reviews only. Experiments run in different repos, so pick one repo in the filter above to compare like with like. Quality is in the two sections below: whether findings were addressed, and what reviewers caught that the review missed.",
               "background_color": "white",
               "font_size": "14",
               "text_align": "left",
@@ -570,11 +570,6 @@
                       "data_source": "metrics",
                       "name": "q4",
                       "query": "sum:ai_pr_review.reviews{replies:true,$repo,$group,$mode,$model,$pr}.as_count().rollup(sum, 604800)"
-                    },
-                    {
-                      "data_source": "metrics",
-                      "name": "q5",
-                      "query": "sum:ai_pr_review.reviews{model:claude-fable-5-2,$repo,$group,$mode,$pr}.as_count().rollup(sum, 604800)"
                     }
                   ],
                   "formulas": [
@@ -597,10 +592,6 @@
                     {
                       "formula": "q4",
                       "alias": "replies"
-                    },
-                    {
-                      "formula": "q5",
-                      "alias": "fable"
                     }
                   ]
                 }
@@ -761,40 +752,6 @@
                       "data_source": "metrics",
                       "name": "r",
                       "query": "sum:ai_pr_review.reviews{mode:rereview,$repo,$group,$model,$pr} by {replies}.as_count()",
-                      "aggregator": "sum"
-                    }
-                  ],
-                  "formulas": [
-                    {
-                      "formula": "c / r / 100",
-                      "limit": {
-                        "count": 10,
-                        "order": "desc"
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          },
-          {
-            "definition": {
-              "type": "toplist",
-              "title": "Cost per review (USD) by model: Fable runs on deep reviews in its experiment",
-              "requests": [
-                {
-                  "response_format": "scalar",
-                  "queries": [
-                    {
-                      "data_source": "metrics",
-                      "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {model}.as_count()",
-                      "aggregator": "sum"
-                    },
-                    {
-                      "data_source": "metrics",
-                      "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {model}.as_count()",
                       "aggregator": "sum"
                     }
                   ],

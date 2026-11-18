@@ -55,8 +55,8 @@ Anthropic key stays required, so leaving the experiment never breaks a review.
 
 In LiteLLM's admin UI, for the key the repos use:
 
-- The models the review uses: `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-fable-5-2`
-  and `claude-haiku-5-5` (Claude Code's background calls and the judges).
+- The models the review uses: `claude-opus-5-5`, `claude-sonnet-5-5` and
+  `claude-haiku-5-5` (Claude Code's background calls and the judges).
 - `{"phoenix_project_name": "duchamp-review"}` in the key's metadata, so review traces
   don't mix with other apps'.
 - A budget and rate limits.
@@ -75,7 +75,6 @@ comparable: Claude Code works it out from token counts, whichever way the calls 
 - **Permission mode.** With `ANTHROPIC_BASE_URL` set, claude-code-action keeps the
   earlier permission defaults instead of auto mode. The review's `--allowedTools` list
   then applies strictly, so denied tool calls may rise.
-- **Fable's fallback.** It relies on Anthropic's overloaded error reaching Claude Code.
 - **Which Anthropic account the gateway uses.** Its rate limits, model access and data
   retention apply, not those of the repo's own key.
 

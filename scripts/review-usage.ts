@@ -269,21 +269,16 @@ const reviewGroup = (experiment: string): string =>
 
 /**
  * The model to tag the review with. modelUsage also lists background models, such as
- * Haiku, so this is the one asked for, or the fallback when only the fallback ran.
+ * Haiku, so this is the one asked for. Gateway reviews quote it and add the [1m]
+ * selector; the tag is the model alone.
  */
-export const reviewModel = (modelArgs: string, models: string[]): string => {
-  // Gateway reviews quote the model and add the [1m] selector; the tag is the model alone.
-  const clean = (flag?: string): string | undefined =>
-    flag?.replace(/^"|"$/g, "").replace(/\[1m\]$/, "")
-  const asked = clean(modelArgs.match(/--model (\S+)/)?.[1])
-  const fallback = clean(modelArgs.match(/--fallback-model (\S+)/)?.[1])
-  const ran = (model: string): boolean =>
-    models.some(used => used.startsWith(model))
-  if (asked && fallback && !ran(asked) && ran(fallback)) {
-    return fallback
-  }
-  return asked ?? models[0] ?? "unknown"
-}
+export const reviewModel = (modelArgs: string, models: string[]): string =>
+  modelArgs
+    .match(/--model (\S+)/)?.[1]
+    ?.replace(/^"|"$/g, "")
+    .replace(/\[1m\]$/, "") ??
+  models[0] ??
+  "unknown"
 
 /**
  * The review's numbers as metrics for volley, which forwards them to Datadog as
