@@ -2,7 +2,7 @@ import { execFileSync } from "child_process"
 import * as fs from "fs"
 import * as os from "os"
 import * as nodePath from "path"
-import { inOutcome } from "./build-review-prompt"
+import { inOutcome, prTraceId } from "./build-review-prompt"
 import {
   fetchReviewThreads,
   isTrustedComment,
@@ -395,6 +395,98 @@ export const formatTable = (findings: Finding[], verdicts: Verdict[]): string =>
     "",
   ].join("\n")
 
+const ANNOTATION_TIMEOUT_MS = 10_000
+
+export interface TraceAnnotation {
+  trace_id: string
+  name: string
+  annotator_kind: "LLM"
+  result: { label: string; score: number; explanation: string }
+  identifier: string
+  metadata: Record<string, unknown>
+}
+
+/**
+ * The outcome as a Phoenix annotation on the PR's trace (prTraceId), so a review's
+ * calls and what happened to its findings sit together. Counts only, like the metrics.
+ * The same identifier on a re-run replaces the earlier annotation.
+ */
+export const outcomeAnnotation = (
+  traceId: string,
+  findings: Finding[],
+  verdicts: Verdict[]
+): TraceAnnotation => {
+  const tally = <T extends string>(values: T[]): Record<string, number> =>
+    values.reduce<Record<string, number>>(
+      (counts, value) => ({ ...counts, [value]: (counts[value] ?? 0) + 1 }),
+      {}
+    )
+  const addressed = tally(verdicts.map(verdict => verdict.addressed))
+  const replies = tally(verdicts.map(verdict => verdict.reply))
+  const reactions = tally(findings.map(finding => finding.reaction))
+  const yes = addressed.yes ?? 0
+  const label =
+    yes === findings.length
+      ? "all_addressed"
+      : yes === 0
+        ? "none_addressed"
+        : "some_addressed"
+  const list = (counts: Record<string, number>): string =>
+    Object.entries(counts)
+      .map(([key, count]) => `${count} ${key}`)
+      .join(", ")
+  return {
+    trace_id: traceId,
+    name: "review_outcome",
+    annotator_kind: "LLM",
+    result: {
+      label,
+      score: findings.length ? yes / findings.length : 0,
+      explanation: `${findings.length} findings. Addressed: ${list(addressed)}. Replies: ${list(replies)}. Reactions: ${list(reactions)}.`,
+    },
+    identifier: "duchamp-outcome",
+    metadata: { findings: findings.length, addressed, replies, reactions },
+  }
+}
+
+/**
+ * Posts the annotation through the gateway's Phoenix pass-through; the key needs
+ * `/phoenix/v1/trace_annotations` in its allowed_passthrough_routes. `"no-log"` keeps
+ * LiteLLM from tracing the call itself. Warns and returns false on any failure.
+ */
+export const annotateTrace = async (
+  annotation: TraceAnnotation,
+  baseUrl = process.env.ANTHROPIC_BASE_URL ?? ""
+): Promise<boolean> => {
+  try {
+    const response = await fetch(
+      `${baseUrl.replace(/\/+$/, "")}/phoenix/v1/trace_annotations`,
+      {
+        method: "POST",
+        headers: {
+          ...parseCustomHeaders(),
+          authorization: `Bearer ${process.env.ANTHROPIC_API_KEY ?? ""}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ "no-log": true, data: [annotation] }),
+        signal: AbortSignal.timeout(ANNOTATION_TIMEOUT_MS),
+      }
+    )
+    if (!response.ok) {
+      console.log(
+        `::warning::The Phoenix annotation failed: HTTP ${response.status}`
+      )
+      return false
+    }
+    return true
+  } catch (error) {
+    console.log(
+      `::warning::The Phoenix annotation failed: ${error instanceof Error ? error.message : error}`
+    )
+    return false
+  }
+}
+
 export interface PullRequest {
   merged: boolean
   user: { login: string }
@@ -450,6 +542,12 @@ const main = async (): Promise<void> => {
     formatMetrics(repo, prNumber, findings, verdicts),
     process.env.VOLLEY_URL
   )
+  // Only gateway reviews have a Phoenix trace; see litellm-experiment/README.md.
+  if (process.env.ANTHROPIC_BASE_URL) {
+    await annotateTrace(
+      outcomeAnnotation(prTraceId(repo, prNumber), findings, verdicts)
+    )
+  }
 }
 
 if (require.main === module) {

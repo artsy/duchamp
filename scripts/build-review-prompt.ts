@@ -1,5 +1,5 @@
 import { execFileSync } from "child_process"
-import { randomUUID } from "crypto"
+import { createHash, randomBytes, randomUUID } from "crypto"
 import * as fs from "fs"
 import * as yaml from "js-yaml"
 import * as os from "os"
@@ -422,11 +422,25 @@ export interface TraceContext {
   runUrl?: string
   /** The gateway's edge header. Its name ends the block; the workflow appends the token. */
   edgeHeader?: string
+  /** The W3C parent span ID; random unless a test fixes it. */
+  spanId?: string
 }
+
+const isRepo = (repo?: string): repo is string =>
+  !!repo && /^[\w.-]+\/[\w.-]+$/.test(repo)
+const isPrNumber = (pr?: string): pr is string => !!pr && /^\d+$/.test(pr)
+
+/**
+ * The Phoenix trace ID of a PR's reviews and judge calls: derived from the repo and PR
+ * number, so the merge-time outcome job can annotate the trace without storing an ID.
+ */
+export const prTraceId = (repo: string, pr: string): string =>
+  createHash("sha256").update(`${repo}#${pr}`).digest("hex").slice(0, 32)
 
 /**
  * Headers that label a review's calls in LiteLLM. Tags give spend per repo and job in
- * its UI; spend-logs metadata reaches each Phoenix span, so traces can be found by PR.
+ * its UI; spend-logs metadata reaches each Phoenix span, so traces can be found by PR;
+ * `traceparent` puts every call for the PR in one trace (prTraceId).
  * Values come from the Actions environment and are checked, so none can add a header.
  */
 export const gatewayHeaders = ({
@@ -436,11 +450,13 @@ export const gatewayHeaders = ({
   tier,
   runUrl,
   edgeHeader,
+  spanId = randomBytes(8).toString("hex"),
 }: TraceContext): string => {
-  const safeRepo = repo && /^[\w.-]+\/[\w.-]+$/.test(repo) ? repo : undefined
+  const safeRepo = isRepo(repo) ? repo : undefined
+  const safePr = isPrNumber(pr) ? pr : undefined
   const metadata = {
     repo: safeRepo,
-    pr: pr && /^\d+$/.test(pr) ? Number(pr) : undefined,
+    pr: safePr ? Number(safePr) : undefined,
     job,
     tier,
     run: runUrl && /^https:\/\/[^\s"]+$/.test(runUrl) ? runUrl : undefined,
@@ -450,8 +466,12 @@ export const gatewayHeaders = ({
     `job:${job}`,
     ...(safeRepo ? [`repo:${safeRepo}`] : []),
   ]
+  const trace =
+    safeRepo && safePr
+      ? `\ntraceparent: 00-${prTraceId(safeRepo, safePr)}-${spanId}-01`
+      : ""
   const edge = edgeHeader ? `\n${edgeHeader}: ` : ""
-  return `x-litellm-tags: ${tags.join(",")}\nx-litellm-spend-logs-metadata: ${JSON.stringify(metadata)}${edge}`
+  return `x-litellm-tags: ${tags.join(",")}\nx-litellm-spend-logs-metadata: ${JSON.stringify(metadata)}${trace}${edge}`
 }
 
 const runUrl = (): string | undefined => {

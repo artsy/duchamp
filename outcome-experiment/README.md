@@ -50,7 +50,8 @@ false positive, and `addressed:no` with neither may have been ignored or deferre
 reply or a 👍 never counts as addressed.
 
 Datadog gets numbers and tags only. The job's summary lists each finding's file and
-verdict, never its text.
+verdict, never its text. For reviews in the [LiteLLM experiment](../litellm-experiment/README.md),
+the same counts also go to the PR's Phoenix trace as a `review_outcome` annotation.
 
 ## How it works
 
