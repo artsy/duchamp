@@ -15,6 +15,7 @@ import {
   formatPreamble,
   formatReviewModeOutputs,
   formatSecuritySection,
+  gatewayHeaders,
   hasSecurityLabel,
   inBestPractices,
   inCodex,
@@ -952,6 +953,36 @@ describe("loadGateway", () => {
   it("is undefined without the file", () => {
     mockFs.existsSync.mockReturnValue(false)
     expect(loadGateway()).toBeUndefined()
+  })
+})
+
+describe("gatewayHeaders", () => {
+  it("labels the calls with tags and Phoenix metadata", () => {
+    expect(
+      gatewayHeaders({
+        repo: "artsy/duchamp",
+        pr: "183",
+        job: "review",
+        tier: "light",
+        runUrl: "https://github.com/artsy/duchamp/actions/runs/1",
+      })
+    ).toBe(
+      "x-litellm-tags: ai-review,job:review,repo:artsy/duchamp\n" +
+        'x-litellm-spend-logs-metadata: {"repo":"artsy/duchamp","pr":183,"job":"review","tier":"light","run":"https://github.com/artsy/duchamp/actions/runs/1"}'
+    )
+  })
+
+  it("leaves out values that could break a header", () => {
+    const headers = gatewayHeaders({
+      repo: "artsy/duchamp\nx-evil: 1",
+      pr: "12\n",
+      job: "judge",
+      runUrl: "https://example.com/a b",
+    })
+    expect(headers.split("\n")).toEqual([
+      "x-litellm-tags: ai-review,job:judge",
+      'x-litellm-spend-logs-metadata: {"job":"judge"}',
+    ])
   })
 })
 
