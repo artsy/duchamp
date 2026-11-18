@@ -24,8 +24,8 @@ A review goes through the gateway when both hold:
    ```yaml
    secrets:
      anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-     litellm-api-key: ${{ secrets.LITELLM_API_KEY }}
-     litellm-edge-token: ${{ secrets.LITELLM_EDGE_TOKEN }}
+     litellm-api-key: ${{ secrets.AI_REVIEW_LITELLM_API_KEY }}
+     litellm-edge-token: ${{ secrets.AI_REVIEW_LITELLM_EDGE_TOKEN }}
    ```
 
 Without the key, enrolment does nothing and the review calls Anthropic as before. The
