@@ -267,21 +267,6 @@ const reviewGroup = (experiment: string): string =>
       : "unknown"
 
 /**
- * The model to tag the review with. modelUsage also lists background models, such as
- * Haiku, so this is the one asked for, or the fallback when only the fallback ran.
- */
-export const reviewModel = (modelArgs: string, models: string[]): string => {
-  const asked = modelArgs.match(/--model (\S+)/)?.[1]
-  const fallback = modelArgs.match(/--fallback-model (\S+)/)?.[1]
-  const ran = (model: string): boolean =>
-    models.some(used => used.startsWith(model))
-  if (asked && fallback && !ran(asked) && ran(fallback)) {
-    return fallback
-  }
-  return asked ?? models[0] ?? "unknown"
-}
-
-/**
  * The review's numbers as metrics for volley, which forwards them to Datadog as
  * `ai_pr_review.<name>`. Counters give exact totals; histograms give the spread per
  * review. Tags are what the dashboard splits by. Numbers only, no PR text.
@@ -291,7 +276,11 @@ export const formatVolleyPayload = (
   context: MetricsContext
 ): { serviceName: string; metrics: VolleyMetric[] } => {
   const effort = context.modelArgs.match(/--effort (\S+)/)?.[1]
-  const model = reviewModel(context.modelArgs, usage.models)
+  // modelUsage also lists background models, such as Haiku, so tag the one asked for.
+  const model =
+    context.modelArgs.match(/--model (\S+)/)?.[1] ??
+    usage.models[0] ??
+    "unknown"
   const tags = [
     `repo:${context.repo}`,
     ...(context.prNumber ? [`pr:${context.prNumber}`] : []),
