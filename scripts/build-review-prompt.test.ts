@@ -42,6 +42,7 @@ import {
   parseLabels,
   pickGateway,
   pickReviewMode,
+  prTraceId,
   REVIEW_EFFORT,
   resolveModelArgs,
   resolveRelatedRepos,
@@ -957,7 +958,7 @@ describe("loadGateway", () => {
 })
 
 describe("gatewayHeaders", () => {
-  it("labels the calls with tags and Phoenix metadata", () => {
+  it("labels the calls with tags, Phoenix metadata and the PR's trace", () => {
     expect(
       gatewayHeaders({
         repo: "artsy/duchamp",
@@ -965,11 +966,24 @@ describe("gatewayHeaders", () => {
         job: "review",
         tier: "light",
         runUrl: "https://github.com/artsy/duchamp/actions/runs/1",
+        spanId: "00f067aa0ba902b7",
       })
     ).toBe(
       "x-litellm-tags: ai-review,job:review,repo:artsy/duchamp\n" +
-        'x-litellm-spend-logs-metadata: {"repo":"artsy/duchamp","pr":183,"job":"review","tier":"light","run":"https://github.com/artsy/duchamp/actions/runs/1"}'
+        'x-litellm-spend-logs-metadata: {"repo":"artsy/duchamp","pr":183,"job":"review","tier":"light","run":"https://github.com/artsy/duchamp/actions/runs/1"}\n' +
+        `traceparent: 00-${prTraceId("artsy/duchamp", "183")}-00f067aa0ba902b7-01`
     )
+  })
+
+  it("gives every job a fresh span under the same trace", () => {
+    const traceparent = (job: "review" | "judge") =>
+      gatewayHeaders({ repo: "artsy/duchamp", pr: "183", job })
+        .split("\n")
+        .find(line => line.startsWith("traceparent: "))
+    const [review, judge] = [traceparent("review"), traceparent("judge")]
+    expect(review).toMatch(/^traceparent: 00-[0-9a-f]{32}-[0-9a-f]{16}-01$/)
+    expect(review?.slice(0, 49)).toBe(judge?.slice(0, 49))
+    expect(review).not.toBe(judge)
   })
 
   it("ends with the edge header's name, for the workflow to append the token", () => {

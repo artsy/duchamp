@@ -1,5 +1,6 @@
 import type { ReviewThread, ThreadComment } from "./review-mode"
 import {
+  annotateTrace,
   encodePath,
   type Finding,
   findingsFrom,
@@ -8,9 +9,11 @@ import {
   judgeInput,
   judgeUrl,
   mergeVerdicts,
+  outcomeAnnotation,
   parseCustomHeaders,
   parseSeverity,
   unifiedDiff,
+  type Verdict,
 } from "./review-outcome"
 
 const comment = (
@@ -270,5 +273,96 @@ describe("parseCustomHeaders", () => {
       parseCustomHeaders("X-Edge-Token: abc:def\n\nX-Empty:\nnot a header")
     ).toEqual({ "X-Edge-Token": "abc:def" })
     expect(parseCustomHeaders("")).toEqual({})
+  })
+})
+
+describe("outcomeAnnotation", () => {
+  const verdict = (
+    id: number,
+    addressed: Verdict["addressed"],
+    reply: Verdict["reply"] = "none"
+  ): Verdict => ({ id, addressed, reply })
+
+  it("sums up the findings as counts, never their text", () => {
+    const annotation = outcomeAnnotation(
+      "a".repeat(32),
+      [
+        finding({ reaction: "up" }),
+        finding({ id: 1 }),
+        finding({ id: 2, body: "secret" }),
+      ],
+      [
+        verdict(0, "yes", "agreed"),
+        verdict(1, "no", "dismissed"),
+        verdict(2, "yes"),
+      ]
+    )
+    expect(annotation).toEqual({
+      trace_id: "a".repeat(32),
+      name: "review_outcome",
+      annotator_kind: "LLM",
+      result: {
+        label: "some_addressed",
+        score: 2 / 3,
+        explanation:
+          "3 findings. Addressed: 2 yes, 1 no. Replies: 1 agreed, 1 dismissed, 1 none. Reactions: 1 up, 2 none.",
+      },
+      identifier: "duchamp-outcome",
+      metadata: {
+        findings: 3,
+        addressed: { yes: 2, no: 1 },
+        replies: { agreed: 1, dismissed: 1, none: 1 },
+        reactions: { up: 1, none: 2 },
+      },
+    })
+    expect(JSON.stringify(annotation)).not.toContain("secret")
+  })
+
+  it("labels all or none addressed", () => {
+    const one = [finding()]
+    expect(outcomeAnnotation("t", one, [verdict(0, "yes")]).result.label).toBe(
+      "all_addressed"
+    )
+    expect(
+      outcomeAnnotation("t", one, [verdict(0, "unclear")]).result.label
+    ).toBe("none_addressed")
+  })
+})
+
+describe("annotateTrace", () => {
+  const annotation = outcomeAnnotation(
+    "a".repeat(32),
+    [finding()],
+    [{ id: 0, addressed: "yes", reply: "none" }]
+  )
+  const realFetch = global.fetch
+  afterEach(() => {
+    global.fetch = realFetch
+  })
+
+  it("posts through the gateway's Phoenix route without being traced", async () => {
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true })
+    global.fetch = fetchMock
+    await expect(
+      annotateTrace(annotation, "https://litellm.example.net/")
+    ).resolves.toBe(true)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe("https://litellm.example.net/phoenix/v1/trace_annotations")
+    expect(JSON.parse(init.body)).toEqual({
+      "no-log": true,
+      data: [annotation],
+    })
+  })
+
+  it("returns false instead of failing the job", async () => {
+    jest.spyOn(console, "log").mockImplementation(() => {})
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 403 })
+    await expect(
+      annotateTrace(annotation, "https://x.artsy.net")
+    ).resolves.toBe(false)
+    global.fetch = jest.fn().mockRejectedValue(new Error("timeout"))
+    await expect(
+      annotateTrace(annotation, "https://x.artsy.net")
+    ).resolves.toBe(false)
   })
 })

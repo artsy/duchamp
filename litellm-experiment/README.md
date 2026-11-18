@@ -57,9 +57,19 @@ In LiteLLM's admin UI, for the key the repos use:
 
 - The models the review uses: `claude-opus-5-5`, `claude-sonnet-5-5` and
   `claude-haiku-5-5` (Claude Code's background calls and the judges).
-- `{"phoenix_project_name": "duchamp-review"}` in the key's metadata, so review traces
-  don't mix with other apps'.
+- In the key's metadata, the Phoenix project, so review traces don't mix with other
+  apps', and the Phoenix route the outcome job writes to:
+
+  ```json
+  {
+    "phoenix_project_name": "duchamp-pr-review",
+    "allowed_passthrough_routes": ["/phoenix/v1/trace_annotations"]
+  }
+  ```
+
 - A budget and rate limits.
+
+Tracing needs nothing more: artsy-litellm sends every key's calls to Phoenix.
 
 ## Measuring it
 
@@ -68,6 +78,14 @@ Every gateway call carries two headers that LiteLLM reads. `x-litellm-tags`
 job in LiteLLM's Usage page. `x-litellm-spend-logs-metadata` (repo, PR number, job, tier
 and the Actions run URL) lands in each Phoenix span's metadata, so you can filter traces
 by PR.
+
+Every call for a PR, reviews and judges alike, also carries a `traceparent` whose trace
+ID is a hash of the repo and PR number, so the PR is one trace in Phoenix. When the PR
+merges, the [outcome](../outcome-experiment/README.md) job works out the same ID and
+annotates the trace with `review_outcome`: how many findings were addressed, the replies
+and the reactions, as counts. Filter traces on that annotation to find the reviews whose
+findings were ignored, and read what the model saw. A failed annotation only logs a
+warning.
 
 Datadog tags each review `gateway:litellm` or `gateway:anthropic`. Compare cost, cache
 hit rate, turns, duration, denied tool calls and outcome between the two. Cost stays
