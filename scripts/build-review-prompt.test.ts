@@ -6,7 +6,6 @@ import {
   assessChanges,
   buildPrompt,
   CODEX_LABEL,
-  DEEP_MODEL,
   formatCodexNote,
   formatContextSection,
   formatDelivery,
@@ -19,7 +18,6 @@ import {
   hasSecurityLabel,
   inBestPractices,
   inCodex,
-  inFable,
   inLeanReviews,
   inMergeRisk,
   inMissedFindings,
@@ -260,27 +258,6 @@ describe("resolveModelArgs", () => {
       `--model ${LIGHT_MODEL} --effort ${LIGHT_EFFORT}`
     )
   })
-
-  it("passes the deep model for a deep review in the Fable experiment, with the model as fallback", () => {
-    expect(resolveModelArgs("claude-opus-5-5", "deep", true)).toBe(
-      `--model ${DEEP_MODEL} --fallback-model claude-opus-5-5 --effort high`
-    )
-  })
-
-  it("keeps the model for a deep review outside the Fable experiment", () => {
-    expect(resolveModelArgs("claude-opus-5-5", "deep")).toBe(
-      "--model claude-opus-5-5 --effort high"
-    )
-  })
-
-  it("keeps the usual models for light and standard reviews in the Fable experiment", () => {
-    expect(resolveModelArgs("claude-opus-5-5", "standard", true)).toBe(
-      "--model claude-opus-5-5 --effort high"
-    )
-    expect(resolveModelArgs("claude-opus-5-5", "light", true)).toBe(
-      `--model ${LIGHT_MODEL} --effort ${LIGHT_EFFORT}`
-    )
-  })
 })
 
 describe("reviewRange", () => {
@@ -341,18 +318,6 @@ describe("assessChanges", () => {
       ).tier
     ).toBe("light")
     expect(mockGit.mock.calls[0][1]).toContain(range)
-  })
-
-  it("is deep for a sensitive file", () => {
-    mockGit.mockReturnValue("1\t0\t.github/workflows/ci.yml\n")
-    expect(
-      assessChanges(
-        { review: true, security: false },
-        "claude-opus-5-5",
-        range,
-        []
-      ).tier
-    ).toBe("deep")
   })
 
   it("keeps a model the caller set, and still lists sensitive files", () => {
@@ -904,39 +869,6 @@ describe("inReplies", () => {
     expect(inReplies("someone-else", ["AI-Review-Replies"])).toBe(true)
     expect(inReplies("someone-else", [LEAN_LABEL])).toBe(false)
     expect(inReplies(undefined, [])).toBe(false)
-  })
-})
-
-describe("inFable", () => {
-  beforeEach(() => {
-    jest.clearAllMocks()
-  })
-
-  it("is true for an enrolled author, from its own list", () => {
-    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
-
-    expect(inFable("mounirdhahri", [])).toBe(true)
-    expect(
-      mockFs.readFileSync.mock.calls.map(([p]) => String(p))
-    ).toContainEqual(
-      expect.stringContaining(path.join("fable-experiment", "participants.yml"))
-    )
-  })
-
-  it("is true for a labelled PR, and false otherwise", () => {
-    mockFs.existsSync.mockReturnValue(false)
-
-    expect(inFable("someone-else", ["AI-Review-Fable"])).toBe(true)
-    expect(inFable("someone-else", [LEAN_LABEL])).toBe(false)
-    expect(inFable(undefined, [])).toBe(false)
-  })
-
-  it("is true for every PR in a listed repo, whoever wrote it", () => {
-    mockFiles({ "participants.yml": "repos:\n  - artsy/gravity\n" })
-
-    expect(inFable("someone-else", [], "Artsy/Gravity")).toBe(true)
-    expect(inFable("someone-else", [], "artsy/eigen")).toBe(false)
-    expect(inFable("someone-else", [])).toBe(false)
   })
 })
 

@@ -6,7 +6,6 @@ import {
   type MetricsContext,
   parseReviewUsage,
   type ReviewUsage,
-  reviewModel,
   sendToVolley,
 } from "./review-usage"
 
@@ -264,29 +263,6 @@ describe("formatUsageLogLine", () => {
     expect(formatUsageLogLine(usage, "", "", "")).not.toContain(
       "Secret PR text"
     )
-  })
-})
-
-describe("reviewModel", () => {
-  const args = "--model claude-fable-5-2 --fallback-model claude-opus-5-5"
-
-  it("is the model asked for when it ran", () => {
-    expect(reviewModel(args, ["claude-haiku-5-5", "claude-fable-5-2"])).toBe(
-      "claude-fable-5-2"
-    )
-    expect(reviewModel(args, ["claude-fable-5-2", "claude-opus-5-5"])).toBe(
-      "claude-fable-5-2"
-    )
-  })
-
-  it("is the fallback when only the fallback ran", () => {
-    expect(reviewModel(args, ["claude-haiku-5-5", "claude-opus-5-5"])).toBe(
-      "claude-opus-5-5"
-    )
-  })
-
-  it("is the model asked for when the run lists no models", () => {
-    expect(reviewModel(args, [])).toBe("claude-fable-5-2")
   })
 })
 
