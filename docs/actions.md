@@ -353,6 +353,9 @@ with who each one is on for, past experiments and the PR that introduced each:
   rating in the summary. See `merge-risk-experiment/README.md`.
 - Replies experiment (`ai-review-replies`): re-reviews read the replies to the
   reviewer's earlier inline comments. See `replies-experiment/README.md`.
+- LiteLLM experiment (`ai-review-litellm`): reviews call Claude through Artsy's LiteLLM
+  gateway, traced to Phoenix. Needs the repo to pass `litellm-api-key`. See
+  `litellm-experiment/README.md`.
 - Outcome experiment (`ai-review-outcome`), on for every merged PR in repos that list
   `closed` in the trigger's types: records whether each inline comment was addressed.
   See `outcome-experiment/README.md`.

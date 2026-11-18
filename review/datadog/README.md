@@ -32,7 +32,9 @@ related-repos experiment carry `related_repos` (true when the review read a
 experiment carry `merge_risk` (true when the prompt asked for a
 [Merge Risk block](../../merge-risk-experiment/README.md)). Reviews from after the
 replies experiment carry `replies` (true when a re-review read at least one
-[reply](../../replies-experiment/README.md)). `group:experiment` means
+[reply](../../replies-experiment/README.md)). Reviews from after the
+[LiteLLM experiment](../../litellm-experiment/README.md) carry `gateway` (`litellm` or
+`anthropic`). `group:experiment` means
 [lean reviews](../../lean-reviews-experiment/README.md), which was called the review
 experiment when the tag was added; the value stays so the dashboard's history lines
 up. Before related repos split out, those reviews also read related repos.

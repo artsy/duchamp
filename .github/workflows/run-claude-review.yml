@@ -10,3 +10,6 @@ jobs:
     uses: artsy/duchamp/.github/workflows/claude-review.yml@main
     secrets:
       anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+      # The LiteLLM experiment; empty until the secrets exist, and then reviews in it use the gateway.
+      litellm-api-key: ${{ secrets.AI_REVIEW_LITELLM_API_KEY }}
+      litellm-edge-token: ${{ secrets.AI_REVIEW_LITELLM_EDGE_TOKEN }}

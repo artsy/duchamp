@@ -21,7 +21,7 @@ import { sendToVolley, type VolleyMetric } from "./review-usage"
  */
 
 const JUDGE_MODEL = "claude-haiku-5-5"
-const JUDGE_URL = "https://api.anthropic.com/v1/messages"
+const ANTHROPIC_URL = "https://api.anthropic.com"
 const JUDGE_TIMEOUT_MS = 120_000
 const MAX_FINDINGS = 50
 const MAX_BODY_CHARS = 1_500
@@ -286,6 +286,25 @@ interface JudgeResponse {
   content?: { type: string; text?: string }[]
 }
 
+/** Anthropic's Messages API, or the gateway's when the LiteLLM experiment sets ANTHROPIC_BASE_URL. */
+export const judgeUrl = (baseUrl = process.env.ANTHROPIC_BASE_URL): string =>
+  `${(baseUrl || ANTHROPIC_URL).replace(/\/+$/, "")}/v1/messages`
+
+/**
+ * ANTHROPIC_CUSTOM_HEADERS, as Claude Code reads it: one `Name: value` per line. The
+ * judges send the same headers as the review, such as the gateway's edge token.
+ */
+export const parseCustomHeaders = (
+  raw = process.env.ANTHROPIC_CUSTOM_HEADERS ?? ""
+): Record<string, string> =>
+  Object.fromEntries(
+    raw
+      .split("\n")
+      .map(line => line.match(/^\s*([A-Za-z0-9-]+)\s*:\s*(.*?)\s*$/))
+      .filter((match): match is RegExpMatchArray => !!match && !!match[2])
+      .map(match => [match[1], match[2]])
+  )
+
 /**
  * One structured answer from the judge model, or null when it stopped early or wasn't
  * JSON. A plain request, not the SDK: other repos install this tooling under their own
@@ -296,9 +315,10 @@ export const askJudge = async (
   content: string,
   schema: Record<string, unknown>
 ): Promise<unknown> => {
-  const response = await fetch(JUDGE_URL, {
+  const response = await fetch(judgeUrl(), {
     method: "POST",
     headers: {
+      ...parseCustomHeaders(),
       "content-type": "application/json",
       "x-api-key": process.env.ANTHROPIC_API_KEY ?? "",
       "anthropic-version": "2023-06-01",

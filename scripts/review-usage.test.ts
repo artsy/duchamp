@@ -6,6 +6,7 @@ import {
   type MetricsContext,
   parseReviewUsage,
   type ReviewUsage,
+  reviewModel,
   sendToVolley,
 } from "./review-usage"
 
@@ -263,6 +264,25 @@ describe("formatUsageLogLine", () => {
     expect(formatUsageLogLine(usage, "", "", "")).not.toContain(
       "Secret PR text"
     )
+  })
+})
+
+describe("reviewModel", () => {
+  it("tags a gateway review with the model alone, without quotes or [1m]", () => {
+    expect(
+      reviewModel('--model "claude-opus-5-5[1m]" --effort high', [
+        "claude-haiku-5-5",
+        "claude-opus-5-5",
+      ])
+    ).toBe("claude-opus-5-5")
+  })
+
+  it("is the model asked for, or the first that ran without one", () => {
+    expect(reviewModel("--model claude-opus-5-5", ["claude-haiku-5-5"])).toBe(
+      "claude-opus-5-5"
+    )
+    expect(reviewModel("", ["claude-sonnet-5-5"])).toBe("claude-sonnet-5-5")
+    expect(reviewModel("", [])).toBe("unknown")
   })
 })
 

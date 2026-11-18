@@ -767,6 +767,68 @@
                 }
               ]
             }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Cost per review (USD): through LiteLLM or direct to Anthropic",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {gateway}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {gateway}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c / r / 100",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Cache hit rate (median): through LiteLLM or direct to Anthropic",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "h",
+                      "query": "avg:ai_pr_review.cache_hit_rate.median{$repo,$group,$mode,$model,$pr} by {gateway}",
+                      "aggregator": "avg"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "h",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
           }
         ]
       }

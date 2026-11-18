@@ -91,6 +91,9 @@ export const MERGE_RISK_LABEL = "ai-review-merge-risk"
 /** Label that opts a single PR into the Codex experiment. */
 export const CODEX_LABEL = "ai-review-codex"
 
+/** Label that opts a single PR into the LiteLLM experiment, in a repo that passes the key. */
+export const LITELLM_LABEL = "ai-review-litellm"
+
 export const DEFAULT_MODEL = "claude-opus-5-5"
 
 export const REVIEW_EFFORT = "high"
@@ -340,14 +343,92 @@ export const inCodex = (
   (!!author &&
     loadParticipants("codex-experiment").includes(author.toLowerCase()))
 
-/** Claude Code CLI flags that select the model for this review. */
+/**
+ * Whether this review is in the LiteLLM experiment: listed authors, every PR in a listed
+ * repo, and labelled PRs. It goes through the gateway only when pickGateway agrees.
+ */
+export const inLiteLLM = (
+  author: string | undefined,
+  labels: string[],
+  repo?: string
+): boolean =>
+  labels.some(label => label.toLowerCase() === LITELLM_LABEL) ||
+  (!!author &&
+    loadParticipants("litellm-experiment").includes(author.toLowerCase())) ||
+  (!!repo &&
+    loadEnrolment("litellm-experiment", "repos").includes(repo.toLowerCase()))
+
+export interface Gateway {
+  baseUrl: string
+  /** The header the gateway's edge check reads; the caller's litellm-edge-token is its value. */
+  edgeHeader?: string
+}
+
+/** Hosts the gateway can be on. Enrolled repos send their LiteLLM key and diffs there. */
+const GATEWAY_HOST = /(^|\.)artsy\.net$/
+
+/**
+ * The gateway in litellm-experiment/participants.yml. Undefined unless `base_url` is an
+ * https URL on artsy.net, so a typo or a bad edit sends reviews to Anthropic instead of
+ * handing the key to another host.
+ */
+export const loadGateway = (): Gateway | undefined => {
+  const file = loadParticipantsFile("litellm-experiment")
+  const baseUrl =
+    typeof file?.base_url === "string"
+      ? file.base_url.trim().replace(/\/+$/, "")
+      : ""
+  if (!/^https:\/\/[^\s/]+(\/\S*)?$/.test(baseUrl)) {
+    return undefined
+  }
+  let host: string
+  try {
+    const url = new URL(baseUrl)
+    if (url.username || url.password || url.port) {
+      return undefined
+    }
+    host = url.hostname
+  } catch {
+    return undefined
+  }
+  if (!GATEWAY_HOST.test(host)) {
+    return undefined
+  }
+  const edgeHeader =
+    typeof file?.edge_header === "string" &&
+    /^[A-Za-z0-9-]+$/.test(file.edge_header)
+      ? file.edge_header
+      : undefined
+  return edgeHeader ? { baseUrl, edgeHeader } : { baseUrl }
+}
+
+/**
+ * The gateway this review goes through: only when the PR is in the experiment and the
+ * caller passed `litellm-api-key`. Otherwise the review calls Anthropic directly.
+ */
+export const pickGateway = (
+  inExperiment: boolean,
+  hasKey: boolean,
+  gateway: Gateway | undefined = inExperiment && hasKey
+    ? loadGateway()
+    : undefined
+): Gateway | undefined => (inExperiment && hasKey ? gateway : undefined)
+
+/**
+ * Claude Code CLI flags that select the model for this review. Through a gateway, Claude Code can't tell the model has a 1M context window and
+ * budgets 200K, so the model names carry the `[1m]` selector.
+ */
 export const resolveModelArgs = (
   model: string,
-  tier: ReviewTier = "standard"
-): string =>
-  tier === "light"
-    ? `--model ${LIGHT_MODEL} --effort ${LIGHT_EFFORT}`
-    : `--model ${model} --effort ${REVIEW_EFFORT}`
+  tier: ReviewTier = "standard",
+  gateway = false
+): string => {
+  const name = (id: string): string => (gateway ? `"${id}[1m]"` : id)
+  if (tier === "light") {
+    return `--model ${name(LIGHT_MODEL)} --effort ${LIGHT_EFFORT}`
+  }
+  return `--model ${name(model)} --effort ${REVIEW_EFFORT}`
+}
 
 const FULL_REVIEW: ReviewMode = { mode: "full", reason: "" }
 
@@ -889,19 +970,29 @@ const main = (): void => {
   const mergeRisk = inMergeRisk(process.env.PR_AUTHOR, labels)
   const replies = inReplies(process.env.PR_AUTHOR, labels)
   const codex = inCodex(process.env.PR_AUTHOR, labels)
+  const litellm = inLiteLLM(
+    process.env.PR_AUTHOR,
+    labels,
+    process.env.GITHUB_REPOSITORY
+  )
+  const gateway = pickGateway(litellm, process.env.HAS_LITELLM_KEY === "true")
 
-  // Lets the workflow skip minting the related repos token, and size the job for Codex.
+  // Lets the workflow skip minting the related repos token, size the job for Codex,
+  // and point the review and the judges at the gateway.
   if (process.argv.includes("--check-experiment")) {
     const outputPath = process.env.GITHUB_OUTPUT
     if (outputPath) {
       fs.appendFileSync(
         outputPath,
-        `experiment=${inLean}\nrelated_repos=${inRelatedRepos}\ncodex=${codex}\n`
+        `experiment=${inLean}\nrelated_repos=${inRelatedRepos}\ncodex=${codex}\nlitellm=${gateway !== undefined}\nlitellm_base_url=${gateway?.baseUrl ?? ""}\nlitellm_edge_header=${gateway?.edgeHeader ?? ""}\n`
       )
     }
     console.log(`Lean reviews experiment: ${inLean}`)
     console.log(`Related repos: ${inRelatedRepos}`)
     console.log(`Codex: ${codex}`)
+    console.log(
+      `LiteLLM: ${gateway ? gateway.baseUrl : litellm ? "in the experiment, but no litellm-api-key or base_url" : false}`
+    )
     return
   }
 
@@ -1018,7 +1109,10 @@ const main = (): void => {
     },
     inLean
   )
-  const modelArgs = [resolveModelArgs(model, changes.tier), addDirArgs(related)]
+  const modelArgs = [
+    resolveModelArgs(model, changes.tier, gateway !== undefined),
+    addDirArgs(related),
+  ]
     .filter(Boolean)
     .join(" ")
   const codexFiles = codex ? writeCodexPrompt(prompt) : undefined
@@ -1030,7 +1124,7 @@ const main = (): void => {
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\nreplies=${repliesRead}\ncodex=${codexFiles !== undefined}\ncodex_prompt_file=${codexFiles?.promptFile ?? ""}\ncodex_pr_file=${codexFiles?.prFile ?? ""}\n${formatReviewModeOutputs(context.reviewMode)}`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\nreplies=${repliesRead}\ncodex=${codexFiles !== undefined}\ncodex_prompt_file=${codexFiles?.promptFile ?? ""}\ncodex_pr_file=${codexFiles?.prFile ?? ""}\ngateway=${gateway ? "litellm" : "anthropic"}\n${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {

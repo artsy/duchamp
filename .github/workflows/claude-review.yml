@@ -11,6 +11,12 @@ on:
       openai-api-key:
         description: "OpenAI API key for the Codex experiment's second review. Without it, only Claude reviews"
         required: false
+      litellm-api-key:
+        description: "LiteLLM virtual key for the LiteLLM experiment. Without it, reviews call Anthropic directly"
+        required: false
+      litellm-edge-token:
+        description: "Value of the LiteLLM gateway's edge header, once it has one (see litellm-experiment/README.md)"
+        required: false
     inputs:
       model:
         description: "Claude model to use for the review"
@@ -67,12 +73,23 @@ jobs:
         env:
           YARN_IGNORE_PATH: 1
 
+      # The judges go through the same gateway as the review, in the LiteLLM experiment.
+      - name: Check experiments
+        id: experiment
+        run: npx ts-node .tooling/scripts/build-review-prompt.ts --check-experiment
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          HAS_LITELLM_KEY: ${{ secrets.litellm-api-key != '' }}
+
       - name: Measure review outcome
         run: npx ts-node .tooling/scripts/review-outcome.ts
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ github.token }}
-          ANTHROPIC_API_KEY: ${{ secrets.anthropic-api-key }}
+          ANTHROPIC_API_KEY: ${{ steps.experiment.outputs.litellm == 'true' && secrets.litellm-api-key || secrets.anthropic-api-key }}
+          ANTHROPIC_BASE_URL: ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_base_url || '' }}
+          ANTHROPIC_CUSTOM_HEADERS: "${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token != '' && format('{0}: {1}', steps.experiment.outputs.litellm_edge_header, secrets.litellm-edge-token) || '' }}"
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report
 
@@ -82,7 +99,9 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ github.token }}
-          ANTHROPIC_API_KEY: ${{ secrets.anthropic-api-key }}
+          ANTHROPIC_API_KEY: ${{ steps.experiment.outputs.litellm == 'true' && secrets.litellm-api-key || secrets.anthropic-api-key }}
+          ANTHROPIC_BASE_URL: ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_base_url || '' }}
+          ANTHROPIC_CUSTOM_HEADERS: "${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token != '' && format('{0}: {1}', steps.experiment.outputs.litellm_edge_header, secrets.litellm-edge-token) || '' }}"
           VOLLEY_URL: https://volley.artsy.net/report
 
   check:
@@ -244,9 +263,10 @@ jobs:
       contents: write  # Required for resolveReviewThread GraphQL mutation
       pull-requests: write
       id-token: write
-    # Step conditions can't read secrets, so this says whether the caller passed the key.
+    # Step conditions and scripts can't read secrets, so these say whether the caller passed the keys.
     env:
       HAS_OPENAI_KEY: ${{ secrets.openai-api-key != '' }}
+      HAS_LITELLM_KEY: ${{ secrets.litellm-api-key != '' }}
 
     steps:
       - name: Checkout PR branch
@@ -354,12 +374,17 @@ jobs:
           PR_FILE: ${{ steps.prompt.outputs.codex_pr_file }}
           GH_TOKEN: ${{ github.token }}
 
+      # In the LiteLLM experiment, Claude Code calls the gateway with the LiteLLM key, and
+      # sends the edge header when the gateway has one. See litellm-experiment/README.md.
       - name: Run Claude Code Review
         id: review
         if: steps.prompt.outputs.review_mode != 'skip'
         uses: anthropics/claude-code-action@v1
+        env:
+          ANTHROPIC_BASE_URL: ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_base_url || '' }}
+          ANTHROPIC_CUSTOM_HEADERS: "${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token != '' && format('{0}: {1}', steps.experiment.outputs.litellm_edge_header, secrets.litellm-edge-token) || '' }}"
         with:
-          anthropic_api_key: ${{ secrets.anthropic-api-key }}
+          anthropic_api_key: ${{ steps.experiment.outputs.litellm == 'true' && secrets.litellm-api-key || secrets.anthropic-api-key }}
           # tool_args decide who posts the summary: see formatDelivery in build-review-prompt.ts.
           claude_args: >-
             ${{ steps.prompt.outputs.model_args }}
@@ -392,6 +417,7 @@ jobs:
           RELATED_REPOS: ${{ steps.prompt.outputs.related_repos_read }}
           MERGE_RISK: ${{ steps.prompt.outputs.merge_risk }}
           REPLIES: ${{ steps.prompt.outputs.replies }}
+          GATEWAY: ${{ steps.prompt.outputs.gateway }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report

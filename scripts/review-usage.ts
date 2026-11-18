@@ -248,6 +248,7 @@ export interface MetricsContext {
   relatedRepos?: string
   mergeRisk?: string
   replies?: string
+  gateway?: string
 }
 
 export type VolleyMetric =
@@ -267,6 +268,19 @@ const reviewGroup = (experiment: string): string =>
       : "unknown"
 
 /**
+ * The model to tag the review with. modelUsage also lists background models, such as
+ * Haiku, so this is the one asked for. Gateway reviews quote it and add the [1m]
+ * selector; the tag is the model alone.
+ */
+export const reviewModel = (modelArgs: string, models: string[]): string =>
+  modelArgs
+    .match(/--model (\S+)/)?.[1]
+    ?.replace(/^"|"$/g, "")
+    .replace(/\[1m\]$/, "") ??
+  models[0] ??
+  "unknown"
+
+/**
  * The review's numbers as metrics for volley, which forwards them to Datadog as
  * `ai_pr_review.<name>`. Counters give exact totals; histograms give the spread per
  * review. Tags are what the dashboard splits by. Numbers only, no PR text.
@@ -276,11 +290,7 @@ export const formatVolleyPayload = (
   context: MetricsContext
 ): { serviceName: string; metrics: VolleyMetric[] } => {
   const effort = context.modelArgs.match(/--effort (\S+)/)?.[1]
-  // modelUsage also lists background models, such as Haiku, so tag the one asked for.
-  const model =
-    context.modelArgs.match(/--model (\S+)/)?.[1] ??
-    usage.models[0] ??
-    "unknown"
+  const model = reviewModel(context.modelArgs, usage.models)
   const tags = [
     `repo:${context.repo}`,
     ...(context.prNumber ? [`pr:${context.prNumber}`] : []),
@@ -296,6 +306,7 @@ export const formatVolleyPayload = (
     ...(context.relatedRepos ? [`related_repos:${context.relatedRepos}`] : []),
     ...(context.mergeRisk ? [`merge_risk:${context.mergeRisk}`] : []),
     ...(context.replies ? [`replies:${context.replies}`] : []),
+    ...(context.gateway ? [`gateway:${context.gateway}`] : []),
   ]
   const histogram = (name: string, value: number): VolleyMetric => ({
     type: "histogram",
@@ -502,6 +513,7 @@ const main = async (): Promise<void> => {
       relatedRepos: process.env.RELATED_REPOS,
       mergeRisk: process.env.MERGE_RISK,
       replies: process.env.REPLIES,
+      gateway: process.env.GATEWAY,
     }),
     process.env.VOLLEY_URL
   )
