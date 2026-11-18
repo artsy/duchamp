@@ -414,6 +414,68 @@ export const pickGateway = (
     : undefined
 ): Gateway | undefined => (inExperiment && hasKey ? gateway : undefined)
 
+export interface TraceContext {
+  repo?: string
+  pr?: string
+  job: "review" | "judge"
+  tier?: ReviewTier
+  runUrl?: string
+}
+
+/**
+ * Headers that label a review's calls in LiteLLM. Tags give spend per repo and job in
+ * its UI; spend-logs metadata reaches each Phoenix span, so traces can be found by PR.
+ * Values come from the Actions environment and are checked, so none can add a header.
+ */
+export const gatewayHeaders = ({
+  repo,
+  pr,
+  job,
+  tier,
+  runUrl,
+}: TraceContext): string => {
+  const safeRepo = repo && /^[\w.-]+\/[\w.-]+$/.test(repo) ? repo : undefined
+  const metadata = {
+    repo: safeRepo,
+    pr: pr && /^\d+$/.test(pr) ? Number(pr) : undefined,
+    job,
+    tier,
+    run: runUrl && /^https:\/\/[^\s"]+$/.test(runUrl) ? runUrl : undefined,
+  }
+  const tags = [
+    "ai-review",
+    `job:${job}`,
+    ...(safeRepo ? [`repo:${safeRepo}`] : []),
+  ]
+  return `x-litellm-tags: ${tags.join(",")}\nx-litellm-spend-logs-metadata: ${JSON.stringify(metadata)}`
+}
+
+const runUrl = (): string | undefined => {
+  const { GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_RUN_ID } = process.env
+  return GITHUB_SERVER_URL && GITHUB_REPOSITORY && GITHUB_RUN_ID
+    ? `${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}`
+    : undefined
+}
+
+/** The `litellm_headers` step output: gatewayHeaders through a gateway, else empty. */
+const headersOutput = (
+  gateway: Gateway | undefined,
+  job: TraceContext["job"],
+  tier?: ReviewTier
+): string => {
+  const headers = gateway
+    ? gatewayHeaders({
+        repo: process.env.GITHUB_REPOSITORY,
+        pr: process.env.PR_NUMBER,
+        job,
+        tier,
+        runUrl: runUrl(),
+      })
+    : ""
+  const delimiter = `EOF_${randomUUID()}`
+  return `litellm_headers<<${delimiter}\n${headers}\n${delimiter}\n`
+}
+
 /**
  * Claude Code CLI flags that select the model for this review. Through a gateway, Claude Code can't tell the model has a 1M context window and
  * budgets 200K, so the model names carry the `[1m]` selector.
@@ -984,7 +1046,7 @@ const main = (): void => {
     if (outputPath) {
       fs.appendFileSync(
         outputPath,
-        `experiment=${inLean}\nrelated_repos=${inRelatedRepos}\ncodex=${codex}\nlitellm=${gateway !== undefined}\nlitellm_base_url=${gateway?.baseUrl ?? ""}\nlitellm_edge_header=${gateway?.edgeHeader ?? ""}\n`
+        `experiment=${inLean}\nrelated_repos=${inRelatedRepos}\ncodex=${codex}\nlitellm=${gateway !== undefined}\nlitellm_base_url=${gateway?.baseUrl ?? ""}\nlitellm_edge_header=${gateway?.edgeHeader ?? ""}\n${headersOutput(gateway, "judge")}`
       )
     }
     console.log(`Lean reviews experiment: ${inLean}`)
@@ -1124,7 +1186,7 @@ const main = (): void => {
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\nreplies=${repliesRead}\ncodex=${codexFiles !== undefined}\ncodex_prompt_file=${codexFiles?.promptFile ?? ""}\ncodex_pr_file=${codexFiles?.prFile ?? ""}\ngateway=${gateway ? "litellm" : "anthropic"}\n${formatReviewModeOutputs(context.reviewMode)}`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\nreplies=${repliesRead}\ncodex=${codexFiles !== undefined}\ncodex_prompt_file=${codexFiles?.promptFile ?? ""}\ncodex_pr_file=${codexFiles?.prFile ?? ""}\ngateway=${gateway ? "litellm" : "anthropic"}\n${headersOutput(gateway, "review", changes.tier)}${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {

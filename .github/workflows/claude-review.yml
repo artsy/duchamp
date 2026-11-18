@@ -80,6 +80,7 @@ jobs:
         env:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           HAS_LITELLM_KEY: ${{ secrets.litellm-api-key != '' }}
 
       - name: Measure review outcome
@@ -89,7 +90,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ANTHROPIC_API_KEY: ${{ steps.experiment.outputs.litellm == 'true' && secrets.litellm-api-key || secrets.anthropic-api-key }}
           ANTHROPIC_BASE_URL: ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_base_url || '' }}
-          ANTHROPIC_CUSTOM_HEADERS: "${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token != '' && format('{0}: {1}', steps.experiment.outputs.litellm_edge_header, secrets.litellm-edge-token) || '' }}"
+          ANTHROPIC_CUSTOM_HEADERS: |-
+            ${{ steps.experiment.outputs.litellm_headers }}
+            ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token != '' && format('{0}: {1}', steps.experiment.outputs.litellm_edge_header, secrets.litellm-edge-token) || '' }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report
 
@@ -101,7 +104,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ANTHROPIC_API_KEY: ${{ steps.experiment.outputs.litellm == 'true' && secrets.litellm-api-key || secrets.anthropic-api-key }}
           ANTHROPIC_BASE_URL: ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_base_url || '' }}
-          ANTHROPIC_CUSTOM_HEADERS: "${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token != '' && format('{0}: {1}', steps.experiment.outputs.litellm_edge_header, secrets.litellm-edge-token) || '' }}"
+          ANTHROPIC_CUSTOM_HEADERS: |-
+            ${{ steps.experiment.outputs.litellm_headers }}
+            ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token != '' && format('{0}: {1}', steps.experiment.outputs.litellm_edge_header, secrets.litellm-edge-token) || '' }}
           VOLLEY_URL: https://volley.artsy.net/report
 
   check:
@@ -374,15 +379,18 @@ jobs:
           PR_FILE: ${{ steps.prompt.outputs.codex_pr_file }}
           GH_TOKEN: ${{ github.token }}
 
-      # In the LiteLLM experiment, Claude Code calls the gateway with the LiteLLM key, and
-      # sends the edge header when the gateway has one. See litellm-experiment/README.md.
+      # In the LiteLLM experiment, Claude Code calls the gateway with the LiteLLM key, labels
+      # each call with the repo, PR and tier, and sends the edge header when the gateway
+      # has one. See litellm-experiment/README.md.
       - name: Run Claude Code Review
         id: review
         if: steps.prompt.outputs.review_mode != 'skip'
         uses: anthropics/claude-code-action@v1
         env:
           ANTHROPIC_BASE_URL: ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_base_url || '' }}
-          ANTHROPIC_CUSTOM_HEADERS: "${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token != '' && format('{0}: {1}', steps.experiment.outputs.litellm_edge_header, secrets.litellm-edge-token) || '' }}"
+          ANTHROPIC_CUSTOM_HEADERS: |-
+            ${{ steps.prompt.outputs.litellm_headers }}
+            ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token != '' && format('{0}: {1}', steps.experiment.outputs.litellm_edge_header, secrets.litellm-edge-token) || '' }}
         with:
           anthropic_api_key: ${{ steps.experiment.outputs.litellm == 'true' && secrets.litellm-api-key || secrets.anthropic-api-key }}
           # tool_args decide who posts the summary: see formatDelivery in build-review-prompt.ts.

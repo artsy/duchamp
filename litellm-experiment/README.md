@@ -63,6 +63,12 @@ In LiteLLM's admin UI, for the key the repos use:
 
 ## Measuring it
 
+Every gateway call carries two headers that LiteLLM reads. `x-litellm-tags`
+(`ai-review`, `job:review` or `job:judge`, `repo:<owner/name>`) splits spend by repo and
+job in LiteLLM's Usage page. `x-litellm-spend-logs-metadata` (repo, PR number, job, tier
+and the Actions run URL) lands in each Phoenix span's metadata, so you can filter traces
+by PR.
+
 Datadog tags each review `gateway:litellm` or `gateway:anthropic`. Compare cost, cache
 hit rate, turns, duration, denied tool calls and outcome between the two. Cost stays
 comparable: Claude Code works it out from token counts, whichever way the calls went.
