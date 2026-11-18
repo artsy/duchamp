@@ -90,9 +90,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ANTHROPIC_API_KEY: ${{ steps.experiment.outputs.litellm == 'true' && secrets.litellm-api-key || secrets.anthropic-api-key }}
           ANTHROPIC_BASE_URL: ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_base_url || '' }}
-          ANTHROPIC_CUSTOM_HEADERS: |-
-            ${{ steps.experiment.outputs.litellm_headers }}
-            ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token != '' && format('{0}: {1}', steps.experiment.outputs.litellm_edge_header, secrets.litellm-edge-token) || '' }}
+          ANTHROPIC_CUSTOM_HEADERS: ${{ steps.experiment.outputs.litellm == 'true' && format('{0}{1}', steps.experiment.outputs.litellm_headers, steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token || '') || '' }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report
 
@@ -104,9 +102,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ANTHROPIC_API_KEY: ${{ steps.experiment.outputs.litellm == 'true' && secrets.litellm-api-key || secrets.anthropic-api-key }}
           ANTHROPIC_BASE_URL: ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_base_url || '' }}
-          ANTHROPIC_CUSTOM_HEADERS: |-
-            ${{ steps.experiment.outputs.litellm_headers }}
-            ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token != '' && format('{0}: {1}', steps.experiment.outputs.litellm_edge_header, secrets.litellm-edge-token) || '' }}
+          ANTHROPIC_CUSTOM_HEADERS: ${{ steps.experiment.outputs.litellm == 'true' && format('{0}{1}', steps.experiment.outputs.litellm_headers, steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token || '') || '' }}
           VOLLEY_URL: https://volley.artsy.net/report
 
   check:
@@ -388,9 +384,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         env:
           ANTHROPIC_BASE_URL: ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_base_url || '' }}
-          ANTHROPIC_CUSTOM_HEADERS: |-
-            ${{ steps.prompt.outputs.litellm_headers }}
-            ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token != '' && format('{0}: {1}', steps.experiment.outputs.litellm_edge_header, secrets.litellm-edge-token) || '' }}
+          ANTHROPIC_CUSTOM_HEADERS: ${{ steps.experiment.outputs.litellm == 'true' && format('{0}{1}', steps.prompt.outputs.litellm_headers, steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token || '') || '' }}
         with:
           anthropic_api_key: ${{ steps.experiment.outputs.litellm == 'true' && secrets.litellm-api-key || secrets.anthropic-api-key }}
           # tool_args decide who posts the summary: see formatDelivery in build-review-prompt.ts.
