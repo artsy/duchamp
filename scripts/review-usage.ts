@@ -18,6 +18,7 @@ interface Usage {
 interface ResultMessage {
   type: "result"
   subtype?: string
+  is_error?: boolean
   duration_ms?: number
   num_turns?: number
   total_cost_usd?: number
@@ -158,7 +159,9 @@ export const parseReviewUsage = (content: string): ReviewUsage | null => {
 
   const usage = result.usage ?? {}
   return {
-    outcome: result.subtype ?? "unknown",
+    // Claude Code can end with subtype "success" and is_error, as when the API rejects
+    // the key before the first turn.
+    outcome: result.is_error ? "error" : (result.subtype ?? "unknown"),
     models: Object.keys(result.modelUsage ?? {}),
     costUsd: result.total_cost_usd ?? 0,
     turns: result.num_turns ?? 0,
