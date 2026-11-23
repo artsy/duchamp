@@ -176,6 +176,25 @@ describe("parseReviewUsage", () => {
     })
   })
 
+  it("reports an error when Claude Code flags one, even with subtype success", () => {
+    const usage = parseReviewUsage(
+      executionFile(
+        { type: "system", subtype: "init", model: "claude-opus-5-5" },
+        {
+          type: "result",
+          subtype: "success",
+          is_error: true,
+          duration_ms: 148,
+          num_turns: 1,
+          total_cost_usd: 0,
+          modelUsage: {},
+        }
+      )
+    )
+
+    expect(usage).toMatchObject({ outcome: "error", costUsd: 0, turns: 1 })
+  })
+
   it("returns null without a result entry", () => {
     expect(
       parseReviewUsage(executionFile({ type: "system", subtype: "init" }))
