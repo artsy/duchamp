@@ -33,7 +33,7 @@ Leaving is the same in reverse: remove your login, or drop the label.
 
 ## What is measured
 
-One `ai_pr_review.findings` count per inline comment from Claude or Codex, with these
+One `ai_pr_review.findings` count per inline comment from Claude, Codex or Gemini, with these
 tags:
 
 | Tag | Values | Source |
@@ -42,7 +42,7 @@ tags:
 | `reaction` | up, down, none | Emoji on the comment: 👍 ❤️ 🎉 🚀 count as up, 👎 as down. A 👎 wins over the others |
 | `reply` | dismissed, agreed, other, none | what people replied, labelled by the judge. "This is not a problem" is `dismissed`, "good find" is `agreed` |
 | `severity` | blocking, required, nit, question, none | the comment's marker (🔴 🟠 🔵 ⚪) |
-| `reviewer` | claude, codex | who posted it |
+| `reviewer` | claude, codex, gemini | who posted it |
 
 `addressed` is the main number, because it needs nobody to do anything. Reactions and
 replies are a second opinion: `addressed:no` with `reply:dismissed` or a 👎 is a likely

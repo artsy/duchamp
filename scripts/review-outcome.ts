@@ -91,7 +91,7 @@ const reactionOf = (
 }
 
 /**
- * The inline comments Claude and Codex opened, with what people did on each. Only replies
+ * The inline comments Claude, Codex and Gemini opened, with what people did on each. Only replies
  * from the PR's author or people with write access are kept.
  */
 export const findingsFrom = (
@@ -106,9 +106,9 @@ export const findingsFrom = (
       }
       const extra =
         first.author.login === ACTIONS_LOGIN
-          ? (Object.keys(EXTRA_PREFIXES) as (keyof typeof EXTRA_PREFIXES)[]).find(
-              name => first.body.startsWith(EXTRA_PREFIXES[name])
-            )
+          ? (
+              Object.keys(EXTRA_PREFIXES) as (keyof typeof EXTRA_PREFIXES)[]
+            ).find(name => first.body.startsWith(EXTRA_PREFIXES[name]))
           : undefined
       const reviewer =
         first.author.login === CLAUDE_LOGIN ? ("claude" as const) : extra

@@ -19,7 +19,8 @@ comment, "AI reviews: Claude | Codex", with two columns:
 
 A new push replaces the side-by-side comment and resolves both reviewers' earlier
 inline threads. If one review fails, its column says so. `scripts/post-side-by-side.ts`
-does the posting.
+does the posting, in the `side-by-side` job after the review. When the PR is also in the
+[Gemini experiment](../gemini-experiment/README.md), the comment gets a third column.
 
 ## Joining
 
@@ -67,7 +68,8 @@ The Codex steps are the last in the `review` job, so they reuse the checkout, th
 related repo clones and the installed skills. `openai/codex-action@v1` runs with
 `sandbox: read-only`, the default `drop-sudo` safety strategy, `gpt-6.1-terra` and
 `high` effort, like Claude. The model is named so a new Codex release can't change it. Codex runs even when Claude's review failed, and its
-failures don't turn the review check red.
+failures don't turn the review check red. Its JSON goes to the `side-by-side` job as an
+artifact, and that job posts it.
 
 Before Codex starts, the workflow removes the job's GitHub token from both checkouts'
 `.git/config`, so Codex can't read it and print it into its comment.

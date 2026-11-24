@@ -1,0 +1,109 @@
+# Gemini experiment
+
+An opt-in addition to the [AI PR review](../review/README.md). PRs in it get a second
+review from Gemini Neon 4, run in Google's Antigravity CLI (`agy`), from the same prompt
+and the same commit as Claude's. One comment shows the reviews side by side, and
+Datadog tags every review by who wrote it, so the two can be compared on findings, cost
+and speed. It is separate from the other [experiments](../review/experiments.md): a PR
+can be in any mix of them.
+
+Gemini runs in Google's own tool, so this compares Gemini-in-Antigravity with
+Opus-in-Claude-Code: model and tool together. Google uses headless Antigravity for its
+own GitHub PR reviews.
+
+## What the PR shows
+
+Claude's review is unchanged. Gemini's inline comments sit on the diff too, posted by
+github-actions[bot] and starting with **Gemini:**. Then one comment, "AI reviews: Claude
+| Gemini" (or "Claude | Codex | Gemini" when the PR is also in the
+[Codex experiment](../codex-experiment/README.md)), with a column per reviewer: its
+summary, then one line per inline comment with its `file:line`, then any it aimed at a
+line outside the diff. If a review failed, its column says so. A new push replaces the
+comment and resolves the earlier **Gemini:** threads.
+
+## Joining
+
+1. **The repo passes the LiteLLM key.** Gemini goes through Artsy's LiteLLM gateway, with
+   the key repos in the [LiteLLM experiment](../litellm-experiment/README.md) already
+   pass. No other secret, and no change to the repo's `run-claude-review.yml`:
+
+   ```yaml
+   secrets:
+     anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+     litellm-api-key: ${{ secrets.AI_REVIEW_LITELLM_API_KEY }}
+   ```
+
+2. **Enrol.** Add your GitHub login to `participants.yml` and open a PR. Case does not
+   matter.
+3. **Per PR.** Add the `ai-review-gemini` label to a single PR. It takes effect on the
+   next push.
+
+Without the key, or without a valid `base_url` in
+`litellm-experiment/participants.yml`, enrolment does nothing and only Claude reviews.
+Repos that pin duchamp to a commit SHA don't get this until they move the pin.
+
+## How it runs
+
+Three jobs in `.github/workflows/claude-review.yml`:
+
+- **`review`** runs Claude, and Codex when enrolled, as before. It no longer posts the
+  side-by-side comment; Codex's JSON goes to the next job as an artifact.
+- **`gemini`** runs on its own runner at the same time. It saves the PR's description
+  and comments first, before Claude posts anything for this push, so Gemini never sees
+  Claude's review. Then it checks out the PR without saving credentials, builds the same
+  prompt, installs the same skills under `~/.agents/skills`, installs `agy` and runs it
+  headless with `--json-schema codex-experiment/output-schema.json`, `--effort high` and
+  `--dangerously-skip-permissions`. Its step stops after 20 minutes. Its failures don't
+  turn the check red.
+- **`side-by-side`** waits for both, posts Codex's and Gemini's inline comments and the
+  comparison comment. It skips posting when a newer push cancelled this run's reviews.
+
+`build-review-prompt.ts` adds a "Running in Antigravity" note to Gemini's copy of the
+prompt (`formatAntigravityNote`). It covers only what Antigravity can't do the same way:
+it can't post, so it returns JSON; it reads the PR from a file; it reads CLAUDE.md,
+AGENTS.md and skills itself; it has no subagents, so it does the security read itself.
+
+The prompt can be longer than one command-line argument allows, so `agy -p` gets a short
+instruction pointing at the prompt file.
+
+## What the gateway needs
+
+In LiteLLM's admin UI (artsy-litellm):
+
+- Gemini Neon 4 under the alias `gemini-neon-4`, with the Google API key behind it,
+  allowed on the key duchamp's callers use.
+- The Gemini-native API (`/v1beta/models/...:generateContent`), which `agy` speaks.
+  `GOOGLE_GEMINI_BASE_URL` is the gateway's `base_url` with no version path, because the
+  SDK adds `/v1beta` itself.
+
+`agy` can't send custom headers yet
+([google-antigravity/antigravity-cli#514](https://github.com/google-antigravity/antigravity-cli/issues/514)).
+So LiteLLM can't split Gemini spend by repo or PR, and once the gateway's edge check
+(`edge_header`) turns on, Gemini calls will be refused. Until #514 lands, the edge check
+needs an exception for Gemini or the experiment pauses.
+
+## Measuring it
+
+- **Findings.** When the PR merges, the [outcome experiment](../outcome-experiment/README.md)
+  judges every inline comment and tags it `reviewer:claude`, `reviewer:codex` or
+  `reviewer:gemini`: addressed, 👍/👎 and replies. The repo must list `closed` in its
+  trigger.
+- **Cost and speed.** `scripts/gemini-usage.ts` sends the Gemini review's numbers under
+  the same `ai_pr_review.*` names as Claude's, tagged `reviewer:gemini` and
+  `model:gemini-neon-4`; Claude's carry `reviewer:claude`. The dashboard's "Reviewers"
+  section compares them. Antigravity reports tokens but no cost, so Gemini's spend comes
+  from LiteLLM's Usage page.
+- `inline_comments` counts the comments Gemini returned, some of which may land off the
+  diff; Claude's counts the ones it posted.
+
+## Risks
+
+- **Prompt injection from the PR.** Antigravity runs with every permission on a runner
+  that holds the LiteLLM key. The job holds no write token and no credentials on disk,
+  and the key's budget and rate limits on the gateway cap the damage.
+- **Headless stalls**
+  ([google-antigravity/antigravity-cli#548](https://github.com/google-antigravity/antigravity-cli/issues/548)).
+  Skipping permission prompts avoids them; the step timeout is the backstop.
+- **Unpinned CLI.** The installer takes no version, so every run gets the latest `agy`.
+  The job logs `agy --version`. A breaking release fails Gemini's column, not Claude's
+  review.

@@ -836,6 +836,292 @@
     {
       "definition": {
         "type": "group",
+        "title": "Reviewers: Claude and Gemini on the same PRs",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "definition": {
+              "type": "note",
+              "content": "Every review tagged by who wrote it: `reviewer:claude` or `reviewer:gemini`, for the [Gemini experiment](https://github.com/artsy/duchamp/blob/main/gemini-experiment/README.md). Both review the same PRs from the same prompt. Antigravity reports no cost, so Gemini's spend is in LiteLLM's Usage page; compare tokens here. Reviews from before the tag show as `N/A`. The outcome widgets also count Codex.",
+              "background_color": "white",
+              "font_size": "14",
+              "text_align": "left",
+              "show_tick": false,
+              "has_padding": true
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Reviews, by reviewer",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "r",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Success rate (%), by reviewer",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "s",
+                      "query": "sum:ai_pr_review.reviews{outcome:success,$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "s / r * 100",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Cost per review (USD), by reviewer",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c / r / 100",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Tokens per review, by reviewer",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "t",
+                      "query": "sum:ai_pr_review.tokens{$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.reviews{$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "t / r",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Duration per review (minutes, median), by reviewer",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "d",
+                      "query": "avg:ai_pr_review.duration_ms.median{$repo,$mode,$pr} by {reviewer}",
+                      "aggregator": "avg"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "d / 60000",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Inline comments per review (average), by reviewer",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "i",
+                      "query": "avg:ai_pr_review.inline_comments.avg{$repo,$mode,$pr} by {reviewer}",
+                      "aggregator": "avg"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "i",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Findings addressed (%), by reviewer",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "y",
+                      "query": "sum:ai_pr_review.findings{addressed:yes,$repo,$pr} by {reviewer}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "f",
+                      "query": "sum:ai_pr_review.findings{$repo,$pr} by {reviewer}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "y / f * 100",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Findings dismissed in a reply or 👎 (%), by reviewer",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "r",
+                      "query": "sum:ai_pr_review.findings{reply:dismissed,$repo,$pr} by {reviewer}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "t",
+                      "query": "sum:ai_pr_review.findings{reaction:down,$repo,$pr} by {reviewer}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "b",
+                      "query": "sum:ai_pr_review.findings{reply:dismissed,reaction:down,$repo,$pr} by {reviewer}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "f",
+                      "query": "sum:ai_pr_review.findings{$repo,$pr} by {reviewer}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "(default_zero(r) + default_zero(t) - default_zero(b)) / f * 100",
+                      "limit": {
+                        "count": 10,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "group",
         "layout_type": "ordered",
         "title": "Outcome: what happened to the review's comments (measured at merge)",
         "widgets": [

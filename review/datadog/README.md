@@ -23,6 +23,9 @@ using the shared workflow reports.
 
 All of them but `findings` and `human_comments` carry the tags `repo`, `pr`, `group` (experiment, standard or unknown), `mode`
 (full, rereview or unknown), `outcome`, `model` and `effort`. Reviews from after the
+[Gemini experiment](../../gemini-experiment/README.md) carry `reviewer` (`claude` or
+`gemini`). Gemini's reviews carry only `repo`, `pr`, `mode`, `outcome`, `model` and
+`reviewer`, and no cost, because Antigravity doesn't report one. Reviews from after the
 security experiment also carry `security` (true when the
 [security pass](../README.md#security-pass) ran). Reviews from after the best-practices
 experiment carry `best_practices` (true when the review ran a
@@ -58,7 +61,7 @@ METRIC_NAME_ALLOWLIST` and the same for `METRIC_TAG_ALLOWLIST` in artsy/volley.
 
 ## The dashboard
 
-`dashboard.json` is the "AI PR review" dashboard, in six sections:
+`dashboard.json` is the "AI PR review" dashboard, in seven sections:
 
 | Section | What it shows |
 | --- | --- |
@@ -66,6 +69,7 @@ METRIC_NAME_ALLOWLIST` and the same for `METRIC_TAG_ALLOWLIST` in artsy/volley.
 | Cost | Spend by day, repo and PR, cost per review, tokens and cache hit rate |
 | Turns, speed and comments | Turns, duration, inline comments and denied tool calls |
 | Experiments | Reviews where each experiment ran, and cost per review with and without it |
+| Reviewers | Claude and Gemini on the same PRs: success rate, cost, tokens, duration, comments and findings addressed or dismissed |
 | Outcome | Findings measured at merge: the share addressed, agreed with and dismissed |
 | Missed findings | Human review comments by category, and the share the review missed |
 
