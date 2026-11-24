@@ -1,13 +1,14 @@
 import { FOOTER_SENTINEL, reviewMarker } from "./post-review-summary"
 import {
   buildSideBySide,
-  type CodexFinding,
+  type Finding,
   earlierSideBySide,
-  formatCodexComments,
+  formatExtraComments,
   formatInlineComments,
   latestClaudeSummary,
   MAX_COLUMN_CHARS,
-  parseCodexOutput,
+  parseReviewOutput,
+  ranReviewers,
   type ReviewComment,
   SIDE_BY_SIDE_MARKER,
   stripTitle,
@@ -104,9 +105,9 @@ describe("formatInlineComments", () => {
   })
 })
 
-describe("parseCodexOutput", () => {
+describe("parseReviewOutput", () => {
   it("reads the summary and the well-formed comments", () => {
-    const out = parseCodexOutput(
+    const out = parseReviewOutput(
       JSON.stringify({
         summary: "## Code Review\nok",
         comments: [
@@ -124,23 +125,50 @@ describe("parseCodexOutput", () => {
   })
 
   it("keeps text that isn't the schema as the summary", () => {
-    expect(parseCodexOutput("## Code Review\nplain")).toEqual({
+    expect(parseReviewOutput("## Code Review\nplain")).toEqual({
       summary: "## Code Review\nplain",
       comments: [],
     })
-    expect(parseCodexOutput('{"verdict":"ok"}')).toEqual({
+    expect(parseReviewOutput('{"verdict":"ok"}')).toEqual({
       summary: '{"verdict":"ok"}',
       comments: [],
     })
   })
 
+  it("unwraps Antigravity's JSON envelope", () => {
+    const envelope = JSON.stringify({
+      status: "success",
+      response: JSON.stringify({
+        summary: "S",
+        comments: [{ path: "a.ts", line: 3, body: "🔵 x" }],
+      }),
+      usage: {},
+    })
+    expect(parseReviewOutput(envelope)).toEqual({
+      summary: "S",
+      comments: [{ path: "a.ts", line: 3, body: "🔵 x" }],
+    })
+  })
+
+  it("keeps an envelope's plain-text response as the summary", () => {
+    expect(
+      parseReviewOutput(JSON.stringify({ response: "plain words" }))
+    ).toEqual({ summary: "plain words", comments: [] })
+  })
+
+  it("reads JSON inside a code fence", () => {
+    expect(
+      parseReviewOutput('```json\n{"summary":"S","comments":[]}\n```')
+    ).toEqual({ summary: "S", comments: [] })
+  })
+
   it("is null with no message", () => {
-    expect(parseCodexOutput(" \n")).toBeNull()
+    expect(parseReviewOutput(" \n")).toBeNull()
   })
 })
 
-describe("formatCodexComments", () => {
-  const finding = (path: string, line: number): CodexFinding => ({
+describe("formatExtraComments", () => {
+  const finding = (path: string, line: number): Finding => ({
     path,
     line,
     body: "🟠 **required:** y.\n\nWhy.",
@@ -148,7 +176,7 @@ describe("formatCodexComments", () => {
 
   it("lists posted comments, then the ones off the diff", () => {
     expect(
-      formatCodexComments([finding("a.ts", 1)], [finding("b.ts", 9)])
+      formatExtraComments([finding("a.ts", 1)], [finding("b.ts", 9)])
     ).toBe(
       [
         "---",
@@ -163,7 +191,7 @@ describe("formatCodexComments", () => {
   })
 
   it("is empty with no comments", () => {
-    expect(formatCodexComments([], [])).toBe("")
+    expect(formatExtraComments([], [])).toBe("")
   })
 })
 
@@ -173,6 +201,9 @@ describe("stripTitle", () => {
       "### Summary\nok"
     )
     expect(stripTitle("## Codex Review\n### Summary\nok")).toBe(
+      "### Summary\nok"
+    )
+    expect(stripTitle("## Gemini Review\n### Summary\nok")).toBe(
       "### Summary\nok"
     )
   })
@@ -187,8 +218,7 @@ describe("buildSideBySide", () => {
     const body = buildSideBySide({
       claude: "## Code Review\n### Verdict\nRequest Changes",
       claudeInline: "---\n\n**Inline comments (1)**\n- `a.ts:1` 🔴 x",
-      codex: "## Codex Review\n### Verdict\nApprove",
-      codexInline: "---\n\n**Inline comments (1)**\n- `b.ts:2` 🟠 y",
+      others: [{ name: "Codex", summary: "## Codex Review\n### Verdict\nApprove", inline: "---\n\n**Inline comments (1)**\n- `b.ts:2` 🟠 y" }],
       headSha: HEAD,
     })
 
@@ -210,8 +240,7 @@ describe("buildSideBySide", () => {
       buildSideBySide({
         claude: null,
         claudeInline: "",
-        codex: "ok",
-        codexInline: "",
+        others: [{ name: "Codex", summary: "ok", inline: "" }],
         headSha: HEAD,
       })
     ).toContain("Claude's review didn't finish")
@@ -219,8 +248,7 @@ describe("buildSideBySide", () => {
       buildSideBySide({
         claude: "ok",
         claudeInline: "",
-        codex: null,
-        codexInline: "",
+        others: [{ name: "Codex", summary: null, inline: "" }],
         headSha: HEAD,
       })
     ).toContain("Codex didn't return a review")
@@ -230,12 +258,78 @@ describe("buildSideBySide", () => {
     const body = buildSideBySide({
       claude: "y".repeat(MAX_COLUMN_CHARS + 10),
       claudeInline: "",
-      codex: "ok",
-      codexInline: "",
+      others: [{ name: "Codex", summary: "ok", inline: "" }],
       headSha: HEAD,
     })
     expect(body).toContain("…cut to fit the comment.")
     expect(body.length).toBeLessThan(65_536)
+  })
+
+  it("keeps three overflowing columns under GitHub's limit", () => {
+    const long = "y".repeat(MAX_COLUMN_CHARS + 10)
+    const body = buildSideBySide({
+      claude: long,
+      claudeInline: "",
+      others: [
+        { name: "Codex", summary: long, inline: "" },
+        { name: "Gemini", summary: long, inline: "" },
+      ],
+      headSha: HEAD,
+    })
+    expect(body.length).toBeLessThan(65_536)
+  })
+
+  it("shows Claude, Codex and Gemini in three columns", () => {
+    const body = buildSideBySide({
+      claude: "## Code Review\nC",
+      claudeInline: "",
+      others: [
+        { name: "Codex", summary: "X", inline: "" },
+        { name: "Gemini", summary: "## Gemini Review\nG", inline: "" },
+      ],
+      headSha: HEAD,
+    })
+    expect(body).toContain("## AI reviews: Claude | Codex | Gemini")
+    expect(body).toContain('width="33%"')
+    expect(body).toContain("All reviewed `aaaaaaa` from the same prompt.")
+    expect(body).not.toContain("## Gemini Review")
+    expect(body.indexOf("G\n")).toBeGreaterThan(body.indexOf("X\n"))
+  })
+
+  it("says when Gemini returned nothing", () => {
+    const body = buildSideBySide({
+      claude: "ok",
+      claudeInline: "",
+      others: [{ name: "Gemini", summary: null, inline: "" }],
+      headSha: HEAD,
+    })
+    expect(body).toContain("## AI reviews: Claude | Gemini")
+    expect(body).toContain("Gemini didn't return a review on this push.")
+    expect(body).toContain('width="50%"')
+    expect(body).toContain("Gemini didn't see Claude's review.")
+  })
+})
+
+describe("ranReviewers", () => {
+  it("lists every reviewer whose job ran, Codex first", () => {
+    expect(
+      ranReviewers({
+        CODEX_RAN: "true",
+        CODEX_REVIEW_FILE: "/t/codex.json",
+        GEMINI_RAN: "true",
+        GEMINI_REVIEW_FILE: "/t/gemini.json",
+      }).map(r => [r.name, r.prefix, r.file])
+    ).toEqual([
+      ["Codex", "**Codex:**", "/t/codex.json"],
+      ["Gemini", "**Gemini:**", "/t/gemini.json"],
+    ])
+  })
+
+  it("leaves out a reviewer whose job didn't run", () => {
+    expect(
+      ranReviewers({ CODEX_RAN: "false", GEMINI_RAN: "true" }).map(r => r.name)
+    ).toEqual(["Gemini"])
+    expect(ranReviewers({})).toEqual([])
   })
 })
 

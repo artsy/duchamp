@@ -4,23 +4,36 @@ import { isReviewSummary } from "./post-review-summary"
 import { stripReviewFooter } from "./review-mode"
 
 /**
- * For Codex experiment PRs: posts Codex's inline comments, then one comment with
- * Claude's review and Codex's side by side. Claude's own summary comment stays,
- * because re-reviews find the previous review through its marker.
+ * For Codex and Gemini experiment PRs: posts each extra reviewer's inline comments, then
+ * one comment with Claude's review and theirs side by side. Claude's own summary comment
+ * stays, because re-reviews find the previous review through its marker.
  */
 
 /** Marks the side-by-side comment, so the next run can replace it. */
 export const SIDE_BY_SIDE_MARKER = "<!-- ai-review-side-by-side -->"
 
 /** GitHub rejects comments over 65,536 characters; this leaves room for the table. */
-export const MAX_COLUMN_CHARS = 30_000
+export const MAX_COMMENT_CHARS = 60_000
+
+/** One column's share when Claude and one other reviewer show. */
+export const MAX_COLUMN_CHARS = MAX_COMMENT_CHARS / 2
 
 const MAX_INLINE_LINE_CHARS = 200
 
 /** Starts each inline comment Codex posts, so cleanup-ai-reviews.js can find them. */
 export const CODEX_COMMENT_PREFIX = "**Codex:**"
 
-export interface CodexFinding {
+/** Starts each inline comment Gemini posts, so cleanup-ai-reviews.js can find them. */
+export const GEMINI_COMMENT_PREFIX = "**Gemini:**"
+
+export interface ExtraReviewer {
+  name: "Codex" | "Gemini"
+  prefix: string
+  /** The review JSON the reviewer's step wrote. */
+  file: string
+}
+
+export interface Finding {
   path: string
   line: number
   body: string
@@ -89,23 +102,33 @@ export const formatInlineComments = (
 }
 
 /**
- * Codex's final message, in codex-experiment/output-schema.json. Text that isn't
- * that JSON is kept as the summary, so a review still shows when Codex ignores the
- * schema. Null when there is no message.
+ * A reviewer's final message, in codex-experiment/output-schema.json. Antigravity wraps it
+ * in an envelope whose `response` holds the message. Text that isn't that JSON is kept as
+ * the summary, so a review still shows when the reviewer ignores the schema. Null when
+ * there is no message.
  */
-export const parseCodexOutput = (
+export const parseReviewOutput = (
   text: string
-): { summary: string; comments: CodexFinding[] } | null => {
-  const trimmed = text.trim()
+): { summary: string; comments: Finding[] } | null => {
+  const trimmed = text
+    .trim()
+    .replace(/^```(?:json)?\s*\n([\s\S]*?)\n```$/, "$1")
+    .trim()
   if (!trimmed) {
     return null
   }
   try {
     const parsed = JSON.parse(trimmed)
+    if (
+      typeof parsed?.response === "string" &&
+      typeof parsed?.summary !== "string"
+    ) {
+      return parseReviewOutput(parsed.response)
+    }
     if (typeof parsed?.summary === "string") {
       const comments = Array.isArray(parsed.comments)
         ? parsed.comments.filter(
-            (c: Partial<CodexFinding>): c is CodexFinding =>
+            (c: Partial<Finding>): c is Finding =>
               typeof c?.path === "string" &&
               Number.isInteger(c?.line) &&
               typeof c?.body === "string" &&
@@ -120,12 +143,12 @@ export const parseCodexOutput = (
   return { summary: trimmed, comments: [] }
 }
 
-/** Codex's inline comments for its column: posted ones, then ones off the diff. */
-export const formatCodexComments = (
-  posted: CodexFinding[],
-  unposted: CodexFinding[]
+/** An extra reviewer's inline comments for its column: posted ones, then ones off the diff. */
+export const formatExtraComments = (
+  posted: Finding[],
+  unposted: Finding[]
 ): string => {
-  const list = (findings: CodexFinding[]): string =>
+  const list = (findings: Finding[]): string =>
     findings.map(c => oneLine(c.path, c.line, c.body)).join("\n")
   const parts = [
     posted.length > 0 &&
@@ -138,48 +161,57 @@ export const formatCodexComments = (
 
 /** The table's headers name the reviewer, so each summary's own title goes. */
 export const stripTitle = (summary: string): string =>
-  summary.replace(/^\s*## Code(x)? Review[^\S\n]*\n/, "").trim()
+  summary.replace(/^\s*## (Code|Codex|Gemini) Review[^\S\n]*\n/, "").trim()
 
-const fitColumn = (text: string): string =>
-  text.length > MAX_COLUMN_CHARS
-    ? `${text.slice(0, MAX_COLUMN_CHARS)}\n\n…cut to fit the comment.`
-    : text
+const fitColumn = (text: string, max: number): string =>
+  text.length > max ? `${text.slice(0, max)}\n\n…cut to fit the comment.` : text
 
 export const buildSideBySide = (input: {
   claude: string | null
   claudeInline: string
-  codex: string | null
-  codexInline: string
+  others: { name: string; summary: string | null; inline: string }[]
   headSha: string
 }): string => {
-  const claude = input.claude
-    ? [stripTitle(input.claude), input.claudeInline]
-        .filter(Boolean)
-        .join("\n\n")
-    : "Claude's review didn't finish on this push."
-  const codex = input.codex
-    ? [stripTitle(input.codex), input.codexInline].filter(Boolean).join("\n\n")
-    : "Codex didn't return a review on this push."
+  const columns = [
+    {
+      name: "Claude",
+      text: input.claude
+        ? [stripTitle(input.claude), input.claudeInline]
+            .filter(Boolean)
+            .join("\n\n")
+        : "Claude's review didn't finish on this push.",
+    },
+    ...input.others.map(other => ({
+      name: other.name,
+      text: other.summary
+        ? [stripTitle(other.summary), other.inline].filter(Boolean).join("\n\n")
+        : `${other.name} didn't return a review on this push.`,
+    })),
+  ]
+  const width = Math.floor(100 / columns.length)
+  const max = Math.floor(MAX_COMMENT_CHARS / columns.length)
+  const sha = `\`${input.headSha.slice(0, 7)}\``
+  const intro =
+    input.others.length === 1
+      ? `Both reviewed ${sha} from the same prompt. ${input.others[0].name} didn't see Claude's review.`
+      : `All reviewed ${sha} from the same prompt. None saw Claude's review.`
 
   // Blank lines around each cell's content let GitHub render the Markdown inside it.
   return [
-    "## AI reviews: Claude | Codex",
+    `## AI reviews: ${columns.map(c => c.name).join(" | ")}`,
     "",
-    `Both reviewed \`${input.headSha.slice(0, 7)}\` from the same prompt. Codex didn't see Claude's review.`,
+    intro,
     "",
     "<table>",
-    '<tr><th width="50%">Claude</th><th width="50%">Codex</th></tr>',
+    `<tr>${columns.map(c => `<th width="${width}%">${c.name}</th>`).join("")}</tr>`,
     "<tr>",
-    '<td valign="top">',
-    "",
-    fitColumn(claude),
-    "",
-    "</td>",
-    '<td valign="top">',
-    "",
-    fitColumn(codex),
-    "",
-    "</td>",
+    ...columns.flatMap(c => [
+      '<td valign="top">',
+      "",
+      fitColumn(c.text, max),
+      "",
+      "</td>",
+    ]),
     "</tr>",
     "</table>",
     "",
@@ -216,21 +248,22 @@ const ghList = <T>(endpoint: string): T[] =>
     .map(line => JSON.parse(line) as T)
 
 /** Posts each finding on its line. GitHub rejects lines outside the diff. */
-const postCodexComments = (
+const postComments = (
   repo: string,
   prNumber: string,
   headSha: string,
-  findings: CodexFinding[]
-): { posted: CodexFinding[]; unposted: CodexFinding[] } => {
-  const posted: CodexFinding[] = []
-  const unposted: CodexFinding[] = []
+  findings: Finding[],
+  reviewer: ExtraReviewer
+): { posted: Finding[]; unposted: Finding[] } => {
+  const posted: Finding[] = []
+  const unposted: Finding[] = []
   for (const finding of findings) {
     try {
       gh([
         "api",
         `repos/${repo}/pulls/${prNumber}/comments`,
         "-f",
-        `body=${CODEX_COMMENT_PREFIX} ${finding.body.trim()}`,
+        `body=${reviewer.prefix} ${finding.body.trim()}`,
         "-f",
         `commit_id=${headSha}`,
         "-f",
@@ -246,16 +279,32 @@ const postCodexComments = (
     }
   }
   console.log(
-    `Codex inline comments: ${posted.length} posted, ${unposted.length} not on the diff`
+    `${reviewer.name} inline comments: ${posted.length} posted, ${unposted.length} not on the diff`
   )
   return { posted, unposted }
 }
+
+/** The extra reviewers whose job ran on this push; a missing review still gets a column. */
+export const ranReviewers = (
+  env: NodeJS.ProcessEnv
+): ExtraReviewer[] =>
+  [
+    env.CODEX_RAN === "true" && {
+      name: "Codex" as const,
+      prefix: CODEX_COMMENT_PREFIX,
+      file: env.CODEX_REVIEW_FILE ?? "",
+    },
+    env.GEMINI_RAN === "true" && {
+      name: "Gemini" as const,
+      prefix: GEMINI_COMMENT_PREFIX,
+      file: env.GEMINI_REVIEW_FILE ?? "",
+    },
+  ].filter((r): r is ExtraReviewer => !!r)
 
 const main = (): void => {
   const repo = process.env.GITHUB_REPOSITORY ?? ""
   const prNumber = process.env.PR_NUMBER ?? ""
   const headSha = process.env.HEAD_SHA ?? ""
-  const reviewFile = process.env.CODEX_REVIEW_FILE ?? ""
 
   const issueComments = ghList<IssueComment>(
     `repos/${repo}/issues/${prNumber}/comments`
@@ -268,32 +317,39 @@ const main = (): void => {
         headSha
       )
     : ""
-  const codexOutput = parseCodexOutput(
-    reviewFile && fs.existsSync(reviewFile)
-      ? fs.readFileSync(reviewFile, "utf8")
-      : ""
-  )
-  const codex = codexOutput?.summary.trim() || null
-  let codexInline = ""
-  if (codexOutput) {
-    const { posted, unposted } = postCodexComments(
+
+  const others = ranReviewers(process.env).map(reviewer => {
+    const output = parseReviewOutput(
+      reviewer.file && fs.existsSync(reviewer.file)
+        ? fs.readFileSync(reviewer.file, "utf8")
+        : ""
+    )
+    if (!output) {
+      return { name: reviewer.name, summary: null, inline: "" }
+    }
+    const { posted, unposted } = postComments(
       repo,
       prNumber,
       headSha,
-      codexOutput.comments
+      output.comments,
+      reviewer
     )
-    codexInline = formatCodexComments(posted, unposted)
-  }
+    return {
+      name: reviewer.name,
+      summary: output.summary.trim() || null,
+      inline: formatExtraComments(posted, unposted),
+    }
+  })
 
-  if (!claude && !codex) {
-    console.log("::warning::Neither review finished, so nothing was posted")
+  if (!claude && others.every(o => !o.summary)) {
+    console.log("::warning::No review finished, so nothing was posted")
     return
   }
 
   const posted = JSON.parse(
     gh(
       ["api", `repos/${repo}/issues/${prNumber}/comments`, "-F", "body=@-"],
-      buildSideBySide({ claude, claudeInline, codex, codexInline, headSha })
+      buildSideBySide({ claude, claudeInline, others, headSha })
     )
   ) as IssueComment
   console.log(`Side-by-side review posted: comment ${posted.id}`)
