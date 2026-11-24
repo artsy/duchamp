@@ -81,7 +81,12 @@ describe("findingsFrom", () => {
           comment("github-actions", "**Codex:** 🔵 **nit:** name", {}, "Bot")
         ),
         thread(
-          comment("github-actions", "**Gemini:** 🟠 **required:** fix", {}, "Bot")
+          comment(
+            "github-actions",
+            "**Gemini:** 🟠 **required:** fix",
+            {},
+            "Bot"
+          )
         ),
         thread(comment("human", "why?")),
         thread(comment("github-actions", "Coverage report", {}, "Bot")),

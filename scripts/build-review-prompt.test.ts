@@ -7,20 +7,20 @@ import {
   buildPrompt,
   CODEX_LABEL,
   formatAntigravityNote,
-  formatGeminiCheck,
   formatCodexNote,
   formatContextSection,
   formatDelivery,
   formatDiffSection,
+  formatGeminiCheck,
   formatInstructionsSection,
   formatMergeRiskSection,
   formatPreamble,
   formatReviewModeOutputs,
   formatSecuritySection,
+  GEMINI_LABEL,
   gatewayHeaders,
   hasSecurityLabel,
   inBestPractices,
-  GEMINI_LABEL,
   inCodex,
   inGemini,
   inLeanReviews,
@@ -605,7 +605,9 @@ describe("inGemini", () => {
     expect(
       mockFs.readFileSync.mock.calls.map(([p]) => String(p))
     ).toContainEqual(
-      expect.stringContaining(path.join("gemini-experiment", "participants.yml"))
+      expect.stringContaining(
+        path.join("gemini-experiment", "participants.yml")
+      )
     )
   })
 
@@ -629,7 +631,9 @@ describe("formatGeminiCheck", () => {
   })
 
   it("skips Gemini without a gateway, so no key or a bad base_url leaves Claude alone", () => {
-    expect(formatGeminiCheck(undefined)).toBe("gemini=false\ngemini_base_url=\n")
+    expect(formatGeminiCheck(undefined)).toBe(
+      "gemini=false\ngemini_base_url=\n"
+    )
   })
 })
 
