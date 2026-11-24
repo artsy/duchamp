@@ -7,7 +7,7 @@ on:
 
 jobs:
   claude-review:
-    uses: artsy/duchamp/.github/workflows/claude-review.yml@main
+    uses: artsy/duchamp/.github/workflows/claude-review.yml@feat/gemini-experiment
     secrets:
       anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
       # The LiteLLM experiment; empty until the secrets exist, and then reviews in it use the gateway.
