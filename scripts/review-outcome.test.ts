@@ -53,12 +53,13 @@ describe("parseSeverity", () => {
     expect(parseSeverity("🔵 **nit:** name")).toBe("nit")
     expect(parseSeverity("⚪ **q:** why?")).toBe("question")
     expect(parseSeverity("**Codex:** 🔴 **blocking:** crash")).toBe("blocking")
+    expect(parseSeverity("**Gemini:** 🟠 **required:** fix")).toBe("required")
     expect(parseSeverity("no marker")).toBe("none")
   })
 })
 
 describe("findingsFrom", () => {
-  it("keeps Claude's and Codex's threads, with reactions and human replies", () => {
+  it("keeps Claude's, Codex's and Gemini's threads, with reactions and human replies", () => {
     const findings = findingsFrom(
       [
         thread(
@@ -78,6 +79,9 @@ describe("findingsFrom", () => {
         ),
         thread(
           comment("github-actions", "**Codex:** 🔵 **nit:** name", {}, "Bot")
+        ),
+        thread(
+          comment("github-actions", "**Gemini:** 🟠 **required:** fix", {}, "Bot")
         ),
         thread(comment("human", "why?")),
         thread(comment("github-actions", "Coverage report", {}, "Bot")),
@@ -103,6 +107,11 @@ describe("findingsFrom", () => {
         severity: "nit",
         reaction: "none",
         replies: [],
+      }),
+      expect.objectContaining({
+        id: 2,
+        reviewer: "gemini",
+        severity: "required",
       }),
     ])
   })

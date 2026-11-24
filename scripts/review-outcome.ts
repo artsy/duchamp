@@ -32,8 +32,8 @@ const MAX_REPLY_CHARS = 600
 // GraphQL returns Bot logins without the [bot] suffix
 const CLAUDE_LOGIN = "claude"
 const ACTIONS_LOGIN = "github-actions"
-// Starts every inline comment Codex posts; see scripts/post-side-by-side.ts
-const CODEX_PREFIX = "**Codex:**"
+// Start every inline comment Codex and Gemini post; see scripts/post-side-by-side.ts
+const EXTRA_PREFIXES = { codex: "**Codex:**", gemini: "**Gemini:**" } as const
 
 /** 👍 ❤️ 🎉 🚀 */
 const POSITIVE_REACTIONS = ["THUMBS_UP", "HEART", "HOORAY", "ROCKET"]
@@ -50,7 +50,7 @@ export type ReplyLabel = "dismissed" | "agreed" | "other" | "none"
 
 export interface Finding {
   id: number
-  reviewer: "claude" | "codex"
+  reviewer: "claude" | keyof typeof EXTRA_PREFIXES
   severity: string
   path: string
   body: string
@@ -73,7 +73,8 @@ export const cut = (text: string, maxChars: number): string =>
   text.length > maxChars ? `${text.slice(0, maxChars)}…` : text
 
 export const parseSeverity = (body: string): string => {
-  const text = body.replace(CODEX_PREFIX, "").trimStart()
+  const prefix = Object.values(EXTRA_PREFIXES).find(p => body.startsWith(p))
+  const text = (prefix ? body.slice(prefix.length) : body).trimStart()
   const marker = Object.keys(SEVERITIES).find(emoji => text.startsWith(emoji))
   return marker ? SEVERITIES[marker] : "none"
 }
@@ -103,16 +104,20 @@ export const findingsFrom = (
       if (first?.author?.__typename !== "Bot") {
         return null
       }
-      const isClaude = first.author.login === CLAUDE_LOGIN
-      const isCodex =
-        first.author.login === ACTIONS_LOGIN &&
-        first.body.startsWith(CODEX_PREFIX)
-      if (!isClaude && !isCodex) {
+      const extra =
+        first.author.login === ACTIONS_LOGIN
+          ? (Object.keys(EXTRA_PREFIXES) as (keyof typeof EXTRA_PREFIXES)[]).find(
+              name => first.body.startsWith(EXTRA_PREFIXES[name])
+            )
+          : undefined
+      const reviewer =
+        first.author.login === CLAUDE_LOGIN ? ("claude" as const) : extra
+      if (!reviewer) {
         return null
       }
 
       return {
-        reviewer: isClaude ? ("claude" as const) : ("codex" as const),
+        reviewer,
         severity: parseSeverity(first.body),
         path: thread.path,
         body: cut(first.body, MAX_BODY_CHARS),

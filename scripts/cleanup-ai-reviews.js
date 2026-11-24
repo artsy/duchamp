@@ -16,8 +16,9 @@
 const CLAUDE_BOT_LOGIN_GRAPHQL = "claude"
 const ACTIONS_BOT_LOGIN_GRAPHQL = "github-actions"
 
-// Starts every inline comment Codex posts; see scripts/post-side-by-side.ts
+// Start every inline comment Codex and Gemini post; see scripts/post-side-by-side.ts
 const CODEX_COMMENT_PREFIX = "**Codex:**"
+const GEMINI_COMMENT_PREFIX = "**Gemini:**"
 
 async function cleanupPreviousAIReviews({ github, context, core }) {
   const { owner, repo } = context.repo
@@ -76,7 +77,9 @@ async function resolveInlineReviewThreads({ github, owner, repo, prNumber }) {
     return (
       author.login === CLAUDE_BOT_LOGIN_GRAPHQL ||
       (author.login === ACTIONS_BOT_LOGIN_GRAPHQL &&
-        (first.body ?? "").startsWith(CODEX_COMMENT_PREFIX))
+        [CODEX_COMMENT_PREFIX, GEMINI_COMMENT_PREFIX].some(prefix =>
+          (first.body ?? "").startsWith(prefix)
+        ))
     )
   })
 
