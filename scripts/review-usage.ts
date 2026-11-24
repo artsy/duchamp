@@ -301,6 +301,7 @@ export const formatVolleyPayload = (
     `mode:${context.reviewMode || "unknown"}`,
     `outcome:${usage.outcome}`,
     `model:${model}`,
+    "reviewer:claude",
     ...(effort ? [`effort:${effort}`] : []),
     ...(context.securityPass ? [`security:${context.securityPass}`] : []),
     ...(context.bestPractices
