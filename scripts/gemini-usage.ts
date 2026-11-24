@@ -30,17 +30,26 @@ export const parseAgyUsage = (envelope: unknown): AgyUsage | null => {
     return null
   }
   const e = envelope as Record<string, unknown>
-  const u = (
-    e.usage && typeof e.usage === "object" ? e.usage : {}
-  ) as Record<string, unknown>
+  const u = (e.usage && typeof e.usage === "object" ? e.usage : {}) as Record<
+    string,
+    unknown
+  >
   const fields: AgyUsage = {
-    status: typeof e.status === "string" ? e.status : undefined,
+    status: typeof e.status === "string" ? e.status.toLowerCase() : undefined,
     inputTokens: num(u.input_tokens, u.prompt_tokens),
     outputTokens: num(u.output_tokens, u.completion_tokens),
-    cachedTokens: num(u.cached_tokens, u.cache_read_input_tokens),
+    cachedTokens: num(
+      u.cache_read_tokens,
+      u.cached_tokens,
+      u.cache_read_input_tokens
+    ),
     costUsd: num(u.total_cost_usd, u.cost_usd, e.total_cost_usd, e.cost_usd),
     turns: num(e.num_turns),
-    durationMs: num(e.duration_ms),
+    durationMs:
+      num(e.duration_ms) ??
+      (typeof e.duration_seconds === "number"
+        ? Math.round(e.duration_seconds * 1000)
+        : undefined),
   }
   return Object.fromEntries(
     Object.entries(fields).filter(([, v]) => v !== undefined)

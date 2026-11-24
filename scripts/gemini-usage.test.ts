@@ -1,6 +1,24 @@
 import { geminiMetrics, parseAgyUsage } from "./gemini-usage"
 
 describe("parseAgyUsage", () => {
+  it("reads the documented envelope: uppercase status, seconds, cache_read_tokens", () => {
+    expect(
+      parseAgyUsage({
+        status: "SUCCESS",
+        usage: { input_tokens: 50, output_tokens: 5, cache_read_tokens: 20 },
+        num_turns: 3,
+        duration_seconds: 12.5,
+      })
+    ).toEqual({
+      status: "success",
+      inputTokens: 50,
+      outputTokens: 5,
+      cachedTokens: 20,
+      turns: 3,
+      durationMs: 12_500,
+    })
+  })
+
   it("reads tokens, turns, duration and status from the envelope", () => {
     expect(
       parseAgyUsage({
@@ -29,7 +47,12 @@ describe("parseAgyUsage", () => {
           total_cost_usd: 0.42,
         },
       })
-    ).toEqual({ inputTokens: 10, outputTokens: 2, cachedTokens: 4, costUsd: 0.42 })
+    ).toEqual({
+      inputTokens: 10,
+      outputTokens: 2,
+      cachedTokens: 4,
+      costUsd: 0.42,
+    })
   })
 
   it("is null for anything that isn't an object", () => {
@@ -66,7 +89,13 @@ describe("geminiMetrics", () => {
     }
     const names = metrics.map(m => m.name)
     expect(names).toEqual(
-      expect.arrayContaining(["reviews", "tokens", "turns", "duration_ms", "inline_comments"])
+      expect.arrayContaining([
+        "reviews",
+        "tokens",
+        "turns",
+        "duration_ms",
+        "inline_comments",
+      ])
     )
     expect(names).not.toContain("cost_cents")
     expect(metrics).toContainEqual({

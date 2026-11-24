@@ -103,9 +103,9 @@ export const formatInlineComments = (
 
 /**
  * A reviewer's final message, in codex-experiment/output-schema.json. Antigravity wraps it
- * in an envelope whose `response` holds the message. Text that isn't that JSON is kept as
- * the summary, so a review still shows when the reviewer ignores the schema. Null when
- * there is no message.
+ * in an envelope: `structured_output` holds the schema's JSON, `response` the text. Text
+ * that isn't that JSON is kept as the summary, so a review still shows when the reviewer
+ * ignores the schema. Null when there is no message.
  */
 export const parseReviewOutput = (
   text: string
@@ -119,6 +119,13 @@ export const parseReviewOutput = (
   }
   try {
     const parsed = JSON.parse(trimmed)
+    if (
+      parsed?.structured_output &&
+      typeof parsed.structured_output === "object" &&
+      typeof parsed?.summary !== "string"
+    ) {
+      return parseReviewOutput(JSON.stringify(parsed.structured_output))
+    }
     if (
       typeof parsed?.response === "string" &&
       typeof parsed?.summary !== "string"
@@ -285,9 +292,7 @@ const postComments = (
 }
 
 /** The extra reviewers whose job ran on this push; a missing review still gets a column. */
-export const ranReviewers = (
-  env: NodeJS.ProcessEnv
-): ExtraReviewer[] =>
+export const ranReviewers = (env: NodeJS.ProcessEnv): ExtraReviewer[] =>
   [
     env.CODEX_RAN === "true" && {
       name: "Codex" as const,

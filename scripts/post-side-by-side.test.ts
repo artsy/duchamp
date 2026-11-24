@@ -1,15 +1,15 @@
 import { FOOTER_SENTINEL, reviewMarker } from "./post-review-summary"
 import {
   buildSideBySide,
-  type Finding,
   earlierSideBySide,
+  type Finding,
   formatExtraComments,
   formatInlineComments,
   latestClaudeSummary,
   MAX_COLUMN_CHARS,
   parseReviewOutput,
-  ranReviewers,
   type ReviewComment,
+  ranReviewers,
   SIDE_BY_SIDE_MARKER,
   stripTitle,
 } from "./post-side-by-side"
@@ -150,6 +150,15 @@ describe("parseReviewOutput", () => {
     })
   })
 
+  it("prefers the envelope's structured_output", () => {
+    const envelope = JSON.stringify({
+      status: "SUCCESS",
+      response: "free text",
+      structured_output: { summary: "S", comments: [] },
+    })
+    expect(parseReviewOutput(envelope)).toEqual({ summary: "S", comments: [] })
+  })
+
   it("keeps an envelope's plain-text response as the summary", () => {
     expect(
       parseReviewOutput(JSON.stringify({ response: "plain words" }))
@@ -218,7 +227,13 @@ describe("buildSideBySide", () => {
     const body = buildSideBySide({
       claude: "## Code Review\n### Verdict\nRequest Changes",
       claudeInline: "---\n\n**Inline comments (1)**\n- `a.ts:1` 🔴 x",
-      others: [{ name: "Codex", summary: "## Codex Review\n### Verdict\nApprove", inline: "---\n\n**Inline comments (1)**\n- `b.ts:2` 🟠 y" }],
+      others: [
+        {
+          name: "Codex",
+          summary: "## Codex Review\n### Verdict\nApprove",
+          inline: "---\n\n**Inline comments (1)**\n- `b.ts:2` 🟠 y",
+        },
+      ],
       headSha: HEAD,
     })
 
