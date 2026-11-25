@@ -53,7 +53,7 @@
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr,!reviewer:gemini}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -78,7 +78,7 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr}.as_count()",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr,!reviewer:gemini}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -103,13 +103,13 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr}.as_count()",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr,!reviewer:gemini}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr,!reviewer:gemini}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -134,7 +134,7 @@
                     {
                       "data_source": "metrics",
                       "name": "t",
-                      "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model,$pr}",
+                      "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model,$pr,!reviewer:gemini}",
                       "aggregator": "avg"
                     }
                   ],
@@ -159,7 +159,7 @@
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {mode}.as_count().rollup(sum, 86400)"
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {mode}.as_count().rollup(sum, 86400)"
                     }
                   ],
                   "formulas": [
@@ -184,12 +184,12 @@
                     {
                       "data_source": "metrics",
                       "name": "ok",
-                      "query": "sum:ai_pr_review.reviews{outcome:success,$repo,$group,$mode,$model} by {mode}.as_count().rollup(sum, 86400)"
+                      "query": "sum:ai_pr_review.reviews{outcome:success,$repo,$group,$mode,$model,!reviewer:gemini} by {mode}.as_count().rollup(sum, 86400)"
                     },
                     {
                       "data_source": "metrics",
                       "name": "all",
-                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {mode}.as_count().rollup(sum, 86400)"
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {mode}.as_count().rollup(sum, 86400)"
                     }
                   ],
                   "formulas": [
@@ -223,7 +223,7 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {repo}.as_count().rollup(sum, 86400)"
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {repo}.as_count().rollup(sum, 86400)"
                     }
                   ],
                   "formulas": [
@@ -248,12 +248,12 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {mode}.as_count().rollup(sum, 86400)"
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {mode}.as_count().rollup(sum, 86400)"
                     },
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {mode}.as_count().rollup(sum, 86400)"
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {mode}.as_count().rollup(sum, 86400)"
                     }
                   ],
                   "formulas": [
@@ -278,12 +278,12 @@
                     {
                       "data_source": "metrics",
                       "name": "p50",
-                      "query": "avg:ai_pr_review.cost_usd.median{$repo,$group,$mode,$model,$pr} by {mode}"
+                      "query": "avg:ai_pr_review.cost_usd.median{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {mode}"
                     },
                     {
                       "data_source": "metrics",
                       "name": "p95",
-                      "query": "avg:ai_pr_review.cost_usd.95percentile{$repo,$group,$mode,$model,$pr} by {mode}"
+                      "query": "avg:ai_pr_review.cost_usd.95percentile{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {mode}"
                     }
                   ],
                   "formulas": [
@@ -312,7 +312,7 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {repo}.as_count()",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {repo}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -340,7 +340,7 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {repo,pr}.as_count()",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {repo,pr}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -369,7 +369,7 @@
                     {
                       "data_source": "metrics",
                       "name": "t",
-                      "query": "sum:ai_pr_review.tokens{$repo,$group,$mode,$model,$pr} by {kind}.as_count().rollup(sum, 86400)"
+                      "query": "sum:ai_pr_review.tokens{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {kind}.as_count().rollup(sum, 86400)"
                     }
                   ],
                   "formulas": [
@@ -394,7 +394,7 @@
                     {
                       "data_source": "metrics",
                       "name": "h",
-                      "query": "avg:ai_pr_review.cache_hit_rate.median{$repo,$group,$mode,$model,$pr} by {mode}"
+                      "query": "avg:ai_pr_review.cache_hit_rate.median{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {mode}"
                     }
                   ],
                   "formulas": [
@@ -428,7 +428,7 @@
                     {
                       "data_source": "metrics",
                       "name": "t",
-                      "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model,$pr} by {mode}"
+                      "query": "avg:ai_pr_review.turns.median{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {mode}"
                     }
                   ],
                   "formulas": [
@@ -453,7 +453,7 @@
                     {
                       "data_source": "metrics",
                       "name": "d",
-                      "query": "avg:ai_pr_review.duration_ms.median{$repo,$group,$mode,$model,$pr} by {mode}"
+                      "query": "avg:ai_pr_review.duration_ms.median{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {mode}"
                     }
                   ],
                   "formulas": [
@@ -478,7 +478,7 @@
                     {
                       "data_source": "metrics",
                       "name": "i",
-                      "query": "avg:ai_pr_review.inline_comments.avg{$repo,$group,$mode,$model,$pr} by {mode}"
+                      "query": "avg:ai_pr_review.inline_comments.avg{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {mode}"
                     }
                   ],
                   "formulas": [
@@ -503,7 +503,7 @@
                     {
                       "data_source": "metrics",
                       "name": "d",
-                      "query": "sum:ai_pr_review.denied_tool_calls{$repo,$group,$mode,$model,$pr} by {repo}.as_count().rollup(sum, 86400)"
+                      "query": "sum:ai_pr_review.denied_tool_calls{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {repo}.as_count().rollup(sum, 86400)"
                     }
                   ],
                   "formulas": [
@@ -549,27 +549,27 @@
                     {
                       "data_source": "metrics",
                       "name": "q0",
-                      "query": "sum:ai_pr_review.reviews{security:true,$repo,$group,$mode,$model,$pr}.as_count().rollup(sum, 604800)"
+                      "query": "sum:ai_pr_review.reviews{security:true,$repo,$group,$mode,$model,$pr,!reviewer:gemini}.as_count().rollup(sum, 604800)"
                     },
                     {
                       "data_source": "metrics",
                       "name": "q1",
-                      "query": "sum:ai_pr_review.reviews{related_repos:true,$repo,$group,$mode,$model,$pr}.as_count().rollup(sum, 604800)"
+                      "query": "sum:ai_pr_review.reviews{related_repos:true,$repo,$group,$mode,$model,$pr,!reviewer:gemini}.as_count().rollup(sum, 604800)"
                     },
                     {
                       "data_source": "metrics",
                       "name": "q2",
-                      "query": "sum:ai_pr_review.reviews{best_practices:true,$repo,$group,$mode,$model,$pr}.as_count().rollup(sum, 604800)"
+                      "query": "sum:ai_pr_review.reviews{best_practices:true,$repo,$group,$mode,$model,$pr,!reviewer:gemini}.as_count().rollup(sum, 604800)"
                     },
                     {
                       "data_source": "metrics",
                       "name": "q3",
-                      "query": "sum:ai_pr_review.reviews{merge_risk:true,$repo,$group,$mode,$model,$pr}.as_count().rollup(sum, 604800)"
+                      "query": "sum:ai_pr_review.reviews{merge_risk:true,$repo,$group,$mode,$model,$pr,!reviewer:gemini}.as_count().rollup(sum, 604800)"
                     },
                     {
                       "data_source": "metrics",
                       "name": "q4",
-                      "query": "sum:ai_pr_review.reviews{replies:true,$repo,$group,$mode,$model,$pr}.as_count().rollup(sum, 604800)"
+                      "query": "sum:ai_pr_review.reviews{replies:true,$repo,$group,$mode,$model,$pr,!reviewer:gemini}.as_count().rollup(sum, 604800)"
                     }
                   ],
                   "formulas": [
@@ -609,13 +609,13 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {security}.as_count()",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {security}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {security}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {security}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -643,13 +643,13 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {related_repos}.as_count()",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {related_repos}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {related_repos}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {related_repos}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -677,13 +677,13 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {best_practices}.as_count()",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {best_practices}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {best_practices}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {best_practices}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -711,13 +711,13 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {merge_risk}.as_count()",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {merge_risk}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {merge_risk}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {merge_risk}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -745,13 +745,13 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{mode:rereview,$repo,$group,$model,$pr} by {replies}.as_count()",
+                      "query": "sum:ai_pr_review.cost_cents{mode:rereview,$repo,$group,$model,$pr,!reviewer:gemini} by {replies}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{mode:rereview,$repo,$group,$model,$pr} by {replies}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{mode:rereview,$repo,$group,$model,$pr,!reviewer:gemini} by {replies}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -779,13 +779,13 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr} by {gateway}.as_count()",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {gateway}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr} by {gateway}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {gateway}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -813,7 +813,7 @@
                     {
                       "data_source": "metrics",
                       "name": "h",
-                      "query": "avg:ai_pr_review.cache_hit_rate.median{$repo,$group,$mode,$model,$pr} by {gateway}",
+                      "query": "avg:ai_pr_review.cache_hit_rate.median{$repo,$group,$mode,$model,$pr,!reviewer:gemini} by {gateway}",
                       "aggregator": "avg"
                     }
                   ],

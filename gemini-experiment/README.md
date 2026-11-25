@@ -53,8 +53,9 @@ Three jobs in `.github/workflows/claude-review.yml`:
   Claude's review. Then it checks out the PR without saving credentials, builds the same
   prompt, installs the same skills under `~/.agents/skills`, installs `agy` and runs it
   headless with `--json-schema codex-experiment/output-schema.json`, `--effort high` and
-  `--dangerously-skip-permissions`. Its step stops after 20 minutes. Its failures don't
-  turn the check red.
+  `--dangerously-skip-permissions`, after dropping sudo. It stops after 14 minutes. Every
+  step continues on error, so its failures don't turn the check red, and a failed run
+  still gets a column that says so.
 - **`side-by-side`** waits for both, posts Codex's and Gemini's inline comments and the
   comparison comment. It skips posting when a newer push cancelled this run's reviews.
 
@@ -99,8 +100,10 @@ needs an exception for Gemini or the experiment pauses.
 ## Risks
 
 - **Prompt injection from the PR.** Antigravity runs with every permission on a runner
-  that holds the LiteLLM key. The job holds no write token and no credentials on disk,
-  and the key's budget and rate limits on the gateway cap the damage.
+  that holds the LiteLLM key. Before it starts, the job removes passwordless sudo and
+  locks the Docker socket, so it can't read tokens from the runner's memory; if sudo
+  still works, Gemini doesn't run. The job holds no write token and no credentials on
+  disk, and the key's budget and rate limits on the gateway cap the damage.
 - **Headless stalls**
   ([google-antigravity/antigravity-cli#548](https://github.com/google-antigravity/antigravity-cli/issues/548)).
   Skipping permission prompts avoids them; the step timeout is the backstop.

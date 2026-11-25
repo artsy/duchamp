@@ -487,7 +487,7 @@ jobs:
     needs: check
     if: needs.check.outputs.should-review == 'true' && needs.check.outputs.gemini == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 28
     continue-on-error: true
     concurrency:
       group: claude-review-gemini-${{ github.repository }}-${{ github.event.pull_request.number }}
@@ -497,11 +497,13 @@ jobs:
       pull-requests: read
     env:
       HAS_LITELLM_KEY: ${{ secrets.litellm-api-key != '' }}
+    # Gemini owes a review unless the prompt said skip, so a failed step still gets a column.
     outputs:
-      ran: ${{ steps.gemini.outcome == 'success' || steps.gemini.outcome == 'failure' }}
+      ran: ${{ steps.prompt.outputs.review_mode != 'skip' }}
     steps:
       # First, so Gemini never sees Claude's review of this push.
       - name: Save the PR for Gemini
+        continue-on-error: true
         run: |
           {
             gh pr view "$PR_NUMBER"
@@ -515,6 +517,7 @@ jobs:
 
       # No credentials left in .git/config, since Antigravity runs with every permission.
       - name: Checkout PR branch
+        continue-on-error: true
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
@@ -522,6 +525,7 @@ jobs:
           persist-credentials: false
 
       - name: Checkout tooling repo
+        continue-on-error: true
         uses: actions/checkout@v4
         with:
           repository: artsy/duchamp
@@ -530,20 +534,24 @@ jobs:
           persist-credentials: false
 
       - name: Setup Node.js
+        continue-on-error: true
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
       - name: Enable Corepack
+        continue-on-error: true
         run: corepack enable
 
       - name: Install tooling dependencies
+        continue-on-error: true
         run: yarn install --frozen-lockfile
         working-directory: .tooling
         env:
           YARN_IGNORE_PATH: 1
 
       - name: Check experiments
+        continue-on-error: true
         id: experiment
         run: npx ts-node .tooling/scripts/build-review-prompt.ts --check-experiment
         env:
@@ -564,6 +572,7 @@ jobs:
       # The same prompt as Claude's, plus the Antigravity note. Claude hasn't posted on
       # this push yet, so it picks the same review mode.
       - name: Build review prompt
+        continue-on-error: true
         id: prompt
         run: npx ts-node .tooling/scripts/build-review-prompt.ts
         env:
@@ -580,6 +589,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Install review skills
+        continue-on-error: true
         if: steps.prompt.outputs.gemini_prompt_file != ''
         env:
           STACK_SKILLS: ${{ steps.prompt.outputs.stack_skills }}
@@ -596,6 +606,7 @@ jobs:
 
       # The installer takes no version, so this runs the latest agy.
       - name: Install Antigravity CLI
+        continue-on-error: true
         if: steps.prompt.outputs.gemini_prompt_file != ''
         run: |
           curl -fsSL https://antigravity.google/cli/install.sh | bash -s -- --skip-aliases
@@ -604,13 +615,27 @@ jobs:
           echo '{"modelProvider": "gemini"}' > "$HOME/.gemini/antigravity-cli/settings.json"
           "$HOME/.local/bin/agy" --version
 
+      # Hosted runners give passwordless sudo and the Docker socket, which would let
+      # Antigravity read the job's tokens from the runner's memory. Both go before it runs.
+      - name: Drop sudo and Docker
+        continue-on-error: true
+        id: drop-sudo
+        if: steps.prompt.outputs.gemini_prompt_file != ''
+        run: |
+          sudo chmod 600 /var/run/docker.sock || true
+          sudo find /etc/sudoers.d -type f -delete
+          if sudo -n true 2>/dev/null; then
+            echo "::error::sudo still works, so Gemini won't run"
+            exit 1
+          fi
+
       # The prompt can pass the size limit of one command-line argument, so agy reads it
       # from the file.
       - name: Run Gemini review
         id: gemini
-        if: steps.prompt.outputs.gemini_prompt_file != ''
+        if: steps.drop-sudo.outcome == 'success'
         continue-on-error: true
-        timeout-minutes: 20
+        timeout-minutes: 15
         run: |
           echo "GEMINI_STARTED_AT=$(date +%s%3N)" >> "$GITHUB_ENV"
           agy -p "Your instructions are in $PROMPT_FILE. Read all of it, then do what it says." \
@@ -619,6 +644,7 @@ jobs:
             --output-format json \
             --json-schema .tooling/codex-experiment/output-schema.json \
             --dangerously-skip-permissions \
+            --print-timeout 14m \
             > "$RUNNER_TEMP/gemini-review.json"
         env:
           PROMPT_FILE: ${{ steps.prompt.outputs.gemini_prompt_file }}
@@ -650,11 +676,13 @@ jobs:
   # scripts/post-side-by-side.ts.
   side-by-side:
     needs: [check, review, gemini]
-    # A newer push cancels this run's reviews; posting then would replace a newer comment.
+    # A newer push cancels this run's review; posting then would replace a newer comment.
+    # A Gemini job that failed or timed out still gets its column.
     if: >-
       !cancelled() && needs.check.outputs.should-review == 'true' &&
-      needs.review.result != 'cancelled' && needs.gemini.result != 'cancelled' &&
-      (needs.review.outputs.codex == 'true' || needs.gemini.outputs.ran == 'true')
+      needs.review.result != 'cancelled' &&
+      (needs.review.outputs.codex == 'true' ||
+       needs.gemini.result != 'skipped' && needs.gemini.outputs.ran != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     continue-on-error: true
@@ -663,6 +691,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout tooling repo
+        continue-on-error: true
         uses: actions/checkout@v4
         with:
           repository: artsy/duchamp
@@ -670,14 +699,17 @@ jobs:
           path: .tooling
 
       - name: Setup Node.js
+        continue-on-error: true
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
       - name: Enable Corepack
+        continue-on-error: true
         run: corepack enable
 
       - name: Install tooling dependencies
+        continue-on-error: true
         run: yarn install --frozen-lockfile
         working-directory: .tooling
         env:
@@ -691,12 +723,13 @@ jobs:
           path: ${{ runner.temp }}/reviews
 
       - name: Post the side-by-side comment
+        continue-on-error: true
         run: npx ts-node .tooling/scripts/post-side-by-side.ts
         env:
           CLAUDE_OUTCOME: ${{ needs.review.result }}
           CODEX_RAN: ${{ needs.review.outputs.codex }}
           CODEX_REVIEW_FILE: ${{ runner.temp }}/reviews/codex-review/codex-review.json
-          GEMINI_RAN: ${{ needs.gemini.outputs.ran }}
+          GEMINI_RAN: ${{ needs.gemini.result != 'skipped' && needs.gemini.outputs.ran != 'false' }}
           GEMINI_REVIEW_FILE: ${{ runner.temp }}/reviews/gemini-review/gemini-review.json
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

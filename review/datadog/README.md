@@ -25,7 +25,9 @@ All of them but `findings` and `human_comments` carry the tags `repo`, `pr`, `gr
 (full, rereview or unknown), `outcome`, `model` and `effort`. Reviews from after the
 [Gemini experiment](../../gemini-experiment/README.md) carry `reviewer` (`claude` or
 `gemini`). Gemini's reviews carry only `repo`, `pr`, `mode`, `outcome`, `model` and
-`reviewer`, and no cost, because Antigravity doesn't report one. Reviews from after the
+`reviewer`, and no cost, because Antigravity doesn't report one. Every widget outside the
+Reviewers section filters them out with `!reviewer:gemini`, so Claude's numbers stay
+Claude's. Reviews from after the
 security experiment also carry `security` (true when the
 [security pass](../README.md#security-pass) ran). Reviews from after the best-practices
 experiment carry `best_practices` (true when the review ran a
