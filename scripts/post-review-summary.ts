@@ -12,7 +12,7 @@ import {
  * action revokes the Claude app token when it ends, so this posts as github-actions[bot].
  *
  * Other reviews post their summary themselves, as claude[bot], and this only deletes
- * the earlier ones.
+ * the earlier ones. See isReviewSummary for which comments count.
  *
  * Earlier summaries are deleted only after the new one posts, so a run that is
  * cancelled or fails leaves the earlier summary in place.
@@ -68,20 +68,26 @@ export const buildCommentBody = (input: CommentInput): string => {
   return `${input.summary.trimEnd()}\n\n${FOOTER_SENTINEL}${footer && `\n${footer}`}`
 }
 
+/** How review/prompt.md's report format starts a summary. */
+const SUMMARY_HEADING = /^\s*##\s+Code Review\b/
+
 /**
- * A review summary: posted by claude[bot] before the workflow posted them, or by
- * github-actions[bot] with the footer. That bot posts other comments too.
+ * A review summary: posted by github-actions[bot] with the footer, or by claude[bot]
+ * under the report format's heading, for reviews that post their own. Both bots post
+ * other comments too. claude[bot] is also who answers `@claude` and who writes on the
+ * PRs Claude opens, and those comments must not be deleted as old summaries.
  */
 export const isReviewSummary = (comment: IssueComment): boolean => {
   if (comment.user?.type !== "Bot") {
     return false
   }
+  const body = comment.body ?? ""
   if (comment.user.login === "claude[bot]") {
-    return true
+    return SUMMARY_HEADING.test(body)
   }
   return (
     comment.user.login === "github-actions[bot]" &&
-    (comment.body ?? "").includes(FOOTER_SENTINEL)
+    body.includes(FOOTER_SENTINEL)
   )
 }
 

@@ -115,11 +115,15 @@ jobs:
       group: claude-review-${{ github.repository }}-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     # Fast-path exclusions: drafts, bots, dependabot, renovate, in-progress label (zero overhead).
+    # Claude's own PRs are the one bot exception, from a branch in this repo only; see
+    # isReviewedBotPr in scripts/check-pr-exclusions.js, which names the same login.
     # `closed` only reaches here from callers in the outcome experiment; it never starts a review.
     if: |
       github.event.action != 'closed' &&
       github.event.pull_request.draft == false &&
-      !contains(github.event.pull_request.user.login, '[bot]') &&
+      (!contains(github.event.pull_request.user.login, '[bot]') ||
+       github.event.pull_request.user.login == 'claude[bot]' &&
+       github.event.pull_request.head.repo.full_name == github.repository) &&
       github.event.pull_request.user.login != 'dependabot' &&
       github.event.pull_request.user.login != 'renovate' &&
       !contains(github.event.pull_request.labels.*.name, 'in-progress') &&
@@ -196,8 +200,17 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const { isReviewedBotPr } = require('./.tooling/scripts/check-pr-exclusions.js');
+
             const username = context.payload.pull_request.user.login;
             const prNumber = context.payload.pull_request.number;
+
+            // An app is not a collaborator, so there is no permission to look up.
+            if (isReviewedBotPr(context.payload.pull_request, `${context.repo.owner}/${context.repo.repo}`)) {
+              console.log(`✓ ${username} is a reviewed bot, and the PR's branch is in this repo`);
+              core.setOutput('should-review', 'true');
+              return;
+            }
 
             // Check if user has write permission to the repo (members/collaborators do)
             try {
@@ -393,6 +406,9 @@ jobs:
             ${{ steps.experiment.outputs.litellm == 'true' && steps.experiment.outputs.litellm_edge_header != '' && secrets.litellm-edge-token != '' && format('{0}: {1}', steps.experiment.outputs.litellm_edge_header, secrets.litellm-edge-token) || '' }}
         with:
           anthropic_api_key: ${{ steps.experiment.outputs.litellm == 'true' && secrets.litellm-api-key || secrets.anthropic-api-key }}
+          # The action refuses a run a bot started, such as Claude pushing to a PR. Set only
+          # for those runs, because any value here also turns off the action's auto mode.
+          allowed_bots: ${{ github.actor == 'claude[bot]' && 'claude' || '' }}
           # tool_args decide who posts the summary: see formatDelivery in build-review-prompt.ts.
           claude_args: >-
             ${{ steps.prompt.outputs.model_args }}

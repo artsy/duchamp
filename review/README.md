@@ -213,6 +213,37 @@ after the run keeps the newest summary and deletes the rest. The step before the
 just resolves Claude's old inline threads. So a run that is cancelled or fails leaves
 the earlier summary up.
 
+A `claude[bot]` comment counts as a summary only when it starts with the report
+format's `## Code Review` heading. `claude[bot]` also answers `@claude` and writes on
+the PRs Claude opens, and those comments stay. A repo whose own `prompt:` drops that
+heading keeps its old summaries outside lean reviews.
+
+## PRs Claude opens
+
+Bot PRs are skipped, except the ones Claude opens, from Slack for example. They are
+code nobody on the team wrote, so they get the same review as anyone's PR.
+
+- **Which PRs.** The author is `claude[bot]` and the branch is in the repo itself. An
+  app is not a collaborator, so the workflow can't look up its write access as it does
+  for people. The branch stands in for it: only an app installed with write access can
+  push one. A `claude[bot]` PR from a fork is skipped like any other bot's.
+- **When.** Claude opens its PRs as drafts, so the first review runs when someone marks
+  the PR ready, and then on each push.
+- **Runs Claude starts.** The action refuses a run started by a bot, such as Claude
+  pushing a commit. The workflow passes `allowed_bots: claude` for those runs only. That
+  input also turns off the action's auto mode, so in those runs a tool call outside the
+  review's allow list is denied outright.
+- **The action's own caution.** It never counts a bot author as trusted, so it denies
+  commands that run code from the checkout and turns git hooks off. The review uses
+  none of those.
+- **One login, two roles.** The reviewer posts inline comments as `claude[bot]`, the
+  same login as the author. The scripts tell the reviewer's inline threads from others
+  by that login, so a thread Claude starts on its own PR as the author is resolved by
+  the next review and counted as a finding in the outcome metrics. Claude's replies in
+  a thread are bot comments, so re-reviews and the outcome judge don't read them.
+- **Experiments.** Enrolment by author works as for anyone: add `claude[bot]` to an
+  experiment's `participants.yml`.
+
 After each review, the job's step summary shows what it cost: model, cost, turns,
 duration, input, cache and output tokens, cache hit rate, and denied tool calls.
 `scripts/review-usage.ts` reads these from the action's execution file. It writes

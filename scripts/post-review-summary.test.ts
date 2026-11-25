@@ -127,6 +127,26 @@ describe("isReviewSummary", () => {
     expect(
       isReviewSummary(comment("claude[bot]", "User", FOOTER_SENTINEL))
     ).toBe(false)
+  })
+
+  it("leaves Claude's other comments alone", () => {
+    expect(
+      isReviewSummary(
+        comment("claude[bot]", "Bot", "Fixed in abc1234, thanks for the catch.")
+      )
+    ).toBe(false)
+    expect(
+      isReviewSummary(
+        comment("claude[bot]", "Bot", "I ran the ## Code Review suggestions")
+      )
+    ).toBe(false)
+    expect(
+      isReviewSummary({
+        id: 3,
+        user: { login: "claude[bot]", type: "Bot" },
+        body: null,
+      })
+    ).toBe(false)
     expect(isReviewSummary({ id: 2, user: null, body: null })).toBe(false)
   })
 })
@@ -162,5 +182,17 @@ describe("earlierSummaries", () => {
 
   it("deletes nothing when there is only one summary", () => {
     expect(earlierSummaries([person(1), claude(2)])).toEqual([])
+  })
+
+  it("keeps what Claude wrote as the PR's author", () => {
+    const reply = {
+      id: 2,
+      user: { login: "claude[bot]", type: "Bot" },
+      body: "Pushed a fix for the nil case.",
+    }
+
+    expect(
+      earlierSummaries([actions(1), reply, actions(3)], 3).map(c => c.id)
+    ).toEqual([1])
   })
 })
