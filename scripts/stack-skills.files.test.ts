@@ -1,6 +1,7 @@
 import * as fs from "fs"
 import * as yaml from "js-yaml"
 import * as path from "path"
+import { TOPIC_SKILLS } from "./topic-skills"
 
 const root = path.join(__dirname, "..")
 const skills = Object.keys(
@@ -55,10 +56,11 @@ describe(".claude/experiment-skills", () => {
     }
   )
 
-  it("has no skill named like a review or stack skill", () => {
+  it("has no skill named like a review, stack or topic skill", () => {
     const taken = [
       ...fs.readdirSync(path.join(root, ".claude", "skills")),
       ...skills,
+      ...TOPIC_SKILLS.map(({ skill }) => skill),
     ]
     expect(experimentSkills.filter(skill => taken.includes(skill))).toEqual([])
   })
