@@ -2,7 +2,61 @@ const {
   DEFAULT_TITLE_PATTERNS,
   parseExcludeConfig,
   checkTitleExclusion,
+  isReviewedBotPr,
 } = require("./check-pr-exclusions")
+
+describe("isReviewedBotPr", () => {
+  const pr = (login, type, headRepo) => ({
+    user: { login, type },
+    head: { repo: headRepo ? { full_name: headRepo } : null },
+  })
+
+  it("accepts Claude's PR from a branch in the repo", () => {
+    expect(
+      isReviewedBotPr(
+        pr("claude[bot]", "Bot", "artsy/gravity"),
+        "artsy/gravity"
+      )
+    ).toBe(true)
+    expect(
+      isReviewedBotPr(
+        pr("claude[bot]", "Bot", "Artsy/Gravity"),
+        "artsy/gravity"
+      )
+    ).toBe(true)
+  })
+
+  it("rejects Claude's PR from a fork or a deleted fork", () => {
+    expect(
+      isReviewedBotPr(
+        pr("claude[bot]", "Bot", "someone/gravity"),
+        "artsy/gravity"
+      )
+    ).toBe(false)
+    expect(
+      isReviewedBotPr(pr("claude[bot]", "Bot", null), "artsy/gravity")
+    ).toBe(false)
+  })
+
+  it("rejects other bots and people", () => {
+    expect(
+      isReviewedBotPr(
+        pr("dependabot[bot]", "Bot", "artsy/gravity"),
+        "artsy/gravity"
+      )
+    ).toBe(false)
+    expect(
+      isReviewedBotPr(pr("octocat", "User", "artsy/gravity"), "artsy/gravity")
+    ).toBe(false)
+    expect(
+      isReviewedBotPr(
+        pr("claude[bot]", "User", "artsy/gravity"),
+        "artsy/gravity"
+      )
+    ).toBe(false)
+    expect(isReviewedBotPr(undefined, "artsy/gravity")).toBe(false)
+  })
+})
 
 describe("parseExcludeConfig", () => {
   it("returns null for null input", () => {

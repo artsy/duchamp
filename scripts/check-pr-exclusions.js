@@ -57,8 +57,34 @@ function checkTitleExclusion(title, configContent) {
   return { excluded: false }
 }
 
+/**
+ * Bots whose PRs are reviewed. Their code is written on request rather than generated
+ * mechanically, like a dependency bump. The `check` job's `if:` in claude-review.yml
+ * names the same logins.
+ */
+const REVIEWED_BOTS = ["claude[bot]"]
+
+/**
+ * Whether a PR is from a reviewed bot. An app is not a collaborator, so the author's
+ * write access can't be looked up. A branch in the repo itself stands in for it: only
+ * an app installed with write access can push one, and a fork PR never qualifies.
+ */
+function isReviewedBotPr(pullRequest, repoFullName) {
+  const login = pullRequest?.user?.login
+  const headRepo = pullRequest?.head?.repo?.full_name
+
+  return (
+    pullRequest?.user?.type === "Bot" &&
+    REVIEWED_BOTS.includes(login) &&
+    !!headRepo &&
+    headRepo.toLowerCase() === repoFullName.toLowerCase()
+  )
+}
+
 module.exports = {
   DEFAULT_TITLE_PATTERNS,
+  REVIEWED_BOTS,
+  isReviewedBotPr,
   parseExcludeConfig,
   checkTitleExclusion,
 }

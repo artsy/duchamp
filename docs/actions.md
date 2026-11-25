@@ -230,7 +230,9 @@ the steps, and a prompt to paste into Claude Code that does them.
 - Comments directly on the PR with findings
 - Default exclusions (configurable per-repo):
   - Draft PRs
-  - Bot authors (dependabot, renovate, usernames containing `[bot]`)
+  - Bot authors (dependabot, renovate, usernames containing `[bot]`), except PRs Claude
+    opens from a branch in the repo (see
+    [PRs Claude opens](../review/README.md#prs-claude-opens))
   - PRs titled exactly "Deploy"
   - PRs with "graphql schema" in the title
   - PRs labeled `in-progress` (requires `labeled`/`unlabeled` in the caller's trigger `types`, see below)
@@ -311,7 +313,7 @@ exclude:
 
 Default exclusions:
 
-- **Always excluded** (cannot be disabled): Draft PRs, bots (username contains `[bot]`), `dependabot`, `renovate`, PRs labeled `in-progress`
+- **Always excluded** (cannot be disabled): Draft PRs, bots (username contains `[bot]`, other than `claude[bot]` on a branch in the repo), `dependabot`, `renovate`, PRs labeled `in-progress`
 - **Title patterns** (disabled with `disable_defaults: true`): `^Deploy$` (exact match), `graphql schema` (contains)
 
 **Complete Prompt Override:**
