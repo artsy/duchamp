@@ -27,6 +27,11 @@ import {
 } from "./review-mode"
 import { classifyDiff, type DiffRisk, type ReviewTier } from "./review-risk"
 import { formatStackSkillsSection, resolveStackSkills } from "./stack-skills"
+import {
+  formatTopicSkillsSection,
+  topicSkillPath,
+  topicSkillsFor,
+} from "./topic-skills"
 
 /**
  * Build the review prompt from review/prompt.md plus repo-specific configuration.
@@ -1118,6 +1123,8 @@ const main = (): void => {
   console.log(
     `Stack skills: ${stack.skills.join(", ") || "none"} (${stack.reason})`
   )
+  const topic = topicSkillsFor(process.env.GITHUB_REPOSITORY)
+  console.log(`Topic skills: ${topic.map(t => t.skill).join(", ") || "none"}`)
 
   // Merge risk is about the whole merge, so it rates the PR even on a re-review.
   const mergeRiskSection = mergeRisk
@@ -1137,6 +1144,7 @@ const main = (): void => {
     formatRelatedReposSection(related, process.env.REPO_PRIVATE === "true") +
     security +
     formatStackSkillsSection(stack.skills) +
+    formatTopicSkillsSection(topic) +
     mergeRiskSection
   const answered =
     inLean && replies && reviewMode.mode === "rereview"
@@ -1186,7 +1194,7 @@ const main = (): void => {
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\nreplies=${repliesRead}\ncodex=${codexFiles !== undefined}\ncodex_prompt_file=${codexFiles?.promptFile ?? ""}\ncodex_pr_file=${codexFiles?.prFile ?? ""}\ngateway=${gateway ? "litellm" : "anthropic"}\n${headersOutput(gateway, "review", changes.tier)}${formatReviewModeOutputs(context.reviewMode)}`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\ntopic_skills=${topic.map(topicSkillPath).join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\nreplies=${repliesRead}\ncodex=${codexFiles !== undefined}\ncodex_prompt_file=${codexFiles?.promptFile ?? ""}\ncodex_pr_file=${codexFiles?.prFile ?? ""}\ngateway=${gateway ? "litellm" : "anthropic"}\n${headersOutput(gateway, "review", changes.tier)}${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {

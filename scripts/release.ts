@@ -112,7 +112,7 @@ const AREAS: [string, RegExp][] = [
   ["AI review experiments", /^[^/]+-experiment\//],
   [
     "AI review",
-    /^(\.github\/workflows\/claude-review\.yml|review\/|review-styles\/|\.claude\/|docs\/enabling-ai-review\.md|scripts\/(build-review-prompt|review-|post-review-summary|post-side-by-side|related-repos|stack-skills|cleanup-ai-reviews|collect-|test-review))/,
+    /^(\.github\/workflows\/claude-review\.yml|review\/|review-styles\/|\.claude\/|docs\/enabling-ai-review\.md|scripts\/(build-review-prompt|review-|post-review-summary|post-side-by-side|related-repos|stack-skills|topic-skills|cleanup-ai-reviews|collect-|test-review))/,
   ],
   [
     "Incidents and on-call",

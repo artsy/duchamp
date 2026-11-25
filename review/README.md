@@ -70,6 +70,21 @@ instead. The [best-practices experiment](../best-practices-experiment/README.md)
 them on the repos in `skills.yml`, and the workflow copies only the ones a review uses.
 See that README for when they run and how we count their use.
 
+Topic skills live in `.claude/topic-skills/<vendor>/<skill>/`. `TOPIC_SKILLS` in
+`scripts/topic-skills.ts` lists each with its repos and `when`, a plain description of
+the code it covers. They are not part of the best-practices experiment: a listed repo
+gets the skill on every review, and the workflow copies it only for those repos.
+
+The prompt tells the reviewer to run a skill when the diff touches the code its `when`
+describes, and to say nothing of it otherwise. The reviewer decides, not a pattern,
+because it reads the whole diff and can tell that a wrapper class calls the vendor's
+API. The cost is that the same diff may not always get the skill; `skill_calls` in
+Datadog shows how often it ran. The prompt also tells the reviewer to judge only the
+lines the diff changes, to put findings under Suggestions unless the diff proves the
+problem, not to ask for an upgrade because a newer API or SDK version exists, and to say
+in the summary which skills ran. `stripe-best-practices` is the first, for gravity,
+exchange, force and eigen. To add a repo or a skill, edit `TOPIC_SKILLS` in a duchamp PR.
+
 `.claude/experiment-skills/` holds skills that belong to one experiment, such as
 `merge-risk` for the [merge risk experiment](../merge-risk-experiment/README.md). The
 workflow copies one only when the review is in its experiment.
@@ -269,6 +284,15 @@ MIT, renamed to avoid a clash; see its `SOURCE.md`.
 `.claude/stack-skills/react-native-best-practices/` is vendored from
 [Callstack's `agent-skills`](https://github.com/callstackincubator/agent-skills/tree/59e9d17446a248b21d86f078fcd0bd2d36db1ca4/skills/react-native-best-practices),
 MIT, with its LICENSE alongside.
+
+`.claude/topic-skills/stripe/` holds `stripe-best-practices`, vendored from
+[Stripe's `stripe/ai`](https://github.com/stripe/ai/tree/2815b93e2c54a87bd9b146df62704a0e84930929/skills/stripe-best-practices),
+MIT, with its LICENSE and a `SOURCE.md` in the parent folder. Stripe publishes no
+versions for it: a bot commits "sync skills" to `stripe/ai` almost daily. The skill text
+goes into the review prompt, so read the diff before you bump the commit. Stripe ships
+other skills, such as `connect-recommend`, that we left out: they were written for
+interactive sessions, and a review can't use most of them. To add one, put its folder
+beside this one and add a `TOPIC_SKILLS` entry.
 
 `.claude/experiment-skills/merge-risk/` adapts
 [Warp's `merge-risk`](https://github.com/warpdotdev/common-skills/blob/8792394ff1b655e0af451b8fabb68ef0cfcbd208/.agents/skills/merge-risk/SKILL.md)

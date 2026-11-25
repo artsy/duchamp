@@ -340,6 +340,7 @@ jobs:
       - name: Install review skills and agents
         env:
           STACK_SKILLS: ${{ steps.prompt.outputs.stack_skills }}
+          TOPIC_SKILLS: ${{ steps.prompt.outputs.topic_skills }}
           MERGE_RISK: ${{ steps.prompt.outputs.merge_risk }}
         run: |
           mkdir -p "$HOME/.claude/skills" "$HOME/.claude/agents"
@@ -348,6 +349,10 @@ jobs:
           # Only the stack skills this review uses, so other reviews can't load them.
           for skill in $STACK_SKILLS; do
             cp -R ".tooling/.claude/stack-skills/$skill" "$HOME/.claude/skills/"
+          done
+          # Topic skills, for the repos that list them in TOPIC_SKILLS.
+          for skill in $TOPIC_SKILLS; do
+            cp -R ".tooling/.claude/topic-skills/$skill" "$HOME/.claude/skills/"
           done
           if [ "$MERGE_RISK" = "true" ]; then
             cp -R .tooling/.claude/experiment-skills/merge-risk "$HOME/.claude/skills/"
