@@ -6,18 +6,18 @@ verdict. It is a second reader, not a merge gate. One shared workflow in this re
 runs it for every Artsy repo that turns it on.
 
 This page is how to turn it on. For every option, see the
-[`run-claude-review.yml` reference](./actions.md#run-claude-reviewyml). For how the
+[`run-agent-review.yml` reference](./actions.md#run-agent-reviewyml). For how the
 review works, see [`review/README.md`](../review/README.md).
 
 ## The steps
 
-1. Copy [`templates/run-claude-review.yml`](../templates/run-claude-review.yml) to
-   `.github/workflows/run-claude-review.yml` in the repo. Keep it as is.
+1. Copy [`templates/run-agent-review.yml`](../templates/run-agent-review.yml) to
+   `.github/workflows/run-agent-review.yml` in the repo. Keep it as is.
 2. Check the repo has the keys it needs (see [The keys](#the-keys) below). Artsy sets
    them for the whole org, so most repos need nothing.
 3. Optional: add a `.claude-review.yml` at the repo root with the repo's own focus
    areas, ignored paths and context. The review works without it, and is better with
-   it. See [Repo Configuration](./actions.md#run-claude-reviewyml).
+   it. See [Repo Configuration](./actions.md#run-agent-reviewyml).
 4. Open a PR with those files and merge it. The review does not run on that PR: the
    Claude action skips a PR whose workflow file differs from the default branch's,
    and the `review` check passes without posting anything. The next PR opened after
@@ -33,11 +33,10 @@ as "Organization secrets".
 
 | Name | Kind | Needed |
 | --- | --- | --- |
-| `ANTHROPIC_API_KEY` | secret | Always. Without it the review fails |
+| `AI_REVIEW_LITELLM_API_KEY` | secret | Always. Every review goes through Artsy's LiteLLM gateway with it; without it the review doesn't run |
 | `REVIEW_APP_PRIVATE_KEY` | secret | Only when `.claude-review.yml` lists a private repo in `related_repos` |
 | `REVIEW_APP_ID` | variable | With `REVIEW_APP_PRIVATE_KEY`. It is an org variable, so there is nothing to add |
 | `OPENAI_API_KEY` | secret | Only for the Codex experiment |
-| `AI_REVIEW_LITELLM_API_KEY` | secret | Only for the LiteLLM experiment |
 | `AI_REVIEW_LITELLM_EDGE_TOKEN` | secret | Only for the LiteLLM experiment, once the gateway has an edge check |
 
 If one is missing, an org admin can share the org secret with the repo, or you can
@@ -54,11 +53,11 @@ without merging it.
 
 ```text
 Enable Artsy's shared AI PR review in this repo. The docs are at
-https://github.com/artsy/duchamp/blob/main/docs/actions.md#run-claude-reviewyml
+https://github.com/artsy/duchamp/blob/main/docs/actions.md#run-agent-reviewyml
 
-1. Add .github/workflows/run-claude-review.yml with the content of
-   https://github.com/artsy/duchamp/blob/main/templates/run-claude-review.yml
-   (fetch it with `gh api repos/artsy/duchamp/contents/templates/run-claude-review.yml`).
+1. Add .github/workflows/run-agent-review.yml with the content of
+   https://github.com/artsy/duchamp/blob/main/templates/run-agent-review.yml
+   (fetch it with `gh api repos/artsy/duchamp/contents/templates/run-agent-review.yml`).
    Keep it as is. If the repo already has this file, stop and tell me.
 
 2. Check which keys reach this repo, with
@@ -118,5 +117,5 @@ review in the repo from then on, and a vague one produces noisy comments.
 When the review keeps raising something the team doesn't want, or keeps missing
 something it should catch, edit `focus_areas` in the repo's `.claude-review.yml`. Say
 what to flag and what not to flag: the reference has
-[examples](./actions.md#run-claude-reviewyml), and `artsy/gravity` and `artsy/volt`
+[examples](./actions.md#run-agent-reviewyml), and `artsy/gravity` and `artsy/volt`
 have long-lived ones.

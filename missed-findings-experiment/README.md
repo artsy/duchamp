@@ -13,7 +13,7 @@ catch themselves?
 ## Joining
 
 1. **Enable it in the repo.** Add `closed` to the trigger in the repo's
-   `run-claude-review.yml`, as for the outcome experiment. Without it the job never
+   `run-agent-review.yml`, as for the outcome experiment. Without it the job never
    runs there.
 
 With `everyone: true` in `participants.yml`, every merged PR in such a repo is
@@ -70,7 +70,7 @@ repo's `.claude-review.yml`, by PR. Nothing writes rules automatically.
 
 ## How it works
 
-The `outcome` job in `claude-review.yml` runs `scripts/review-missed.ts` when a PR
+The `outcome` job in `agent-review.yml` runs `scripts/review-missed.ts` when a PR
 closes as merged. One call to `claude-haiku-5-5` gets the human comments with their
 diff hunks and the AI's inline comments, and returns the category, whether each was
 caught, and the restatement. The text is passed as data, with an instruction not to

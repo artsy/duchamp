@@ -51,14 +51,14 @@ describe("parseArgs", () => {
       repos: ["eigen", "force"],
       since: "2026-10-14",
       splits: ["2026-10-22", "2026-10-29"],
-      workflow: "review.yml",
+      workflows: ["review.yml"],
     })
   })
 
-  it("defaults the workflow file", () => {
+  it("defaults to the caller's new and old file names, so runs from before the rename count", () => {
     expect(
-      parseArgs(["--repos", "eigen", "--since", "2026-10-14"]).workflow
-    ).toBe("run-claude-review.yml")
+      parseArgs(["--repos", "eigen", "--since", "2026-10-14"]).workflows
+    ).toEqual(["run-agent-review.yml", "run-claude-review.yml"])
   })
 
   it("requires repos and since", () => {

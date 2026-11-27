@@ -1,6 +1,6 @@
 # AI PR review
 
-The [Claude AI PR review](../docs/actions.md#run-claude-reviewyml) reviews every PR
+The [Claude AI PR review](../docs/actions.md#run-agent-reviewyml) reviews every PR
 with `prompt.md` in this directory. It runs on the workflow's `model` input,
 `claude-opus-5-5` by default, at `high` effort (`REVIEW_EFFORT` in
 `scripts/build-review-prompt.ts`). Small lean-reviews PRs run on a lighter model; see
@@ -237,7 +237,7 @@ mode. The group is `experiment` for PRs in
 `standard` for the rest, and `unknown` for log lines from before the group was
 recorded. Since lean reviews went to every PR, new runs are all `experiment`. The two groups differ in more than one way (lean PRs also re-review and
 route models), so compare each group with itself before and after a change.
-It finds runs by the caller's workflow file, `run-claude-review.yml` unless you pass
+It finds runs by the caller's workflow file, `run-agent-review.yml` unless you pass
 `--workflow`. GitHub keeps logs for 90 days by default, so older windows are gone.
 This is a before/after comparison, not a controlled test: the mix of PRs changes
 from week to week. Runs from before re-reviews existed show as mode `all`; after,

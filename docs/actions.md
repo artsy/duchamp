@@ -11,7 +11,7 @@ This document provides detailed reference information for all GitHub Actions ava
 | `run-add-version-label.yml`          | Auto-add version labels to PRs | For repositories using auto-release |
 | `run-conventional-commits-check.yml` | Validate conventional commits  | For conventional commit compliance  |
 | `run-npm-audit.yml`                  | Discover vulnerabilities       | For Node projects                   |
-| `run-claude-review.yml`              | AI-powered PR review           | For Claude-based code review        |
+| `run-agent-review.yml`              | AI-powered PR review           | For Claude-based code review        |
 | `link-pr-to-notion.yml`             | Link PRs to Notion tasks       | For repos using Notion task tracking |
 | `incident-standup-reminder.yml`      | Remind on-call to run standup  | For scheduled Slack standup reminders |
 | `incident-next-on-call.yml`          | Remind engineers of an upcoming on-call shift | For scheduled Slack next-on-call reminders |
@@ -193,19 +193,19 @@ on:
 
 ---
 
-### run-claude-review.yml
+### run-agent-review.yml
 
 **Purpose**: AI-powered pull request review using Claude
 
 **Use Case**: Automated code review with customizable focus areas for any repository
 
 ```yaml
-uses: artsy/duchamp/.github/workflows/claude-review.yml@main
+uses: artsy/duchamp/.github/workflows/agent-review.yml@main
 with:
   model: "claude-opus-5-5" # Claude model (default)
   timeout-minutes: 30 # Maximum review time (default: 30)
 secrets:
-  anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }} # Required
+  litellm-api-key: ${{ secrets.AI_REVIEW_LITELLM_API_KEY }} # Required: every review goes through LiteLLM
   review-app-private-key: ${{ secrets.REVIEW_APP_PRIVATE_KEY }} # Optional, for private related_repos
   openai-api-key: ${{ secrets.OPENAI_API_KEY }} # Optional, for the Codex experiment
 ```
@@ -244,7 +244,11 @@ the steps, and a prompt to paste into Claude Code that does them.
 
 **Secrets:**
 
-- `anthropic-api-key` (required): Anthropic API key for Claude access
+- `litellm-api-key`: the LiteLLM virtual key (org secret `AI_REVIEW_LITELLM_API_KEY`).
+  Every review goes through Artsy's LiteLLM gateway with it
+- `anthropic-api-key` (optional): an Anthropic API key. Callers that still pass it call
+  Anthropic directly, except for PRs in the LiteLLM experiment. New callers pass only
+  `litellm-api-key`
 - `review-app-private-key` (optional): private key of the Artsy Review Context GitHub
   App (org secret `REVIEW_APP_PRIVATE_KEY`). The workflow mints a read-only token from
   it for private repos listed in `related_repos`. Without it, private related repos are
@@ -687,7 +691,7 @@ jobs:
 | Automated releases              | `run-add-version-label.yml`          | Requires .autorc file                |
 | Conventional commits            | `run-conventional-commits-check.yml` | Enforces commit standards            |
 | Security vulnerability scanning | `run-npm-audit.yml`                  | Scans yarn.lock for vulnerabilities  |
-| AI-powered code review          | `run-claude-review.yml`              | Uses Claude to review PRs            |
+| AI-powered code review          | `run-agent-review.yml`              | Uses Claude to review PRs            |
 | Notion task tracking            | `link-pr-to-notion.yml`             | Links PRs to Notion tasks by short ID |
 | Scheduled on-call Slack reminders | `incident-standup-reminder.yml`   | Sources current on-call from incident.io |
 | Scheduled upcoming on-call reminders | `incident-next-on-call.yml`    | Notifies engineers ahead of their shift starting |

@@ -5,7 +5,7 @@
 # it, and what people replied. It changes nothing in the review. This is separate from
 # the other experiments: a PR can be in any mix of them.
 #
-# It only runs in repos whose `run-claude-review.yml` lists `closed` in its
+# It only runs in repos whose `run-agent-review.yml` lists `closed` in its
 # pull_request types.
 #
 # `everyone: true` puts every merged PR in those repos in the experiment, whoever wrote
