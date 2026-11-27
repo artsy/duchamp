@@ -95,6 +95,12 @@ So LiteLLM can't split Gemini spend by repo or PR, and once the gateway's edge c
 (`edge_header`) turns on, Gemini calls will be refused. Until #514 lands, the edge check
 needs an exception for Gemini or the experiment pauses.
 
+## Checking it works
+
+Open a PR as an enrolled author, or add the `ai-review-gemini` label, and push twice.
+The first push gets a full Gemini review and a side-by-side comment; the second gets a
+Gemini re-review of the changes since its commit.
+
 ## Measuring it
 
 - **Findings.** When the PR merges, the [outcome experiment](../outcome-experiment/README.md)
