@@ -105,7 +105,7 @@ export const formatInlineComments = (
  * A reviewer's final message, in codex-experiment/output-schema.json. Antigravity wraps it
  * in an envelope: `structured_output` holds the schema's JSON, `response` the text. Text
  * that isn't that JSON is kept as the summary, so a review still shows when the reviewer
- * ignores the schema. Null when there is no message.
+ * ignores the schema. Null when there is no message, or the envelope says the run failed.
  */
 export const parseReviewOutput = (
   text: string
@@ -119,6 +119,13 @@ export const parseReviewOutput = (
   }
   try {
     const parsed = JSON.parse(trimmed)
+    if (
+      typeof parsed?.status === "string" &&
+      typeof parsed?.summary !== "string" &&
+      parsed.status.toUpperCase() !== "SUCCESS"
+    ) {
+      return null
+    }
     if (
       parsed?.structured_output &&
       typeof parsed.structured_output === "object" &&

@@ -41,6 +41,16 @@ jobs:
     steps:
       - run: echo "in-progress label added, cancelled any running review"
 
+  # A job has one concurrency group, so Gemini's own group needs its own job.
+  cancel-gemini-on-in-progress:
+    if: github.event.action == 'labeled' && github.event.label.name == 'in-progress'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: claude-review-gemini-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - run: echo "in-progress label added, cancelled any running Gemini review"
+
   # What happened to the review's findings, and what people caught that it missed, for the
   # outcome and missed-findings experiments. Runs only where the caller lists `closed` in
   # its pull_request types. See outcome-experiment/README.md.
@@ -273,6 +283,7 @@ jobs:
       id-token: write
     outputs:
       codex: ${{ steps.codex-prep.outcome == 'success' }}
+      claude: ${{ steps.review.outcome }}
     # Step conditions and scripts can't read secrets, so these say whether the caller passed the keys.
     env:
       HAS_OPENAI_KEY: ${{ secrets.openai-api-key != '' }}
@@ -368,17 +379,11 @@ jobs:
             await cleanupPreviousAIReviews({ github, context, core });
 
       # Codex has no network, so it reads the PR from a file. Saved before Claude runs,
-      # so Codex never sees Claude's review of this push.
+      # so Codex never sees Claude's review of this push, and without strangers' comments.
       - name: Save the PR for Codex
         continue-on-error: true
         if: steps.prompt.outputs.codex == 'true' && steps.prompt.outputs.review_mode != 'skip' && env.HAS_OPENAI_KEY == 'true'
-        # Without --comments gh prints the description; with it, only the comments.
-        run: |
-          {
-            gh pr view "$PR_NUMBER"
-            echo
-            gh pr view "$PR_NUMBER" --comments
-          } > "$PR_FILE"
+        run: npx ts-node .tooling/scripts/save-pr.ts
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_FILE: ${{ steps.prompt.outputs.codex_pr_file }}
@@ -501,20 +506,6 @@ jobs:
     outputs:
       ran: ${{ steps.prompt.outputs.review_mode != 'skip' }}
     steps:
-      # First, so Gemini never sees Claude's review of this push.
-      - name: Save the PR for Gemini
-        continue-on-error: true
-        run: |
-          {
-            gh pr view "$PR_NUMBER"
-            echo
-            gh pr view "$PR_NUMBER" --comments
-          } > "$RUNNER_TEMP/gemini-pr.md"
-        env:
-          GH_REPO: ${{ github.repository }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          GH_TOKEN: ${{ github.token }}
-
       # No credentials left in .git/config, since Antigravity runs with every permission.
       - name: Checkout PR branch
         continue-on-error: true
@@ -604,19 +595,20 @@ jobs:
             cp -R .tooling/.claude/experiment-skills/merge-risk "$HOME/.agents/skills/"
           fi
 
-      # The installer takes no version, so this runs the latest agy.
-      - name: Install Antigravity CLI
+      # Only comments from the author and people with write access, bots excluded, so
+      # Gemini never sees Claude's review or a stranger's instructions.
+      - name: Save the PR for Gemini
         continue-on-error: true
-        if: steps.prompt.outputs.gemini_prompt_file != ''
-        run: |
-          curl -fsSL https://antigravity.google/cli/install.sh | bash
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          mkdir -p "$HOME/.gemini/antigravity-cli"
-          echo '{"modelProvider": "gemini"}' > "$HOME/.gemini/antigravity-cli/settings.json"
-          "$HOME/.local/bin/agy" --version
+        if: steps.prompt.outputs.gemini_pr_file != ''
+        run: npx ts-node .tooling/scripts/save-pr.ts
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_FILE: ${{ steps.prompt.outputs.gemini_pr_file }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
 
       # Hosted runners give passwordless sudo and the Docker socket, which would let
-      # Antigravity read the job's tokens from the runner's memory. Both go before it runs.
+      # Antigravity read the job's tokens from the runner's memory. Both go first.
       - name: Drop sudo and Docker
         continue-on-error: true
         id: drop-sudo
@@ -628,6 +620,17 @@ jobs:
             echo "::error::sudo still works, so Gemini won't run"
             exit 1
           fi
+
+      # The installer takes no version, so this runs the latest agy.
+      - name: Install Antigravity CLI
+        continue-on-error: true
+        if: steps.drop-sudo.outcome == 'success'
+        run: |
+          curl -fsSL https://antigravity.google/cli/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          mkdir -p "$HOME/.gemini/antigravity-cli"
+          echo '{"modelProvider": "gemini"}' > "$HOME/.gemini/antigravity-cli/settings.json"
+          "$HOME/.local/bin/agy" --version
 
       # The prompt can pass the size limit of one command-line argument, so agy reads it
       # from the file.
@@ -676,10 +679,10 @@ jobs:
   side-by-side:
     needs: [check, review, gemini]
     # A newer push cancels this run's review; posting then would replace a newer comment.
-    # A Gemini job that failed or timed out still gets its column.
+    # The same goes for Gemini's job. One that failed or timed out still gets its column.
     if: >-
       !cancelled() && needs.check.outputs.should-review == 'true' &&
-      needs.review.result != 'cancelled' &&
+      needs.review.result != 'cancelled' && needs.gemini.result != 'cancelled' &&
       (needs.review.outputs.codex == 'true' ||
        needs.gemini.result != 'skipped' && needs.gemini.outputs.ran != 'false')
     runs-on: ubuntu-latest
@@ -725,7 +728,8 @@ jobs:
         continue-on-error: true
         run: npx ts-node .tooling/scripts/post-side-by-side.ts
         env:
-          CLAUDE_OUTCOME: ${{ needs.review.result }}
+          # The review step's own outcome, so a later step failing doesn't hide Claude's column.
+          CLAUDE_OUTCOME: ${{ needs.review.outputs.claude || needs.review.result }}
           CODEX_RAN: ${{ needs.review.outputs.codex }}
           CODEX_REVIEW_FILE: ${{ runner.temp }}/reviews/codex-review/codex-review.json
           GEMINI_RAN: ${{ needs.gemini.result != 'skipped' && needs.gemini.outputs.ran != 'false' }}

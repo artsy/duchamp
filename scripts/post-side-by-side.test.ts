@@ -106,6 +106,19 @@ describe("formatInlineComments", () => {
 })
 
 describe("parseReviewOutput", () => {
+  it("treats an Antigravity envelope that didn't succeed as no review", () => {
+    for (const status of ["ERROR", "CANCELED", "INTERRUPTED"]) {
+      const out = parseReviewOutput(
+        JSON.stringify({
+          status,
+          response: "I started reviewing the workflow and then",
+          error: "deadline exceeded",
+        })
+      )
+      expect(out).toBeNull()
+    }
+  })
+
   it("reads the summary and the well-formed comments", () => {
     const out = parseReviewOutput(
       JSON.stringify({

@@ -35,8 +35,8 @@ async function cleanupPreviousAIReviews({ github, context, core }) {
 }
 
 /**
- * Resolve inline review threads started by the Claude bot, or by Codex through the
- * workflow.
+ * Resolve inline review threads started by the Claude bot, or by Codex or Gemini
+ * through the workflow.
  * We resolve rather than delete to preserve any conversation history
  * (resolved threads collapse in GitHub UI but keep the discussion).
  */

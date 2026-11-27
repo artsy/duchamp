@@ -119,9 +119,9 @@ export const geminiMetrics = (
   ]
 }
 
-const readEnvelope = (file: string): unknown => {
+const parseJson = (text: string): unknown => {
   try {
-    return JSON.parse(fs.readFileSync(file, "utf8"))
+    return JSON.parse(text)
   } catch {
     return null
   }
@@ -129,16 +129,13 @@ const readEnvelope = (file: string): unknown => {
 
 const main = async (): Promise<void> => {
   const file = process.env.GEMINI_REVIEW_FILE ?? ""
-  const envelope = file && fs.existsSync(file) ? readEnvelope(file) : null
-  const usage = parseAgyUsage(envelope)
+  const text = file && fs.existsSync(file) ? fs.readFileSync(file, "utf8") : ""
+  const usage = parseAgyUsage(parseJson(text))
   const startedAt = Number(process.env.GEMINI_STARTED_AT)
   const durationMs =
     usage?.durationMs ??
     (Number.isFinite(startedAt) && startedAt > 0 ? Date.now() - startedAt : 0)
-  const review =
-    file && fs.existsSync(file)
-      ? parseReviewOutput(fs.readFileSync(file, "utf8"))
-      : null
+  const review = parseReviewOutput(text)
 
   const context = {
     repo: process.env.GITHUB_REPOSITORY ?? "",
