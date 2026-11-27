@@ -1,7 +1,12 @@
 import { execFileSync } from "child_process"
 import * as fs from "fs"
 import { isReviewSummary } from "./post-review-summary"
-import { stripReviewFooter } from "./review-mode"
+import {
+  GEMINI_REVIEW_END,
+  GEMINI_REVIEW_START,
+  geminiReviewMarker,
+  stripReviewFooter,
+} from "./review-mode"
 
 /**
  * For Codex and Gemini experiment PRs: posts each extra reviewer's inline comments, then
@@ -194,14 +199,17 @@ export const buildSideBySide = (input: {
             .filter(Boolean)
             .join("\n\n")
         : "Claude's review didn't finish on this push.",
+      remembered: false,
     },
     ...input.others.map(other => ({
       name: other.name,
       text: other.summary
         ? [stripTitle(other.summary), other.inline].filter(Boolean).join("\n\n")
         : `${other.name} didn't return a review on this push.`,
+      remembered: other.name === "Gemini" && other.summary !== null,
     })),
   ]
+  const geminiReviewed = columns.some(c => c.remembered)
   const width = Math.floor(100 / columns.length)
   const max = Math.floor(MAX_COMMENT_CHARS / columns.length)
   const sha = `\`${input.headSha.slice(0, 7)}\``
@@ -219,16 +227,22 @@ export const buildSideBySide = (input: {
     "<table>",
     `<tr>${columns.map(c => `<th width="${width}%">${c.name}</th>`).join("")}</tr>`,
     "<tr>",
-    ...columns.flatMap(c => [
-      '<td valign="top">',
-      "",
-      fitColumn(c.text, max),
-      "",
-      "</td>",
-    ]),
+    ...columns.flatMap(c => {
+      const text = fitColumn(c.text, max)
+      return [
+        '<td valign="top">',
+        "",
+        c.remembered
+          ? `${GEMINI_REVIEW_START}\n${text}\n${GEMINI_REVIEW_END}`
+          : text,
+        "",
+        "</td>",
+      ]
+    }),
     "</tr>",
     "</table>",
     "",
+    ...(geminiReviewed ? [geminiReviewMarker(input.headSha)] : []),
     SIDE_BY_SIDE_MARKER,
   ].join("\n")
 }

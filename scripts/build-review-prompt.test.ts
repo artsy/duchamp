@@ -432,14 +432,37 @@ describe("pickReviewMode", () => {
     expect(mockExec).not.toHaveBeenCalled()
   })
 
-  it("gives Gemini a full review without looking up Claude's earlier one", () => {
+  it("re-reviews Gemini from its own earlier review, never Claude's", () => {
+    const sha = "c".repeat(40)
+    const claudeSummary = `Claude's summary\n<!-- ai-review-sha: ${"d".repeat(40)} -->`
+    const sideBySide = `<!-- gemini-review -->\nGemini's notes\n<!-- /gemini-review -->\n<!-- ai-review-gemini-sha: ${sha} -->`
+    mockExec.mockImplementation((cmd: string, args: string[]) =>
+      cmd === "gh"
+        ? `${JSON.stringify(claudeSummary)}\n${JSON.stringify(sideBySide)}\n`
+        : args[0] === "diff"
+          ? "src/app.ts\n"
+          : ""
+    )
+
     expect(
       pickReviewMode(undefined, "artsy/eigen", "42", [], true, true)
     ).toEqual({
-      mode: "full",
-      reason: "Gemini doesn't build on Claude's earlier review",
+      mode: "rereview",
+      reason: "changes since earlier review at ccccccc",
+      previous: { sha, body: "Gemini's notes" },
     })
-    expect(mockExec).not.toHaveBeenCalled()
+  })
+
+  it("gives Gemini a full review when only Claude has reviewed", () => {
+    mockExec.mockImplementation((cmd: string) =>
+      cmd === "gh"
+        ? `${JSON.stringify(`Claude's summary\n<!-- ai-review-sha: ${"d".repeat(40)} -->`)}\n`
+        : ""
+    )
+
+    expect(
+      pickReviewMode(undefined, "artsy/eigen", "42", [], true, true)
+    ).toEqual({ mode: "full", reason: "no earlier review" })
   })
 
   it("looks up the earlier review otherwise", () => {

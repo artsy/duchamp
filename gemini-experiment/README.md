@@ -50,9 +50,9 @@ Three jobs in `.github/workflows/claude-review.yml`:
   side-by-side comment; Codex's JSON goes to the next job as an artifact.
 - **`gemini`** runs on its own runner at the same time. It checks out the PR without
   saving credentials, builds the same prompt and installs the same skills under
-  `~/.agents/skills`. Two differences: Gemini always reviews in full, because the earlier
-  review on the PR is Claude's and building on it would show Gemini Claude's summary;
-  and it reads only public related repos, because it gets no related-repos token. It saves the PR's description and comments to a file
+  `~/.agents/skills`. Two differences: re-reviews build on Gemini's own last review, never
+  Claude's (see below); and it reads only public related repos, because it gets no
+  related-repos token. It saves the PR's description and comments to a file
   (`scripts/save-pr.ts`), keeping only comments from the PR's author and people with
   write access, so bots (Claude included) and strangers are left out. Then it drops sudo,
   installs `agy` and runs it headless with `--model gemini-4-neon-high`,
@@ -67,6 +67,14 @@ Three jobs in `.github/workflows/claude-review.yml`:
 prompt (`formatAntigravityNote`). It covers only what Antigravity can't do the same way:
 it can't post, so it returns JSON; it reads the PR from a file; it reads CLAUDE.md,
 AGENTS.md and skills itself; it has no subagents, so it does the security read itself.
+
+**Re-reviews.** The side-by-side comment is Gemini's memory: when Gemini returned a
+review, the comment carries `<!-- ai-review-gemini-sha: <commit> -->` and wraps Gemini's
+column in `<!-- gemini-review -->` markers. On the next push, `findPreviousGeminiReview`
+reads them, and Gemini re-reviews the changes since its commit with its own column as its
+earlier notes, on the same rules as Claude's re-reviews. It never reads Claude's summary,
+or the replies to Claude's inline comments. If Gemini didn't return a review last time,
+or only lockfiles changed and the comment lost its column, the next review is full.
 
 The prompt can be longer than one command-line argument allows, so `agy -p` gets a short
 instruction pointing at the prompt file.

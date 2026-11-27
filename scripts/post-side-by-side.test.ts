@@ -13,6 +13,11 @@ import {
   SIDE_BY_SIDE_MARKER,
   stripTitle,
 } from "./post-side-by-side"
+import {
+  GEMINI_REVIEW_END,
+  GEMINI_REVIEW_START,
+  geminiReviewMarker,
+} from "./review-mode"
 
 const HEAD = "a".repeat(40)
 const OLD = "b".repeat(40)
@@ -236,6 +241,40 @@ describe("stripTitle", () => {
 })
 
 describe("buildSideBySide", () => {
+  it("marks Gemini's review and commit, so its next run can re-review from it", () => {
+    const body = buildSideBySide({
+      claude: "## Code Review\nok",
+      claudeInline: "",
+      others: [
+        {
+          name: "Gemini",
+          summary: "## Code Review\n### Summary\nGemini's notes",
+          inline: "",
+        },
+      ],
+      headSha: HEAD,
+    })
+
+    expect(body).toContain(geminiReviewMarker(HEAD))
+    const start = body.indexOf(GEMINI_REVIEW_START)
+    const end = body.indexOf(GEMINI_REVIEW_END)
+    expect(body.slice(start, end)).toContain("Gemini's notes")
+    expect(body.slice(start, end)).not.toContain("ok")
+    expect(body.endsWith(SIDE_BY_SIDE_MARKER)).toBe(true)
+  })
+
+  it("leaves Gemini's markers out when it didn't return a review", () => {
+    const body = buildSideBySide({
+      claude: "## Code Review\nok",
+      claudeInline: "",
+      others: [{ name: "Gemini", summary: null, inline: "" }],
+      headSha: HEAD,
+    })
+
+    expect(body).not.toContain("ai-review-gemini-sha")
+    expect(body).not.toContain(GEMINI_REVIEW_START)
+  })
+
   it("puts Claude left and Codex right, with Markdown-friendly cells", () => {
     const body = buildSideBySide({
       claude: "## Code Review\n### Verdict\nRequest Changes",

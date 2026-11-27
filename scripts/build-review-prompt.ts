@@ -21,6 +21,8 @@ import {
 import {
   type AnsweredThread,
   fetchAnsweredThreads,
+  findPreviousGeminiReview,
+  findPreviousReview,
   formatRereviewSection,
   type ReviewMode,
   resolveReviewMode,
@@ -250,8 +252,7 @@ export const securityLabelJustAdded = (
 
 /**
  * A full review when the security label was just added, else the usual choice. Gemini
- * always reviews in full: the earlier review on the PR is Claude's, and building on it
- * would show Gemini Claude's summary, or skip when Claude already reviewed this commit.
+ * builds on its own earlier review, never Claude's, so it never reads Claude's summary.
  */
 export const pickReviewMode = (
   triggerLabel: string | undefined,
@@ -260,17 +261,16 @@ export const pickReviewMode = (
   ignorePaths: string[],
   inLean: boolean,
   forGemini = false
-): ReviewMode => {
-  if (forGemini) {
-    return {
-      mode: "full",
-      reason: "Gemini doesn't build on Claude's earlier review",
-    }
-  }
-  return securityLabelJustAdded(triggerLabel)
+): ReviewMode =>
+  securityLabelJustAdded(triggerLabel)
     ? { mode: "full", reason: `${SECURITY_LABEL} label just added` }
-    : resolveReviewMode(repo, prNumber, ignorePaths, inLean)
-}
+    : resolveReviewMode(
+        repo,
+        prNumber,
+        ignorePaths,
+        inLean,
+        forGemini ? findPreviousGeminiReview : findPreviousReview
+      )
 
 /**
  * Whether this review is in the security experiment: listed authors, every PR in a
@@ -1209,8 +1209,12 @@ const main = (): void => {
     security +
     formatStackSkillsSection(stack.skills) +
     mergeRiskSection
+  // The replies are to Claude's inline comments, so Gemini doesn't read them.
   const answered =
-    inLean && replies && reviewMode.mode === "rereview"
+    inLean &&
+    replies &&
+    reviewMode.mode === "rereview" &&
+    process.env.GEMINI_PROMPT !== "true"
       ? fetchAnsweredThreads(
           process.env.GITHUB_REPOSITORY,
           process.env.PR_NUMBER,
