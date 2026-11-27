@@ -432,6 +432,16 @@ describe("pickReviewMode", () => {
     expect(mockExec).not.toHaveBeenCalled()
   })
 
+  it("gives Gemini a full review without looking up Claude's earlier one", () => {
+    expect(
+      pickReviewMode(undefined, "artsy/eigen", "42", [], true, true)
+    ).toEqual({
+      mode: "full",
+      reason: "Gemini doesn't build on Claude's earlier review",
+    })
+    expect(mockExec).not.toHaveBeenCalled()
+  })
+
   it("looks up the earlier review otherwise", () => {
     mockExec.mockImplementation(() => {
       throw new Error("gh failed")

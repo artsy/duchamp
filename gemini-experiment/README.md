@@ -50,7 +50,9 @@ Three jobs in `.github/workflows/claude-review.yml`:
   side-by-side comment; Codex's JSON goes to the next job as an artifact.
 - **`gemini`** runs on its own runner at the same time. It checks out the PR without
   saving credentials, builds the same prompt and installs the same skills under
-  `~/.agents/skills`. It saves the PR's description and comments to a file
+  `~/.agents/skills`. Two differences: Gemini always reviews in full, because the earlier
+  review on the PR is Claude's and building on it would show Gemini Claude's summary;
+  and it reads only public related repos, because it gets no related-repos token. It saves the PR's description and comments to a file
   (`scripts/save-pr.ts`), keeping only comments from the PR's author and people with
   write access, so bots (Claude included) and strangers are left out. Then it drops sudo,
   installs `agy` and runs it headless with `--model gemini-4-neon-high`,
@@ -115,6 +117,8 @@ needs an exception for Gemini or the experiment pauses.
 - **Headless stalls**
   ([google-antigravity/antigravity-cli#548](https://github.com/google-antigravity/antigravity-cli/issues/548)).
   Skipping permission prompts avoids them; the step timeout is the backstop.
+- **Private code.** `agy` can reach the network, so the job mints no related-repos
+  token and private related repos never land on its runner.
 - **Unpinned CLI.** The installer takes no version, so every run gets the latest `agy`.
   The job logs `agy --version`. A breaking release fails Gemini's column, not Claude's
   review.

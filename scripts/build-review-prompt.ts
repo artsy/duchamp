@@ -248,17 +248,26 @@ export const securityLabelJustAdded = (
   triggerLabel: string | undefined
 ): boolean => triggerLabel?.toLowerCase() === SECURITY_LABEL
 
-/** A full review when the security label was just added, else the usual choice. */
+/**
+ * A full review when the security label was just added, else the usual choice. Gemini
+ * always reviews in full: the earlier review on the PR is Claude's, and building on it
+ * would show Gemini Claude's summary, or skip when Claude already reviewed this commit.
+ */
 export const pickReviewMode = (
   triggerLabel: string | undefined,
   repo: string | undefined,
   prNumber: string | undefined,
   ignorePaths: string[],
-  inLean: boolean
-): ReviewMode =>
-  securityLabelJustAdded(triggerLabel)
+  inLean: boolean,
+  forGemini = false
+): ReviewMode => {
+  if (forGemini) {
+    return { mode: "full", reason: "Gemini doesn't build on Claude's earlier review" }
+  }
+  return securityLabelJustAdded(triggerLabel)
     ? { mode: "full", reason: `${SECURITY_LABEL} label just added` }
     : resolveReviewMode(repo, prNumber, ignorePaths, inLean)
+}
 
 /**
  * Whether this review is in the security experiment: listed authors, every PR in a
@@ -1122,7 +1131,8 @@ const main = (): void => {
     process.env.GITHUB_REPOSITORY,
     process.env.PR_NUMBER,
     ignorePaths,
-    inLean
+    inLean,
+    process.env.GEMINI_PROMPT === "true"
   )
   console.log(`Review mode: ${reviewMode.mode} (${reviewMode.reason})`)
 
