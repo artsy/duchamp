@@ -60,6 +60,26 @@ In LiteLLM's admin UI, for the key the repos use:
 - `{"phoenix_project_name": "duchamp-review"}` in the key's metadata, so review traces
   don't mix with other apps'.
 - A budget and rate limits.
+- Key type "AI APIs", so the key can call models but not manage the gateway. Never use
+  the master key.
+
+The key is the org secret `AI_REVIEW_LITELLM_API_KEY`, shared with selected repos. The
+staging admin UI is https://litellm.stg.artsy.systems (VPN): Logs shows each call, and
+the key's page shows its spend against the budget.
+
+## Trying the gateway by hand
+
+From your own terminal, not a shared session, so the key stays private:
+
+```sh
+printf "LiteLLM key: "; read -rs LITELLM_KEY; export LITELLM_KEY; echo
+ANTHROPIC_BASE_URL=https://litellm-staging.artsy.net ANTHROPIC_API_KEY=$LITELLM_KEY \
+  claude -p "Say hi" --model "claude-opus-5-5[1m]" --output-format json |
+  jq '{result, total_cost_usd, usage}'
+```
+
+A reply with a non-zero `total_cost_usd` and cache token counts in `usage` means the
+review's cost and cache metrics will work through the gateway.
 
 ## Measuring it
 
