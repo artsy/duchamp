@@ -49,7 +49,8 @@ Anthropic key stays required, so leaving the experiment never breaks a review.
 - **Edge check.** Once the gateway checks a header at Cloudflare, set `edge_header` in
   `participants.yml` to its name, and repos pass the value as `litellm-edge-token`.
   Claude Code sends it on every call through `ANTHROPIC_CUSTOM_HEADERS`.
-- Codex isn't affected. It still calls OpenAI with its own key.
+- Gemini goes through the gateway too; see the
+  [Gemini experiment](../gemini-experiment/README.md).
 
 ## What the gateway needs
 

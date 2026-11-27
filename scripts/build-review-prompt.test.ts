@@ -5,9 +5,7 @@ import {
   assemblePrompt,
   assessChanges,
   buildPrompt,
-  CODEX_LABEL,
   formatAntigravityNote,
-  formatCodexNote,
   formatContextSection,
   formatDelivery,
   formatDiffSection,
@@ -21,7 +19,6 @@ import {
   gatewayHeaders,
   hasSecurityLabel,
   inBestPractices,
-  inCodex,
   inGemini,
   inLeanReviews,
   inLiteLLM,
@@ -52,7 +49,6 @@ import {
   reviewRange,
   SECURITY_LABEL,
   securityLabelJustAdded,
-  writeCodexPrompt,
   writeGeminiPrompt,
   writeSecurityDiff,
 } from "./build-review-prompt"
@@ -549,29 +545,6 @@ describe("formatMergeRiskSection", () => {
   })
 })
 
-describe("inCodex", () => {
-  it("includes listed authors, in any case", () => {
-    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
-    expect(inCodex("mounirdhahri", [])).toBe(true)
-    expect(
-      mockFs.readFileSync.mock.calls.map(([p]) => String(p))
-    ).toContainEqual(
-      expect.stringContaining(path.join("codex-experiment", "participants.yml"))
-    )
-  })
-
-  it("includes any PR with the label", () => {
-    mockFiles({})
-    expect(inCodex("someone", [CODEX_LABEL.toUpperCase()])).toBe(true)
-  })
-
-  it("leaves out everyone else", () => {
-    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
-    expect(inCodex("someone", ["bug"])).toBe(false)
-    expect(inCodex(undefined, [])).toBe(false)
-  })
-})
-
 describe("formatPreamble", () => {
   it("names the repo, PR and base branch, and the diff to run", () => {
     const preamble = formatPreamble("artsy/eigen", "42", "main")
@@ -582,52 +555,6 @@ describe("formatPreamble", () => {
     expect(preamble).toContain("`git diff origin/main...HEAD`")
     expect(preamble).toContain("AGENTS.md or CLAUDE.md")
     expect(preamble.endsWith("\n\n")).toBe(true)
-  })
-})
-
-describe("formatCodexNote", () => {
-  const note = formatCodexNote("/tmp/r/pr.md")
-
-  it("asks for the summary and inline comments as JSON", () => {
-    expect(note).toContain("## Running in Codex")
-    expect(note).toContain("cannot post comments")
-    expect(note).toContain("`summary` is the summary comment")
-    expect(note).toContain("`comments` are the inline comments")
-    expect(note).toContain("on a line the PR adds or changes")
-  })
-
-  it("points at the PR file, skills on disk and no subagents", () => {
-    expect(note).toContain("`/tmp/r/pr.md`")
-    expect(note).toContain("`~/.agents/skills/<name>/SKILL.md`")
-    expect(note).toContain("you have none")
-    expect(note).toContain("CLAUDE.md is not loaded for you")
-  })
-})
-
-describe("writeCodexPrompt", () => {
-  beforeEach(() => {
-    mockFs.writeFileSync.mockReset()
-  })
-
-  it("writes the same prompt with the Codex note at the end", () => {
-    const files = writeCodexPrompt("PROMPT", "/tmp/r")
-
-    expect(files).toEqual({
-      promptFile: path.join("/tmp/r", "codex-prompt.md"),
-      prFile: path.join("/tmp/r", "pr.md"),
-    })
-    expect(mockFs.writeFileSync).toHaveBeenCalledWith(
-      path.join("/tmp/r", "codex-prompt.md"),
-      `PROMPT${formatCodexNote(path.join("/tmp/r", "pr.md"))}`
-    )
-  })
-
-  it("returns undefined when the write fails", () => {
-    jest.spyOn(console, "error").mockImplementation(() => {})
-    mockFs.writeFileSync.mockImplementation(() => {
-      throw new Error("disk full")
-    })
-    expect(writeCodexPrompt("PROMPT", "/tmp/r")).toBeUndefined()
   })
 })
 
@@ -678,7 +605,6 @@ describe("formatAntigravityNote", () => {
     expect(note).toContain("cannot post comments")
     expect(note).toContain("`summary` is the summary comment")
     expect(note).toContain("on a line the PR adds or changes")
-    expect(note).not.toContain("Codex")
   })
 
   it("points at the PR file, CLAUDE.md, skills on disk and no subagents", () => {

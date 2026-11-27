@@ -842,7 +842,7 @@
           {
             "definition": {
               "type": "note",
-              "content": "Every review tagged by who wrote it: `reviewer:claude` or `reviewer:gemini`, for the [Gemini experiment](https://github.com/artsy/duchamp/blob/main/gemini-experiment/README.md). Both review the same PRs from the same prompt. Antigravity reports no cost, so Gemini's spend is in LiteLLM's Usage page; compare tokens here. Reviews from before the tag show as `N/A`. The outcome widgets also count Codex.",
+              "content": "Every review tagged by who wrote it: `reviewer:claude` or `reviewer:gemini`, for the [Gemini experiment](https://github.com/artsy/duchamp/blob/main/gemini-experiment/README.md). Both review the same PRs from the same prompt. Antigravity reports no cost, so Gemini's spend is in LiteLLM's Usage page; compare tokens here. Reviews from before the tag show as `N/A`. The outcome widgets also count Codex's findings from before that experiment ended.",
               "background_color": "white",
               "font_size": "14",
               "text_align": "left",

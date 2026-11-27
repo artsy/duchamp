@@ -9,8 +9,8 @@ import {
 } from "./review-mode"
 
 /**
- * For Codex and Gemini experiment PRs: posts each extra reviewer's inline comments, then
- * one comment with Claude's review and theirs side by side. Claude's own summary comment
+ * For Gemini experiment PRs: posts Gemini's inline comments, then one comment with
+ * Claude's review and Gemini's side by side. Claude's own summary comment
  * stays, because re-reviews find the previous review through its marker.
  */
 
@@ -25,14 +25,11 @@ export const MAX_COLUMN_CHARS = MAX_COMMENT_CHARS / 2
 
 const MAX_INLINE_LINE_CHARS = 200
 
-/** Starts each inline comment Codex posts, so cleanup-ai-reviews.js can find them. */
-export const CODEX_COMMENT_PREFIX = "**Codex:**"
-
 /** Starts each inline comment Gemini posts, so cleanup-ai-reviews.js can find them. */
 export const GEMINI_COMMENT_PREFIX = "**Gemini:**"
 
 export interface ExtraReviewer {
-  name: "Codex" | "Gemini"
+  name: "Gemini"
   prefix: string
   /** The review JSON the reviewer's step wrote. */
   file: string
@@ -107,7 +104,7 @@ export const formatInlineComments = (
 }
 
 /**
- * A reviewer's final message, in codex-experiment/output-schema.json. Antigravity wraps it
+ * A reviewer's final message, in gemini-experiment/output-schema.json. Antigravity wraps it
  * in an envelope: `structured_output` holds the schema's JSON, `response` the text. Text
  * that isn't that JSON is kept as the summary, so a review still shows when the reviewer
  * ignores the schema. Null when there is no message, or the envelope says the run failed.
@@ -180,7 +177,7 @@ export const formatExtraComments = (
 
 /** The table's headers name the reviewer, so each summary's own title goes. */
 export const stripTitle = (summary: string): string =>
-  summary.replace(/^\s*## (Code|Codex|Gemini) Review[^\S\n]*\n/, "").trim()
+  summary.replace(/^\s*## (Code|Gemini) Review[^\S\n]*\n/, "").trim()
 
 const fitColumn = (text: string, max: number): string =>
   text.length > max ? `${text.slice(0, max)}\n\n…cut to fit the comment.` : text
@@ -315,11 +312,6 @@ const postComments = (
 /** The extra reviewers whose job ran on this push; a missing review still gets a column. */
 export const ranReviewers = (env: NodeJS.ProcessEnv): ExtraReviewer[] =>
   [
-    env.CODEX_RAN === "true" && {
-      name: "Codex" as const,
-      prefix: CODEX_COMMENT_PREFIX,
-      file: env.CODEX_REVIEW_FILE ?? "",
-    },
     env.GEMINI_RAN === "true" && {
       name: "Gemini" as const,
       prefix: GEMINI_COMMENT_PREFIX,

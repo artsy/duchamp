@@ -40,7 +40,7 @@ settle it, the reviewer keeps the finding and says why in one sentence.
   or `COLLABORATOR`). On a public repo anyone can reply to a thread, and that text
   would otherwise reach the prompt.
 - **Which threads.** Only ones Claude started, from any earlier review of the PR.
-  Codex's threads and threads a person started are left out.
+  Gemini's threads and threads a person started are left out.
 - **Where.** The reply has to be on the inline thread. A reply to the summary, or a
   general PR comment, isn't read.
 - **Size.** A finding is cut to 300 characters, a reply to 600, and the block to 6 KB,

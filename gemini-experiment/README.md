@@ -15,10 +15,8 @@ own GitHub PR reviews.
 
 Claude's review is unchanged. Gemini's inline comments sit on the diff too, posted by
 github-actions[bot] and starting with **Gemini:**. Then one comment, "AI reviews: Claude
-| Gemini" (or "Claude | Codex | Gemini" when the PR is also in the
-[Codex experiment](../codex-experiment/README.md)), with a column per reviewer: its
-summary, then one line per inline comment with its `file:line`, then any it aimed at a
-line outside the diff. If a review failed, its column says so. A new push replaces the
+| Gemini", with a column per reviewer: its summary, then one line per inline comment with
+its `file:line`, then any it aimed at a line outside the diff. If a review failed, its column says so. A new push replaces the
 comment and resolves the earlier **Gemini:** threads.
 
 ## Joining
@@ -46,8 +44,7 @@ Repos that pin duchamp to a commit SHA don't get this until they move the pin.
 
 Three jobs in `.github/workflows/claude-review.yml`:
 
-- **`review`** runs Claude, and Codex when enrolled, as before. It no longer posts the
-  side-by-side comment; Codex's JSON goes to the next job as an artifact.
+- **`review`** runs Claude, as before.
 - **`gemini`** runs on its own runner at the same time. It checks out the PR without
   saving credentials, builds the same prompt and installs the same skills under
   `~/.agents/skills`. Two differences: re-reviews build on Gemini's own last review, never
@@ -56,12 +53,12 @@ Three jobs in `.github/workflows/claude-review.yml`:
   (`scripts/save-pr.ts`), keeping only comments from the PR's author and people with
   write access, so bots (Claude included) and strangers are left out. Then it drops sudo,
   installs `agy` and runs it headless with `--model gemini-4-neon-high`,
-  `--json-schema codex-experiment/output-schema.json` and
+  `--json-schema gemini-experiment/output-schema.json` and
   `--dangerously-skip-permissions`. It stops after 14 minutes. Every step continues on
   error, so its failures don't turn the check red, and a failed run still gets a column
   that says so. The `in-progress` label cancels it, as it does Claude's review.
-- **`side-by-side`** waits for both, posts Codex's and Gemini's inline comments and the
-  comparison comment. It skips posting when a newer push cancelled this run's reviews.
+- **`side-by-side`** waits for both, posts Gemini's inline comments and the comparison
+  comment. It skips posting when a newer push cancelled this run's reviews.
 
 `build-review-prompt.ts` adds a "Running in Antigravity" note to Gemini's copy of the
 prompt (`formatAntigravityNote`). It covers only what Antigravity can't do the same way:
@@ -102,8 +99,7 @@ needs an exception for Gemini or the experiment pauses.
 ## Measuring it
 
 - **Findings.** When the PR merges, the [outcome experiment](../outcome-experiment/README.md)
-  judges every inline comment and tags it `reviewer:claude`, `reviewer:codex` or
-  `reviewer:gemini`: addressed, 👍/👎 and replies. The repo must list `closed` in its
+  judges every inline comment and tags it `reviewer:claude` or `reviewer:gemini`: addressed, 👍/👎 and replies. The repo must list `closed` in its
   trigger.
 - **Cost and speed.** `scripts/gemini-usage.ts` sends the Gemini review's numbers under
   the same `ai_pr_review.*` names as Claude's, tagged `reviewer:gemini` and

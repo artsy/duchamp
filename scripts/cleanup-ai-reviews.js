@@ -16,8 +16,7 @@
 const CLAUDE_BOT_LOGIN_GRAPHQL = "claude"
 const ACTIONS_BOT_LOGIN_GRAPHQL = "github-actions"
 
-// Start every inline comment Codex and Gemini post; see scripts/post-side-by-side.ts
-const CODEX_COMMENT_PREFIX = "**Codex:**"
+// Starts every inline comment Gemini posts; see scripts/post-side-by-side.ts
 const GEMINI_COMMENT_PREFIX = "**Gemini:**"
 
 async function cleanupPreviousAIReviews({ github, context, core }) {
@@ -35,8 +34,8 @@ async function cleanupPreviousAIReviews({ github, context, core }) {
 }
 
 /**
- * Resolve inline review threads started by the Claude bot, or by Codex or Gemini
- * through the workflow.
+ * Resolve inline review threads started by the Claude bot, or by Gemini through the
+ * workflow.
  * We resolve rather than delete to preserve any conversation history
  * (resolved threads collapse in GitHub UI but keep the discussion).
  */
@@ -77,9 +76,7 @@ async function resolveInlineReviewThreads({ github, owner, repo, prNumber }) {
     return (
       author.login === CLAUDE_BOT_LOGIN_GRAPHQL ||
       (author.login === ACTIONS_BOT_LOGIN_GRAPHQL &&
-        [CODEX_COMMENT_PREFIX, GEMINI_COMMENT_PREFIX].some(prefix =>
-          (first.body ?? "").startsWith(prefix)
-        ))
+        (first.body ?? "").startsWith(GEMINI_COMMENT_PREFIX))
     )
   })
 

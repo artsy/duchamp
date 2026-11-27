@@ -9,7 +9,7 @@ on:
         description: "Private key of the Artsy Review Context GitHub App, which reads private repos listed in related_repos. Without it, private repos are skipped"
         required: false
       openai-api-key:
-        description: "OpenAI API key for the Codex experiment's second review. Without it, only Claude reviews"
+        description: "Unused since the Codex experiment ended. Kept so callers that still pass it don't break"
         required: false
       litellm-api-key:
         description: "LiteLLM virtual key for the LiteLLM experiment. Without it, reviews call Anthropic directly"
@@ -139,12 +139,10 @@ jobs:
       contents: read
       pull-requests: write
     env:
-      HAS_OPENAI_KEY: ${{ secrets.openai-api-key != '' }}
       HAS_LITELLM_KEY: ${{ secrets.litellm-api-key != '' }}
     outputs:
       should-review: ${{ steps.org-check.outputs.should-review }}
-      review-timeout: ${{ steps.timeout.outputs.minutes }}
-      gemini: ${{ steps.timeout.outputs.gemini }}
+      gemini: ${{ steps.experiments.outputs.gemini }}
     steps:
       - name: Checkout PR repo (sparse - config only)
         uses: actions/checkout@v4
@@ -250,30 +248,20 @@ jobs:
               core.setOutput('should-review', 'false');
             }
 
-      # Codex runs after Claude in the same job, so its PRs get extra time instead of
-      # cutting into Claude's. Expressions can't add numbers, so this step does it. Its
-      # outputs also say whether the Gemini job runs.
-      - name: Size the review job
-        id: timeout
+      # Its outputs say whether the Gemini job runs.
+      - name: Check experiments
+        id: experiments
         if: steps.org-check.outputs.should-review == 'true'
-        run: |
-          codex=$(PR_AUTHOR="$PR_AUTHOR" PR_LABELS="$PR_LABELS" \
-            npx ts-node .tooling/scripts/build-review-prompt.ts --check-experiment | sed -n 's/^Codex: //p')
-          extra=0
-          if [ "$codex" = "true" ] && [ "$HAS_OPENAI_KEY" = "true" ]; then extra=$CODEX_EXTRA_MINUTES; fi
-          echo "minutes=$((TIMEOUT_MINUTES + extra))" >> "$GITHUB_OUTPUT"
+        run: npx ts-node .tooling/scripts/build-review-prompt.ts --check-experiment
         env:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-          TIMEOUT_MINUTES: ${{ inputs.timeout-minutes }}
-          # The Codex step's own limit plus a few minutes to post the comparison.
-          CODEX_EXTRA_MINUTES: 20
 
   review:
     needs: check
     if: needs.check.outputs.should-review == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ fromJSON(needs.check.outputs.review-timeout || format('{0}', inputs.timeout-minutes)) }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     concurrency:
       group: claude-review-${{ github.repository }}-${{ github.event.pull_request.number }}
       cancel-in-progress: true
@@ -282,11 +270,9 @@ jobs:
       pull-requests: write
       id-token: write
     outputs:
-      codex: ${{ steps.codex-prep.outcome == 'success' }}
       claude: ${{ steps.review.outcome }}
     # Step conditions and scripts can't read secrets, so these say whether the caller passed the keys.
     env:
-      HAS_OPENAI_KEY: ${{ secrets.openai-api-key != '' }}
       HAS_LITELLM_KEY: ${{ secrets.litellm-api-key != '' }}
 
     steps:
@@ -378,17 +364,6 @@ jobs:
             const { cleanupPreviousAIReviews } = require('./.tooling/scripts/cleanup-ai-reviews.js');
             await cleanupPreviousAIReviews({ github, context, core });
 
-      # Codex has no network, so it reads the PR from a file. Saved before Claude runs,
-      # so Codex never sees Claude's review of this push, and without strangers' comments.
-      - name: Save the PR for Codex
-        continue-on-error: true
-        if: steps.prompt.outputs.codex == 'true' && steps.prompt.outputs.review_mode != 'skip' && env.HAS_OPENAI_KEY == 'true'
-        run: npx ts-node .tooling/scripts/save-pr.ts
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_FILE: ${{ steps.prompt.outputs.codex_pr_file }}
-          GH_TOKEN: ${{ github.token }}
-
       # In the LiteLLM experiment, Claude Code calls the gateway with the LiteLLM key, labels
       # each call with the repo, PR and tier, and sends the edge header when the gateway
       # has one. See litellm-experiment/README.md.
@@ -439,51 +414,6 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report
-
-      # The Codex steps go last: the action drops sudo for every step after it. They
-      # run even when Claude's review failed, and their failures don't turn the check red.
-      - name: Prepare Codex
-        id: codex-prep
-        continue-on-error: true
-        if: >-
-          !cancelled() && steps.prompt.outputs.codex == 'true' &&
-          steps.prompt.outputs.review_mode != 'skip' && env.HAS_OPENAI_KEY == 'true'
-        run: |
-          mkdir -p "$HOME/.agents/skills"
-          cp -R "$HOME/.claude/skills/." "$HOME/.agents/skills/"
-          # Checkout leaves the job's token in .git/config, and claude-code-action puts its
-          # app token in the origin URL. Codex can read both, so remove them.
-          git config --local --unset-all http.https://github.com/.extraheader || true
-          git -C .tooling config --local --unset-all http.https://github.com/.extraheader || true
-          git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          git -C .tooling remote set-url origin https://github.com/artsy/duchamp.git
-
-      - name: Run Codex review
-        id: codex
-        continue-on-error: true
-        timeout-minutes: 15
-        if: ${{ !cancelled() && steps.codex-prep.outcome == 'success' }}
-        uses: openai/codex-action@v1
-        with:
-          openai-api-key: ${{ secrets.openai-api-key }}
-          prompt-file: ${{ steps.prompt.outputs.codex_prompt_file }}
-          output-file: ${{ runner.temp }}/codex-review.json
-          output-schema-file: ${{ github.workspace }}/.tooling/codex-experiment/output-schema.json
-          # The legacy sandbox, because permission profiles are still beta. read-only
-          # can read the related repo clones and the PR file under RUNNER_TEMP.
-          sandbox: read-only
-          model: gpt-6.1-terra
-          effort: high
-
-      # The side-by-side job posts Codex's review once Gemini's is in too.
-      - name: Upload Codex's review
-        continue-on-error: true
-        if: ${{ !cancelled() && steps.codex-prep.outcome == 'success' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: codex-review
-          path: ${{ runner.temp }}/codex-review.json
-          if-no-files-found: ignore
 
   # The Gemini experiment: a second review from Gemini Neon 4 in Antigravity CLI, through
   # the LiteLLM gateway, on its own runner beside Claude's. Its failures don't turn the
@@ -633,7 +563,7 @@ jobs:
           agy -p "Your instructions are in $PROMPT_FILE. Read all of it, then do what it says." \
             --model "$GEMINI_MODEL" \
             --output-format json \
-            --json-schema .tooling/codex-experiment/output-schema.json \
+            --json-schema .tooling/gemini-experiment/output-schema.json \
             --dangerously-skip-permissions \
             --print-timeout 14m \
             > "$RUNNER_TEMP/gemini-review.json"
@@ -662,8 +592,8 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           VOLLEY_URL: https://volley.artsy.net/report
 
-  # Posts Codex's and Gemini's inline comments, then one comment with every review side by
-  # side, once all of them are done. Claude's own summary and inline comments stay. See
+  # Posts Gemini's inline comments, then one comment with Claude's and Gemini's reviews
+  # side by side, once both are done. Claude's own summary and inline comments stay. See
   # scripts/post-side-by-side.ts.
   side-by-side:
     needs: [check, review, gemini]
@@ -672,8 +602,7 @@ jobs:
     if: >-
       !cancelled() && needs.check.outputs.should-review == 'true' &&
       needs.review.result != 'cancelled' && needs.gemini.result != 'cancelled' &&
-      (needs.review.outputs.codex == 'true' ||
-       needs.gemini.result != 'skipped' && needs.gemini.outputs.ran != 'false')
+      needs.gemini.result != 'skipped' && needs.gemini.outputs.ran != 'false'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     continue-on-error: true
@@ -706,11 +635,11 @@ jobs:
         env:
           YARN_IGNORE_PATH: 1
 
-      - name: Download the reviews
+      - name: Download Gemini's review
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
-          pattern: "*-review"
+          name: gemini-review
           path: ${{ runner.temp }}/reviews
 
       - name: Post the side-by-side comment
@@ -719,10 +648,8 @@ jobs:
         env:
           # The review step's own outcome, so a later step failing doesn't hide Claude's column.
           CLAUDE_OUTCOME: ${{ needs.review.outputs.claude || needs.review.result }}
-          CODEX_RAN: ${{ needs.review.outputs.codex }}
-          CODEX_REVIEW_FILE: ${{ runner.temp }}/reviews/codex-review/codex-review.json
           GEMINI_RAN: ${{ needs.gemini.result != 'skipped' && needs.gemini.outputs.ran != 'false' }}
-          GEMINI_REVIEW_FILE: ${{ runner.temp }}/reviews/gemini-review/gemini-review.json
+          GEMINI_REVIEW_FILE: ${{ runner.temp }}/reviews/gemini-review.json
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ github.token }}

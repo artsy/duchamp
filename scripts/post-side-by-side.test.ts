@@ -227,9 +227,6 @@ describe("stripTitle", () => {
     expect(stripTitle("## Code Review\n\n### Summary\nok")).toBe(
       "### Summary\nok"
     )
-    expect(stripTitle("## Codex Review\n### Summary\nok")).toBe(
-      "### Summary\nok"
-    )
     expect(stripTitle("## Gemini Review\n### Summary\nok")).toBe(
       "### Summary\nok"
     )
@@ -275,29 +272,29 @@ describe("buildSideBySide", () => {
     expect(body).not.toContain(GEMINI_REVIEW_START)
   })
 
-  it("puts Claude left and Codex right, with Markdown-friendly cells", () => {
+  it("puts Claude left and Gemini right, with Markdown-friendly cells", () => {
     const body = buildSideBySide({
       claude: "## Code Review\n### Verdict\nRequest Changes",
       claudeInline: "---\n\n**Inline comments (1)**\n- `a.ts:1` 🔴 x",
       others: [
         {
-          name: "Codex",
-          summary: "## Codex Review\n### Verdict\nApprove",
+          name: "Gemini",
+          summary: "## Gemini Review\n### Verdict\nApprove",
           inline: "---\n\n**Inline comments (1)**\n- `b.ts:2` 🟠 y",
         },
       ],
       headSha: HEAD,
     })
 
-    expect(body).toContain("## AI reviews: Claude | Codex")
+    expect(body).toContain("## AI reviews: Claude | Gemini")
     expect(body).toContain("`aaaaaaa`")
     const claudeAt = body.indexOf("Request Changes")
-    const codexAt = body.indexOf("Approve")
+    const geminiAt = body.indexOf("Approve")
     expect(claudeAt).toBeGreaterThan(-1)
-    expect(codexAt).toBeGreaterThan(claudeAt)
+    expect(geminiAt).toBeGreaterThan(claudeAt)
     expect(body).toContain('<td valign="top">\n\n### Verdict')
     expect(body).toContain("- `a.ts:1` 🔴 x")
-    expect(body.indexOf("- `b.ts:2` 🟠 y")).toBeGreaterThan(codexAt)
+    expect(body.indexOf("- `b.ts:2` 🟠 y")).toBeGreaterThan(geminiAt)
     expect(body).not.toContain("## Code Review")
     expect(body.endsWith(SIDE_BY_SIDE_MARKER)).toBe(true)
   })
@@ -307,7 +304,7 @@ describe("buildSideBySide", () => {
       buildSideBySide({
         claude: null,
         claudeInline: "",
-        others: [{ name: "Codex", summary: "ok", inline: "" }],
+        others: [{ name: "Gemini", summary: "ok", inline: "" }],
         headSha: HEAD,
       })
     ).toContain("Claude's review didn't finish")
@@ -315,52 +312,21 @@ describe("buildSideBySide", () => {
       buildSideBySide({
         claude: "ok",
         claudeInline: "",
-        others: [{ name: "Codex", summary: null, inline: "" }],
+        others: [{ name: "Gemini", summary: null, inline: "" }],
         headSha: HEAD,
       })
-    ).toContain("Codex didn't return a review")
+    ).toContain("Gemini didn't return a review")
   })
 
   it("cuts a column that would overflow the comment", () => {
     const body = buildSideBySide({
       claude: "y".repeat(MAX_COLUMN_CHARS + 10),
       claudeInline: "",
-      others: [{ name: "Codex", summary: "ok", inline: "" }],
+      others: [{ name: "Gemini", summary: "ok", inline: "" }],
       headSha: HEAD,
     })
     expect(body).toContain("…cut to fit the comment.")
     expect(body.length).toBeLessThan(65_536)
-  })
-
-  it("keeps three overflowing columns under GitHub's limit", () => {
-    const long = "y".repeat(MAX_COLUMN_CHARS + 10)
-    const body = buildSideBySide({
-      claude: long,
-      claudeInline: "",
-      others: [
-        { name: "Codex", summary: long, inline: "" },
-        { name: "Gemini", summary: long, inline: "" },
-      ],
-      headSha: HEAD,
-    })
-    expect(body.length).toBeLessThan(65_536)
-  })
-
-  it("shows Claude, Codex and Gemini in three columns", () => {
-    const body = buildSideBySide({
-      claude: "## Code Review\nC",
-      claudeInline: "",
-      others: [
-        { name: "Codex", summary: "X", inline: "" },
-        { name: "Gemini", summary: "## Gemini Review\nG", inline: "" },
-      ],
-      headSha: HEAD,
-    })
-    expect(body).toContain("## AI reviews: Claude | Codex | Gemini")
-    expect(body).toContain('width="33%"')
-    expect(body).toContain("All reviewed `aaaaaaa` from the same prompt.")
-    expect(body).not.toContain("## Gemini Review")
-    expect(body.indexOf("G\n")).toBeGreaterThan(body.indexOf("X\n"))
   })
 
   it("says when Gemini returned nothing", () => {
@@ -378,24 +344,17 @@ describe("buildSideBySide", () => {
 })
 
 describe("ranReviewers", () => {
-  it("lists every reviewer whose job ran, Codex first", () => {
+  it("lists Gemini when its job ran", () => {
     expect(
       ranReviewers({
-        CODEX_RAN: "true",
-        CODEX_REVIEW_FILE: "/t/codex.json",
         GEMINI_RAN: "true",
         GEMINI_REVIEW_FILE: "/t/gemini.json",
       }).map(r => [r.name, r.prefix, r.file])
-    ).toEqual([
-      ["Codex", "**Codex:**", "/t/codex.json"],
-      ["Gemini", "**Gemini:**", "/t/gemini.json"],
-    ])
+    ).toEqual([["Gemini", "**Gemini:**", "/t/gemini.json"]])
   })
 
-  it("leaves out a reviewer whose job didn't run", () => {
-    expect(
-      ranReviewers({ CODEX_RAN: "false", GEMINI_RAN: "true" }).map(r => r.name)
-    ).toEqual(["Gemini"])
+  it("leaves Gemini out when its job didn't run", () => {
+    expect(ranReviewers({ GEMINI_RAN: "false" })).toEqual([])
     expect(ranReviewers({})).toEqual([])
   })
 })

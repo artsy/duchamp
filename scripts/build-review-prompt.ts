@@ -46,7 +46,7 @@ import { formatStackSkillsSection, resolveStackSkills } from "./stack-skills"
  * only what changed since the last review. A PR is in it when its author is listed in
  * lean-reviews-experiment/participants.yml, or when it carries the LEAN_LABEL. See
  * lean-reviews-experiment/README.md. Related repos, security, best practices, merge
- * risk and Codex are their own experiments; see review/experiments.md.
+ * risk and Gemini are their own experiments; see review/experiments.md.
  */
 
 interface ExcludeConfig {
@@ -89,9 +89,6 @@ export const MISSED_FINDINGS_LABEL = "ai-review-missed-findings"
 
 /** Label that opts a single PR into the merge risk experiment. */
 export const MERGE_RISK_LABEL = "ai-review-merge-risk"
-
-/** Label that opts a single PR into the Codex experiment. */
-export const CODEX_LABEL = "ai-review-codex"
 
 /** Label that opts a single PR into the Gemini experiment. */
 export const GEMINI_LABEL = "ai-review-gemini"
@@ -351,15 +348,6 @@ export const inMergeRisk = (
   labels.some(label => label.toLowerCase() === MERGE_RISK_LABEL) ||
   (!!author &&
     loadParticipants("merge-risk-experiment").includes(author.toLowerCase()))
-
-/** Whether this PR also gets a Codex review: listed authors and labelled PRs. */
-export const inCodex = (
-  author: string | undefined,
-  labels: string[]
-): boolean =>
-  labels.some(label => label.toLowerCase() === CODEX_LABEL) ||
-  (!!author &&
-    loadParticipants("codex-experiment").includes(author.toLowerCase()))
 
 /** Whether this PR also gets a Gemini review: listed authors and labelled PRs. */
 export const inGemini = (
@@ -944,7 +932,7 @@ export const LEAN_SUMMARY_SECTION = [
   "",
 ].join("\n")
 
-/** The opening lines of every review prompt, Claude's and Codex's. */
+/** The opening lines of every review prompt, Claude's and Gemini's. */
 export const formatPreamble = (
   repo = "",
   prNumber = "",
@@ -962,39 +950,6 @@ export const formatPreamble = (
     "",
     "",
   ].join("\n")
-
-/**
- * Codex reviews the same prompt as Claude. This note goes last and covers only what
- * Codex can't do the same way: it has no GitHub tools, no network and no subagents.
- */
-export const formatCodexNote = (prFile: string): string =>
-  [
-    "\n## Running in Codex\n",
-    'You are OpenAI Codex, in a read-only sandbox with no network. This prompt was written for Claude Code, so where it names a tool you don\'t have, do the following instead. Where this section disagrees with "How to Deliver Your Review", follow this section.\n',
-    "- **You cannot post comments or run `gh`.** Your final message is JSON in the given schema, and the workflow posts it. `summary` is the summary comment, shown next to Claude's. `comments` are the inline comments the prompt asks for, in the same format: `path` from the repo root, and `line` in the PR's version of the file, on a line the PR adds or changes. A comment on any other line can't be posted inline and lands in your column instead.",
-    `- **The PR description and comments** are in \`${prFile}\`, saved before this run's reviews. Read it where the prompt says to read the PR description or run \`gh pr view\`.`,
-    "- **CLAUDE.md is not loaded for you,** whatever the prompt says. Read it from the repo root if it exists.",
-    "- **Skills:** where the prompt says to run a skill, read `~/.agents/skills/<name>/SKILL.md` and follow it.",
-    "- **Subagents:** you have none. Where the prompt hands work to one, do it yourself and say so in the summary.",
-    "",
-  ].join("\n")
-
-/** Writes Codex's prompt next to the PR file it reads. Undefined when the write fails. */
-export const writeCodexPrompt = (
-  prompt: string,
-  dir: string = process.env.RUNNER_TEMP || os.tmpdir()
-): { promptFile: string; prFile: string } | undefined => {
-  const prFile = path.join(dir, "pr.md")
-  const promptFile = path.join(dir, "codex-prompt.md")
-  try {
-    fs.writeFileSync(promptFile, prompt + formatCodexNote(prFile))
-    return { promptFile, prFile }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(`Warning: Failed to write the Codex prompt: ${message}`)
-    return undefined
-  }
-}
 
 /**
  * Gemini reviews the same prompt as Claude, in Antigravity CLI. This note goes last and
@@ -1096,7 +1051,6 @@ const main = (): void => {
   )
   const mergeRisk = inMergeRisk(process.env.PR_AUTHOR, labels)
   const replies = inReplies(process.env.PR_AUTHOR, labels)
-  const codex = inCodex(process.env.PR_AUTHOR, labels)
   const litellm = inLiteLLM(
     process.env.PR_AUTHOR,
     labels,
@@ -1108,19 +1062,18 @@ const main = (): void => {
     process.env.HAS_LITELLM_KEY === "true"
   )
 
-  // Lets the workflow skip minting the related repos token, size the job for Codex,
+  // Lets the workflow skip minting the related repos token, decide whether Gemini runs,
   // and point the review and the judges at the gateway.
   if (process.argv.includes("--check-experiment")) {
     const outputPath = process.env.GITHUB_OUTPUT
     if (outputPath) {
       fs.appendFileSync(
         outputPath,
-        `experiment=${inLean}\nrelated_repos=${inRelatedRepos}\ncodex=${codex}\nlitellm=${gateway !== undefined}\nlitellm_base_url=${gateway?.baseUrl ?? ""}\nlitellm_edge_header=${gateway?.edgeHeader ?? ""}\n${headersOutput(gateway, "judge")}${formatGeminiCheck(geminiGateway)}`
+        `experiment=${inLean}\nrelated_repos=${inRelatedRepos}\nlitellm=${gateway !== undefined}\nlitellm_base_url=${gateway?.baseUrl ?? ""}\nlitellm_edge_header=${gateway?.edgeHeader ?? ""}\n${headersOutput(gateway, "judge")}${formatGeminiCheck(geminiGateway)}`
       )
     }
     console.log(`Lean reviews experiment: ${inLean}`)
     console.log(`Related repos: ${inRelatedRepos}`)
-    console.log(`Codex: ${codex}`)
     console.log(`Gemini: ${geminiGateway !== undefined}`)
     console.log(
       `LiteLLM: ${gateway ? gateway.baseUrl : litellm ? "in the experiment, but no litellm-api-key or base_url" : false}`
@@ -1252,8 +1205,6 @@ const main = (): void => {
   ]
     .filter(Boolean)
     .join(" ")
-  const codexFiles = codex ? writeCodexPrompt(prompt) : undefined
-  console.log(`Codex review: ${codexFiles !== undefined}`)
   // Only the Gemini job asks for its prompt, so the review job writes no Gemini files.
   const geminiFiles =
     process.env.GEMINI_PROMPT === "true" ? writeGeminiPrompt(prompt) : undefined
@@ -1264,7 +1215,7 @@ const main = (): void => {
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\nreplies=${repliesRead}\ncodex=${codexFiles !== undefined}\ncodex_prompt_file=${codexFiles?.promptFile ?? ""}\ncodex_pr_file=${codexFiles?.prFile ?? ""}\ngemini_prompt_file=${geminiFiles?.promptFile ?? ""}\ngemini_pr_file=${geminiFiles?.prFile ?? ""}\ngateway=${gateway ? "litellm" : "anthropic"}\n${headersOutput(gateway, "review", changes.tier)}${formatReviewModeOutputs(context.reviewMode)}`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\nreplies=${repliesRead}\ngemini_prompt_file=${geminiFiles?.promptFile ?? ""}\ngemini_pr_file=${geminiFiles?.prFile ?? ""}\ngateway=${gateway ? "litellm" : "anthropic"}\n${headersOutput(gateway, "review", changes.tier)}${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {

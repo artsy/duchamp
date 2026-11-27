@@ -32,8 +32,8 @@ const MAX_REPLY_CHARS = 600
 // GraphQL returns Bot logins without the [bot] suffix
 const CLAUDE_LOGIN = "claude"
 const ACTIONS_LOGIN = "github-actions"
-// Start every inline comment Codex and Gemini post; see scripts/post-side-by-side.ts
-const EXTRA_PREFIXES = { codex: "**Codex:**", gemini: "**Gemini:**" } as const
+// Starts every inline comment Gemini posts; see scripts/post-side-by-side.ts
+const EXTRA_PREFIXES = { gemini: "**Gemini:**" } as const
 
 /** 👍 ❤️ 🎉 🚀 */
 const POSITIVE_REACTIONS = ["THUMBS_UP", "HEART", "HOORAY", "ROCKET"]
@@ -91,7 +91,7 @@ const reactionOf = (
 }
 
 /**
- * The inline comments Claude, Codex and Gemini opened, with what people did on each. Only replies
+ * The inline comments Claude and Gemini opened, with what people did on each. Only replies
  * from the PR's author or people with write access are kept.
  */
 export const findingsFrom = (

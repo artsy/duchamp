@@ -3,10 +3,9 @@ import * as fs from "fs"
 import { isTrustedComment } from "./review-mode"
 
 /**
- * Saves a PR's description and comments to a file, for the reviewers that can't run `gh`
- * themselves (Codex, Gemini). On a public repo anyone can comment, and those reviewers run
- * with an API key in reach, so only comments from the PR's author or people with write
- * access go in.
+ * Saves a PR's description and comments to a file for Gemini, which can't run `gh`. On a
+ * public repo anyone can comment, and Gemini runs with an API key in reach, so only
+ * comments from the PR's author or people with write access go in.
  */
 
 export interface PrView {

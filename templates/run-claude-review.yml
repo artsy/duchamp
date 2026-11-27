@@ -10,8 +10,6 @@ jobs:
     uses: artsy/duchamp/.github/workflows/claude-review.yml@main
     secrets:
       anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-      # Optional: a second review from Codex, for PRs in the Codex experiment
-      # openai-api-key: ${{ secrets.OPENAI_API_KEY }}
       # Optional: route reviews through Artsy's LiteLLM gateway, for the LiteLLM experiment
       # litellm-api-key: ${{ secrets.AI_REVIEW_LITELLM_API_KEY }}
       # litellm-edge-token: ${{ secrets.AI_REVIEW_LITELLM_EDGE_TOKEN }}
