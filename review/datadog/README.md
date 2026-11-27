@@ -73,7 +73,7 @@ METRIC_NAME_ALLOWLIST` and the same for `METRIC_TAG_ALLOWLIST` in artsy/volley.
 | Cost | Spend by day, repo and PR, cost per review, tokens and cache hit rate |
 | Turns, speed and comments | Turns, duration, inline comments and denied tool calls |
 | Experiments | Reviews where each experiment ran, and cost per review with and without it |
-| Reviewers | Claude and Gemini on the same PRs: success rate, cost, tokens, duration, comments and findings addressed or dismissed |
+| Reviewers | Claude and Gemini on the same PRs, by model (so light and standard reviews compare like with like): success rate, cost, tokens, duration, comments, and by reviewer, findings addressed or dismissed |
 | Outcome | Findings measured at merge: the share addressed, agreed with and dismissed |
 | Missed findings | Human review comments by category, and the share the review missed |
 
@@ -88,16 +88,19 @@ with like. The Outcome and Missed findings sections follow only the repo and PR
 filters, and their metrics carry no experiment tags, so compare those by date or by
 repo.
 
-Edit the file rather than the dashboard in the UI, then apply it again.
-
-To create it, use Dashboards → New Dashboard → the gear menu → Import dashboard JSON,
-or the API with an application key that can write dashboards:
+Edit the file rather than the dashboard in the UI, then apply it again. The live
+dashboard is [`dbj-2qa-hxg`](https://app.datadoghq.com/dashboard/dbj-2qa-hxg/ai-pr-review).
+Update it in place, not with a new import, so its URL stays the same: open it, then the
+gear menu → Import dashboard JSON, or use the API with an application key that can write
+dashboards:
 
 ```bash
-curl -sS -X POST "https://api.datadoghq.com/api/v1/dashboard" \
+curl -sS -X PUT "https://api.datadoghq.com/api/v1/dashboard/dbj-2qa-hxg" \
   -H "DD-API-KEY: $DD_API_KEY" -H "DD-APPLICATION-KEY: $DD_APP_KEY" \
   -H "Content-Type: application/json" -d @review/datadog/dashboard.json
 ```
+
+To create it from scratch elsewhere, `POST` to `/api/v1/dashboard` instead.
 
 To update it, `PUT` the same file to `/api/v1/dashboard/<id>`.
 

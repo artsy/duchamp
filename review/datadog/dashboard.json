@@ -842,7 +842,7 @@
           {
             "definition": {
               "type": "note",
-              "content": "Every review tagged by who wrote it: `reviewer:claude` or `reviewer:gemini`, for the [Gemini experiment](https://github.com/artsy/duchamp/blob/main/gemini-experiment/README.md). Both review the same PRs from the same prompt. Antigravity reports no cost, so Gemini's cost here is estimated from tokens at list price (tagged cost:estimated); LiteLLM's Usage page has the billed figure. Reviews from before the tag show as `N/A`. The outcome widgets also count Codex's findings from before that experiment ended.",
+              "content": "Every review tagged by who wrote it: `reviewer:claude` or `reviewer:gemini`, for the [Gemini experiment](https://github.com/artsy/duchamp/blob/main/gemini-experiment/README.md). Both review the same PRs from the same prompt. Review widgets split by model too, so light changes (Sonnet, Gemini 3.8 Flash) and standard ones (Opus, Gemini Neon 4) compare tier with tier; findings carry no model tag, so those stay by reviewer. Antigravity reports no cost, so Gemini's cost here is estimated from tokens at list price (tagged cost:estimated); LiteLLM's Usage page has the billed figure. Reviews from before the tag show as `N/A`. The outcome widgets also count Codex's findings from before that experiment ended.",
               "background_color": "white",
               "font_size": "14",
               "text_align": "left",
@@ -853,7 +853,7 @@
           {
             "definition": {
               "type": "toplist",
-              "title": "Reviews, by reviewer",
+              "title": "Reviews, by reviewer and model",
               "requests": [
                 {
                   "response_format": "scalar",
@@ -861,7 +861,7 @@
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{$repo,$mode,$pr} by {reviewer,model}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -881,7 +881,7 @@
           {
             "definition": {
               "type": "toplist",
-              "title": "Success rate (%), by reviewer",
+              "title": "Success rate (%), by reviewer and model",
               "requests": [
                 {
                   "response_format": "scalar",
@@ -889,13 +889,13 @@
                     {
                       "data_source": "metrics",
                       "name": "s",
-                      "query": "sum:ai_pr_review.reviews{outcome:success,$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{outcome:success,$repo,$mode,$pr} by {reviewer,model}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{$repo,$mode,$pr} by {reviewer,model}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -915,7 +915,7 @@
           {
             "definition": {
               "type": "toplist",
-              "title": "Cost per review (USD), by reviewer",
+              "title": "Cost per review (USD), by reviewer and model",
               "requests": [
                 {
                   "response_format": "scalar",
@@ -923,13 +923,13 @@
                     {
                       "data_source": "metrics",
                       "name": "c",
-                      "query": "sum:ai_pr_review.cost_cents{$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "query": "sum:ai_pr_review.cost_cents{$repo,$mode,$pr} by {reviewer,model}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{$repo,$mode,$pr} by {reviewer,model}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -949,7 +949,7 @@
           {
             "definition": {
               "type": "toplist",
-              "title": "Tokens per review, by reviewer",
+              "title": "Tokens per review, by reviewer and model",
               "requests": [
                 {
                   "response_format": "scalar",
@@ -957,13 +957,13 @@
                     {
                       "data_source": "metrics",
                       "name": "t",
-                      "query": "sum:ai_pr_review.tokens{$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "query": "sum:ai_pr_review.tokens{$repo,$mode,$pr} by {reviewer,model}.as_count()",
                       "aggregator": "sum"
                     },
                     {
                       "data_source": "metrics",
                       "name": "r",
-                      "query": "sum:ai_pr_review.reviews{$repo,$mode,$pr} by {reviewer}.as_count()",
+                      "query": "sum:ai_pr_review.reviews{$repo,$mode,$pr} by {reviewer,model}.as_count()",
                       "aggregator": "sum"
                     }
                   ],
@@ -983,7 +983,7 @@
           {
             "definition": {
               "type": "toplist",
-              "title": "Duration per review (minutes, median), by reviewer",
+              "title": "Duration per review (minutes, median), by reviewer and model",
               "requests": [
                 {
                   "response_format": "scalar",
@@ -991,7 +991,7 @@
                     {
                       "data_source": "metrics",
                       "name": "d",
-                      "query": "avg:ai_pr_review.duration_ms.median{$repo,$mode,$pr} by {reviewer}",
+                      "query": "avg:ai_pr_review.duration_ms.median{$repo,$mode,$pr} by {reviewer,model}",
                       "aggregator": "avg"
                     }
                   ],
@@ -1011,7 +1011,7 @@
           {
             "definition": {
               "type": "toplist",
-              "title": "Inline comments per review (average), by reviewer",
+              "title": "Inline comments per review (average), by reviewer and model",
               "requests": [
                 {
                   "response_format": "scalar",
@@ -1019,7 +1019,7 @@
                     {
                       "data_source": "metrics",
                       "name": "i",
-                      "query": "avg:ai_pr_review.inline_comments.avg{$repo,$mode,$pr} by {reviewer}",
+                      "query": "avg:ai_pr_review.inline_comments.avg{$repo,$mode,$pr} by {reviewer,model}",
                       "aggregator": "avg"
                     }
                   ],
