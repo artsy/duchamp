@@ -34,6 +34,5 @@ jobs:
     secrets:
       anthropic-api-key: ${{ secrets.anthropic-api-key }}
       review-app-private-key: ${{ secrets.review-app-private-key }}
-      openai-api-key: ${{ secrets.openai-api-key }}
       litellm-api-key: ${{ secrets.litellm-api-key }}
       litellm-edge-token: ${{ secrets.litellm-edge-token }}

@@ -300,7 +300,7 @@ describe("answeredThreads", () => {
             comment("author", "because")
           ),
           thread(
-            comment("github-actions", "**Codex:** bug", "NONE", "Bot"),
+            comment("github-actions", "Coverage report", "NONE", "Bot"),
             comment("author", "no")
           ),
         ],

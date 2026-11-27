@@ -14,10 +14,6 @@
 
 // GraphQL returns Bot logins without the [bot] suffix
 const CLAUDE_BOT_LOGIN_GRAPHQL = "claude"
-const ACTIONS_BOT_LOGIN_GRAPHQL = "github-actions"
-
-// Starts every inline comment Codex posts; see scripts/post-side-by-side.ts
-const CODEX_COMMENT_PREFIX = "**Codex:**"
 
 async function cleanupPreviousAIReviews({ github, context, core }) {
   const { owner, repo } = context.repo
@@ -34,8 +30,7 @@ async function cleanupPreviousAIReviews({ github, context, core }) {
 }
 
 /**
- * Resolve inline review threads started by the Claude bot, or by Codex through the
- * workflow.
+ * Resolve inline review threads started by the Claude bot.
  * We resolve rather than delete to preserve any conversation history
  * (resolved threads collapse in GitHub UI but keep the discussion).
  */
@@ -73,11 +68,7 @@ async function resolveInlineReviewThreads({ github, owner, repo, prNumber }) {
     const first = thread.comments.nodes[0]
     const author = first?.author
     if (author?.__typename !== "Bot") return false
-    return (
-      author.login === CLAUDE_BOT_LOGIN_GRAPHQL ||
-      (author.login === ACTIONS_BOT_LOGIN_GRAPHQL &&
-        (first.body ?? "").startsWith(CODEX_COMMENT_PREFIX))
-    )
+    return author.login === CLAUDE_BOT_LOGIN_GRAPHQL
   })
 
   await Promise.all(

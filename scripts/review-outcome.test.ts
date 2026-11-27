@@ -47,18 +47,17 @@ const finding = (overrides: Partial<Finding> = {}): Finding => ({
 })
 
 describe("parseSeverity", () => {
-  it("reads the marker, with or without the Codex prefix", () => {
+  it("reads the marker", () => {
     expect(parseSeverity("🔴 **blocking:** crash")).toBe("blocking")
     expect(parseSeverity("🟠 **required:** fix")).toBe("required")
     expect(parseSeverity("🔵 **nit:** name")).toBe("nit")
     expect(parseSeverity("⚪ **q:** why?")).toBe("question")
-    expect(parseSeverity("**Codex:** 🔴 **blocking:** crash")).toBe("blocking")
     expect(parseSeverity("no marker")).toBe("none")
   })
 })
 
 describe("findingsFrom", () => {
-  it("keeps Claude's and Codex's threads, with reactions and human replies", () => {
+  it("keeps Claude's threads, with reactions and human replies, and drops Codex's", () => {
     const findings = findingsFrom(
       [
         thread(
@@ -97,13 +96,6 @@ describe("findingsFrom", () => {
         reaction: "down",
         replies: ["on purpose"],
       },
-      expect.objectContaining({
-        id: 1,
-        reviewer: "codex",
-        severity: "nit",
-        reaction: "none",
-        replies: [],
-      }),
     ])
   })
 
