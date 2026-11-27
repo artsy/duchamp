@@ -21,6 +21,32 @@ export interface AgyUsage {
 
 export const GEMINI_USAGE_LOG_PREFIX = "GEMINI_USAGE "
 
+/**
+ * Gemini Neon 4's standard-tier list price in dollars per token, from public write-ups
+ * (Antigravity reports no cost). An estimate: check it against LiteLLM's Usage page.
+ */
+export const GEMINI_PRICE_PER_TOKEN = {
+  input: 3 / 1_000_000,
+  output: 15 / 1_000_000,
+  cacheRead: 0.15 / 1_000_000,
+}
+
+/** The review's cost at list price, or undefined without token counts. */
+export const estimateCostUsd = (usage: AgyUsage | null): number | undefined => {
+  if (
+    usage?.inputTokens === undefined &&
+    usage?.outputTokens === undefined &&
+    usage?.cachedTokens === undefined
+  ) {
+    return undefined
+  }
+  const cost =
+    (usage.inputTokens ?? 0) * GEMINI_PRICE_PER_TOKEN.input +
+    (usage.outputTokens ?? 0) * GEMINI_PRICE_PER_TOKEN.output +
+    (usage.cachedTokens ?? 0) * GEMINI_PRICE_PER_TOKEN.cacheRead
+  return Math.round(cost * 10_000) / 10_000
+}
+
 const num = (...values: unknown[]): number | undefined =>
   values.find((v): v is number => typeof v === "number" && Number.isFinite(v))
 
@@ -92,17 +118,29 @@ export const geminiMetrics = (
     }
   }
 
+  const reported = usage?.costUsd
+  const costUsd = reported ?? estimateCostUsd(usage)
+  const costTags =
+    reported === undefined
+      ? [...tags, "cost:estimated"]
+      : [...tags, "cost:reported"]
+
   return [
     { type: "increment", name: "reviews", tags },
-    ...(usage?.costUsd !== undefined
+    ...(costUsd !== undefined
       ? [
           {
             type: "incrementBy" as const,
             name: "cost_cents",
-            value: Math.round(usage.costUsd * 100),
-            tags,
+            value: Math.round(costUsd * 100),
+            tags: costTags,
           },
-          histogram("cost_usd", usage.costUsd),
+          {
+            type: "histogram" as const,
+            name: "cost_usd",
+            value: costUsd,
+            tags: costTags,
+          },
         ]
       : []),
     ...tokens.map(

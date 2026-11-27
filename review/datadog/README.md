@@ -25,7 +25,8 @@ All of them but `findings` and `human_comments` carry the tags `repo`, `pr`, `gr
 (full, rereview or unknown), `outcome`, `model` and `effort`. Reviews from after the
 [Gemini experiment](../../gemini-experiment/README.md) carry `reviewer` (`claude` or
 `gemini`). Gemini's reviews carry only `repo`, `pr`, `mode`, `outcome`, `model` and
-`reviewer`, and no cost, because Antigravity doesn't report one. Every review-level widget outside the
+`reviewer`, plus `cost:estimated` on their cost, which `gemini-usage.ts` works out from
+tokens at list price because Antigravity reports none. Every review-level widget outside the
 Reviewers section filters them out with `!reviewer:gemini`, so Claude's numbers stay
 Claude's. The Outcome section's `findings` widgets don't: they include Gemini's
 findings (and Codex's, from before that experiment ended), split by `reviewer`. Reviews from after the

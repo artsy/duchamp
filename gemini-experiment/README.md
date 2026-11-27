@@ -30,8 +30,8 @@ comment and resolves the earlier **Gemini:** threads.
      litellm-api-key: ${{ secrets.AI_REVIEW_LITELLM_API_KEY }}
    ```
 
-2. **Enrol.** Add your GitHub login to `participants.yml` and open a PR. Case does not
-   matter.
+2. **Enrol.** Add your GitHub login to `participants.yml`, or a repo (`owner/name`)
+   under `repos` to enroll every PR in it, and open a PR. Case does not matter.
 3. **Per PR.** Add the `ai-review-gemini` label to a single PR. It takes effect on the
    next push.
 
@@ -103,8 +103,10 @@ needs an exception for Gemini or the experiment pauses.
 - **Cost and speed.** `scripts/gemini-usage.ts` sends the Gemini review's numbers under
   the same `ai_pr_review.*` names as Claude's, tagged `reviewer:gemini` and
   `model:gemini-4-neon`; Claude's carry `reviewer:claude`. The dashboard's "Reviewers"
-  section compares them. Antigravity reports tokens but no cost, so Gemini's spend comes
-  from LiteLLM's Usage page.
+  section compares them. Antigravity reports tokens but no cost, so `gemini-usage.ts`
+  estimates it from tokens at Gemini Neon 4's list price ($3 input, $15 output, $0.15
+  cached input per million) and tags it `cost:estimated`. Check it against LiteLLM's
+  Usage page.
 - `inline_comments` counts the comments Gemini returned, some of which may land off the
   diff; Claude's counts the ones it posted.
 

@@ -70,7 +70,7 @@ describe("geminiMetrics", () => {
     durationMs: 60_000,
   }
 
-  it("tags every metric with the reviewer and model, and skips cost when unknown", () => {
+  it("tags every metric with the reviewer and model", () => {
     const metrics = geminiMetrics(
       { status: "success", inputTokens: 1000, outputTokens: 200, turns: 7 },
       context
@@ -97,7 +97,6 @@ describe("geminiMetrics", () => {
         "inline_comments",
       ])
     )
-    expect(names).not.toContain("cost_cents")
     expect(metrics).toContainEqual({
       type: "histogram",
       name: "duration_ms",
@@ -114,6 +113,34 @@ describe("geminiMetrics", () => {
     expect(metrics).toContainEqual(
       expect.objectContaining({ name: "cost_usd", value: 0.42 })
     )
+  })
+
+  it("estimates cost from tokens at Gemini Neon 4's list price when the envelope has none", () => {
+    const metrics = geminiMetrics(
+      {
+        status: "success",
+        inputTokens: 200_000,
+        outputTokens: 40_000,
+        cachedTokens: 1_000_000,
+      },
+      context
+    )
+    // 200k x $3/M + 40k x $15/M + 1M x $0.15/M = $0.60 + $0.60 + $0.15
+    expect(metrics).toContainEqual(
+      expect.objectContaining({ name: "cost_cents", value: 135 })
+    )
+    expect(metrics).toContainEqual(
+      expect.objectContaining({
+        name: "cost_usd",
+        value: 1.35,
+        tags: expect.arrayContaining(["cost:estimated"]),
+      })
+    )
+  })
+
+  it("sends no cost when there are no token counts either", () => {
+    const metrics = geminiMetrics({ status: "error" }, context)
+    expect(metrics.map(m => m.name)).not.toContain("cost_cents")
   })
 
   it("still counts a review that returned nothing, as an error", () => {

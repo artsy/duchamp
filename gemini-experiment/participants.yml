@@ -9,6 +9,7 @@
 # does nothing.
 #
 # To join or leave, add or remove your login and open a PR. Case does not matter.
+# `repos` enrolls every PR in a repo (owner/name); empty it to pause there.
 # Anyone can also try it on a single PR by adding the `ai-review-gemini` label,
 # without being on this list.
 #
@@ -16,3 +17,7 @@
 
 participants:
   - MounirDhahri
+
+# Every gravity PR until 20 have both reviews, then emptied until the verdict.
+repos:
+  - artsy/gravity
