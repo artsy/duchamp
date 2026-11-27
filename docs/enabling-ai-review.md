@@ -36,7 +36,6 @@ as "Organization secrets".
 | `AI_REVIEW_LITELLM_API_KEY` | secret | Always. Every review goes through Artsy's LiteLLM gateway with it; without it the review doesn't run |
 | `REVIEW_APP_PRIVATE_KEY` | secret | Only when `.claude-review.yml` lists a private repo in `related_repos` |
 | `REVIEW_APP_ID` | variable | With `REVIEW_APP_PRIVATE_KEY`. It is an org variable, so there is nothing to add |
-| `OPENAI_API_KEY` | secret | Only for the Codex experiment |
 | `AI_REVIEW_LITELLM_EDGE_TOKEN` | secret | Only for the LiteLLM experiment, once the gateway has an edge check |
 
 If one is missing, an org admin can share the org secret with the repo, or you can

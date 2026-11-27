@@ -31,9 +31,6 @@ const MAX_REPLY_CHARS = 600
 
 // GraphQL returns Bot logins without the [bot] suffix
 const CLAUDE_LOGIN = "claude"
-const ACTIONS_LOGIN = "github-actions"
-// Starts every inline comment Codex posts; see scripts/post-side-by-side.ts
-const CODEX_PREFIX = "**Codex:**"
 
 /** 👍 ❤️ 🎉 🚀 */
 const POSITIVE_REACTIONS = ["THUMBS_UP", "HEART", "HOORAY", "ROCKET"]
@@ -50,7 +47,7 @@ export type ReplyLabel = "dismissed" | "agreed" | "other" | "none"
 
 export interface Finding {
   id: number
-  reviewer: "claude" | "codex"
+  reviewer: "claude"
   severity: string
   path: string
   body: string
@@ -73,7 +70,7 @@ export const cut = (text: string, maxChars: number): string =>
   text.length > maxChars ? `${text.slice(0, maxChars)}…` : text
 
 export const parseSeverity = (body: string): string => {
-  const text = body.replace(CODEX_PREFIX, "").trimStart()
+  const text = body.trimStart()
   const marker = Object.keys(SEVERITIES).find(emoji => text.startsWith(emoji))
   return marker ? SEVERITIES[marker] : "none"
 }
@@ -90,7 +87,7 @@ const reactionOf = (
 }
 
 /**
- * The inline comments Claude and Codex opened, with what people did on each. Only replies
+ * The inline comments Claude opened, with what people did on each. Only replies
  * from the PR's author or people with write access are kept.
  */
 export const findingsFrom = (
@@ -103,16 +100,12 @@ export const findingsFrom = (
       if (first?.author?.__typename !== "Bot") {
         return null
       }
-      const isClaude = first.author.login === CLAUDE_LOGIN
-      const isCodex =
-        first.author.login === ACTIONS_LOGIN &&
-        first.body.startsWith(CODEX_PREFIX)
-      if (!isClaude && !isCodex) {
+      if (first.author.login !== CLAUDE_LOGIN) {
         return null
       }
 
       return {
-        reviewer: isClaude ? ("claude" as const) : ("codex" as const),
+        reviewer: "claude" as const,
         severity: parseSeverity(first.body),
         path: thread.path,
         body: cut(first.body, MAX_BODY_CHARS),

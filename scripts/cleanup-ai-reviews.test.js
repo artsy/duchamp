@@ -77,7 +77,7 @@ describe("cleanupPreviousAIReviews", () => {
     expect(mutationCalls[0][1]).toEqual({ threadId: "thread-1" })
   })
 
-  it("should resolve Codex's threads but not other github-actions threads", async () => {
+  it("should leave github-actions threads alone, Codex's included", async () => {
     const threads = [
       {
         id: "codex",
@@ -116,8 +116,7 @@ describe("cleanupPreviousAIReviews", () => {
     const mutationCalls = mockGithub.graphql.mock.calls.filter(([query]) =>
       query.includes("mutation")
     )
-    expect(mutationCalls).toHaveLength(1)
-    expect(mutationCalls[0][1]).toEqual({ threadId: "codex" })
+    expect(mutationCalls).toHaveLength(0)
   })
 
   it("should handle no threads", async () => {
