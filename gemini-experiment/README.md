@@ -100,6 +100,7 @@ needs an exception for Gemini or the experiment pauses.
 Open a PR as an enrolled author, or add the `ai-review-gemini` label, and push twice.
 The first push gets a full Gemini review and a side-by-side comment; the second gets a
 Gemini re-review of the changes since its commit.
+The run's `gemini` job logs `Review mode: rereview` when it found its earlier review.
 
 ## Measuring it
 
