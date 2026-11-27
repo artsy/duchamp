@@ -51,7 +51,7 @@ Three jobs in `.github/workflows/agent-review.yml`:
   related-repos token. It saves the PR's description and comments to a file
   (`scripts/save-pr.ts`), keeping only comments from the PR's author and people with
   write access, so bots (Claude included) and strangers are left out. Then it drops sudo,
-  installs `agy` and runs it headless with `--model gemini-4-neon-high`,
+  installs `agy` and runs it headless with the tier's model (below),
   `--json-schema gemini-experiment/output-schema.json` and
   `--dangerously-skip-permissions`. It stops after 14 minutes. Every step continues on
   error, so its failures don't turn the check red, and a failed run still gets a column
@@ -72,6 +72,10 @@ earlier notes, on the same rules as Claude's re-reviews. It never reads Claude's
 or the replies to Claude's inline comments. If Gemini didn't return a review last time,
 or only lockfiles changed and the comment lost its column, the next review is full.
 
+**Model.** Gemini follows the same tier as Claude ([model routing](../review/README.md#model-routing)):
+light changes get `gemini-3.8-flash-medium`, everything else `gemini-4-neon-high`
+(`geminiModelFor` in `build-review-prompt.ts`).
+
 The prompt can be longer than one command-line argument allows, so `agy -p` gets a short
 instruction pointing at the prompt file.
 
@@ -79,9 +83,9 @@ instruction pointing at the prompt file.
 
 In LiteLLM's admin UI (artsy-litellm):
 
-- Gemini Neon 4 under the public name `gemini-4-neon`, with the Google API key behind it,
-  allowed on the key duchamp's callers use.
-  It has to be Google's own ID: `agy` takes the effort in the model name
+- Gemini Neon 4 and Gemini 3.8 Flash under the public names `gemini-4-neon` and
+  `gemini-3.8-flash`, with the Google API key behind them, allowed on the key duchamp's
+  callers use. They have to be Google's own IDs: `agy` takes the effort in the model name
   (`gemini-4-neon-high`) and sends `gemini-4-neon`, with the effort in the request.
 - The public host forwarding `/v1beta/models` (artsy/artsy-litellm#16) and Cloudflare
   letting it skip the WAF (artsy/infrastructure#1604).
@@ -102,10 +106,12 @@ needs an exception for Gemini or the experiment pauses.
   trigger.
 - **Cost and speed.** `scripts/gemini-usage.ts` sends the Gemini review's numbers under
   the same `ai_pr_review.*` names as Claude's, tagged `reviewer:gemini` and
-  `model:gemini-4-neon`; Claude's carry `reviewer:claude`. The dashboard's "Reviewers"
-  section compares them. Antigravity reports tokens but no cost, so `gemini-usage.ts`
-  estimates it from tokens at Gemini Neon 4's list price ($3 input, $15 output, $0.15
-  cached input per million) and tags it `cost:estimated`. Check it against LiteLLM's
+  `model:` and `effort:` (`gemini-4-neon` / `high`, or `gemini-3.8-flash` / `medium`);
+  Claude's carry `reviewer:claude`. The dashboard's "Reviewers" section compares them;
+  compare each tier with its own (`model:` tells them apart). Antigravity reports tokens
+  but no cost, so `gemini-usage.ts` estimates it from tokens at list price per million:
+  Neon 4 $3 input, $15 output, $0.15 cached; 3.8 Flash $0.75, $3.75, $0.075 until
+  2026-12-31, then double. It's tagged `cost:estimated`; check it against LiteLLM's
   Usage page.
 - `inline_comments` counts the comments Gemini returned, some of which may land off the
   diff; Claude's counts the ones it posted.

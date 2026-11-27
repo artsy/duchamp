@@ -17,6 +17,7 @@ import {
   formatSecuritySection,
   GEMINI_LABEL,
   gatewayHeaders,
+  geminiModelFor,
   hasSecurityLabel,
   inBestPractices,
   inGemini,
@@ -590,6 +591,16 @@ describe("inGemini", () => {
     mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
     expect(inGemini("someone", ["bug"])).toBe(false)
     expect(inGemini(undefined, [])).toBe(false)
+  })
+})
+
+describe("geminiModelFor", () => {
+  it("gives light changes Gemini 3.8 Flash at medium, like Claude's Sonnet", () => {
+    expect(geminiModelFor("light")).toBe("gemini-3.8-flash-medium")
+  })
+
+  it("gives everything else Gemini Neon 4 at high", () => {
+    expect(geminiModelFor("standard")).toBe("gemini-4-neon-high")
   })
 })
 

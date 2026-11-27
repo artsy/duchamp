@@ -98,10 +98,10 @@ before.
 For PRs in the [lean reviews experiment](../lean-reviews-experiment/README.md),
 `scripts/review-risk.ts` sorts the changes into a tier before the run:
 
-| Tier | When | Model and effort |
-| --- | --- | --- |
-| light | Every changed file is docs (`*.md`, `*.mdx`, `*.txt`, images, `docs/`, `LICENSE`), or at most 40 changed lines and no sensitive file | `claude-sonnet-5-5`, `medium` |
-| standard | Anything else | the workflow's `model` input, `high` |
+| Tier | When | Model and effort | Gemini, for the [Gemini experiment](../gemini-experiment/README.md) |
+| --- | --- | --- | --- |
+| light | Every changed file is docs (`*.md`, `*.mdx`, `*.txt`, images, `docs/`, `LICENSE`), or at most 40 changed lines and no sensitive file | `claude-sonnet-5-5`, `medium` | `gemini-3.8-flash`, `medium` |
+| standard | Anything else | the workflow's `model` input, `high` | `gemini-4-neon`, `high` |
 
 - A sensitive file keeps a PR on standard however small the change. `SENSITIVE_PATTERNS`
   lists them: workflows and actions, paths naming auth, sessions, tokens, secrets,

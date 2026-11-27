@@ -1,5 +1,5 @@
 import * as fs from "fs"
-import { GEMINI_MODEL } from "./build-review-prompt"
+import { GEMINI_STANDARD_MODEL } from "./build-review-prompt"
 import { parseReviewOutput } from "./post-side-by-side"
 import { sendToVolley, type VolleyMetric } from "./review-usage"
 
@@ -21,29 +21,50 @@ export interface AgyUsage {
 
 export const GEMINI_USAGE_LOG_PREFIX = "GEMINI_USAGE "
 
+const perMillion = (input: number, output: number, cacheRead: number) => ({
+  input: input / 1_000_000,
+  output: output / 1_000_000,
+  cacheRead: cacheRead / 1_000_000,
+})
+
 /**
- * Gemini Neon 4's standard-tier list price in dollars per token, from public write-ups
- * (Antigravity reports no cost). An estimate: check it against LiteLLM's Usage page.
+ * Standard-tier list prices in dollars per token, by Google's model ID, from public
+ * write-ups (Antigravity reports no cost). Estimates: check them against LiteLLM's Usage
+ * page. Gemini 3.8 Flash's introductory rate runs to 2026-12-31, then doubles.
  */
-export const GEMINI_PRICE_PER_TOKEN = {
-  input: 3 / 1_000_000,
-  output: 15 / 1_000_000,
-  cacheRead: 0.15 / 1_000_000,
+export const GEMINI_PRICES: Record<string, ReturnType<typeof perMillion>> = {
+  "gemini-4-neon": perMillion(3, 15, 0.15),
+  "gemini-3.8-flash": perMillion(0.75, 3.75, 0.075),
 }
 
-/** The review's cost at list price, or undefined without token counts. */
-export const estimateCostUsd = (usage: AgyUsage | null): number | undefined => {
+/** Antigravity's model name, such as gemini-4-neon-high, as Google's ID and the effort. */
+export const splitAgyModel = (
+  name: string
+): { model: string; effort: string } => {
+  const match = name.match(/^(.*)-(low|medium|high|xhigh|max)$/)
+  return match
+    ? { model: match[1], effort: match[2] }
+    : { model: name, effort: "unknown" }
+}
+
+/** The review's cost at list price, or undefined without token counts or a price. */
+export const estimateCostUsd = (
+  usage: AgyUsage | null,
+  model: string
+): number | undefined => {
+  const price = GEMINI_PRICES[model]
   if (
-    usage?.inputTokens === undefined &&
-    usage?.outputTokens === undefined &&
-    usage?.cachedTokens === undefined
+    !price ||
+    (usage?.inputTokens === undefined &&
+      usage?.outputTokens === undefined &&
+      usage?.cachedTokens === undefined)
   ) {
     return undefined
   }
   const cost =
-    (usage.inputTokens ?? 0) * GEMINI_PRICE_PER_TOKEN.input +
-    (usage.outputTokens ?? 0) * GEMINI_PRICE_PER_TOKEN.output +
-    (usage.cachedTokens ?? 0) * GEMINI_PRICE_PER_TOKEN.cacheRead
+    (usage.inputTokens ?? 0) * price.input +
+    (usage.outputTokens ?? 0) * price.output +
+    (usage.cachedTokens ?? 0) * price.cacheRead
   return Math.round(cost * 10_000) / 10_000
 }
 
@@ -85,6 +106,8 @@ export const parseAgyUsage = (envelope: unknown): AgyUsage | null => {
 export const geminiMetrics = (
   usage: AgyUsage | null,
   context: {
+    /** Antigravity's model name, such as gemini-4-neon-high. */
+    model: string
     repo: string
     prNumber: string
     reviewMode: string
@@ -93,12 +116,14 @@ export const geminiMetrics = (
   }
 ): VolleyMetric[] => {
   const outcome = usage?.status === "success" ? "success" : "error"
+  const { model, effort } = splitAgyModel(context.model)
   const tags = [
     `repo:${context.repo}`,
     ...(context.prNumber ? [`pr:${context.prNumber}`] : []),
     `mode:${context.reviewMode || "unknown"}`,
     `outcome:${outcome}`,
-    `model:${GEMINI_MODEL}`,
+    `model:${model}`,
+    `effort:${effort}`,
     "reviewer:gemini",
   ]
   const histogram = (name: string, value: number): VolleyMetric => ({
@@ -119,7 +144,7 @@ export const geminiMetrics = (
   }
 
   const reported = usage?.costUsd
-  const costUsd = reported ?? estimateCostUsd(usage)
+  const costUsd = reported ?? estimateCostUsd(usage, model)
   const costTags =
     reported === undefined
       ? [...tags, "cost:estimated"]
@@ -176,6 +201,7 @@ const main = async (): Promise<void> => {
   const review = parseReviewOutput(text)
 
   const context = {
+    model: process.env.GEMINI_MODEL || GEMINI_STANDARD_MODEL,
     repo: process.env.GITHUB_REPOSITORY ?? "",
     prNumber: process.env.PR_NUMBER ?? "",
     reviewMode: process.env.REVIEW_MODE ?? "",
