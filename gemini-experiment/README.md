@@ -48,14 +48,16 @@ Three jobs in `.github/workflows/claude-review.yml`:
 
 - **`review`** runs Claude, and Codex when enrolled, as before. It no longer posts the
   side-by-side comment; Codex's JSON goes to the next job as an artifact.
-- **`gemini`** runs on its own runner at the same time. It saves the PR's description
-  and comments first, before Claude posts anything for this push, so Gemini never sees
-  Claude's review. Then it checks out the PR without saving credentials, builds the same
-  prompt, installs the same skills under `~/.agents/skills`, installs `agy` and runs it
-  headless with `--json-schema codex-experiment/output-schema.json`, `--model gemini-4-neon-high` and
-  `--dangerously-skip-permissions`, after dropping sudo. It stops after 14 minutes. Every
-  step continues on error, so its failures don't turn the check red, and a failed run
-  still gets a column that says so.
+- **`gemini`** runs on its own runner at the same time. It checks out the PR without
+  saving credentials, builds the same prompt and installs the same skills under
+  `~/.agents/skills`. It saves the PR's description and comments to a file
+  (`scripts/save-pr.ts`), keeping only comments from the PR's author and people with
+  write access, so bots (Claude included) and strangers are left out. Then it drops sudo,
+  installs `agy` and runs it headless with `--model gemini-4-neon-high`,
+  `--json-schema codex-experiment/output-schema.json` and
+  `--dangerously-skip-permissions`. It stops after 14 minutes. Every step continues on
+  error, so its failures don't turn the check red, and a failed run still gets a column
+  that says so. The `in-progress` label cancels it, as it does Claude's review.
 - **`side-by-side`** waits for both, posts Codex's and Gemini's inline comments and the
   comparison comment. It skips posting when a newer push cancelled this run's reviews.
 
@@ -104,9 +106,11 @@ needs an exception for Gemini or the experiment pauses.
 ## Risks
 
 - **Prompt injection from the PR.** Antigravity runs with every permission on a runner
-  that holds the LiteLLM key. Before it starts, the job removes passwordless sudo and
-  locks the Docker socket, so it can't read tokens from the runner's memory; if sudo
-  still works, Gemini doesn't run. The job holds no write token and no credentials on
+  that holds the LiteLLM key. Anyone can comment on a public PR, so only comments from
+  the PR's author and people with write access reach it; outside contributors' PRs are
+  skipped, and forks don't get the key anyway. Before `agy` is even installed, the job
+  removes passwordless sudo and locks the Docker socket, so it can't read tokens from the
+  runner's memory; if sudo still works, Gemini doesn't run. The job holds no write token and no credentials on
   disk, and the key's budget and rate limits on the gateway cap the damage.
 - **Headless stalls**
   ([google-antigravity/antigravity-cli#548](https://github.com/google-antigravity/antigravity-cli/issues/548)).

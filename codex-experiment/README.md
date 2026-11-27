@@ -48,8 +48,10 @@ Codex gets the same text plus a short "Running in Codex" section at the end
 - **No GitHub tools.** Codex can't post, so it returns its summary and inline comments
   as JSON in `output-schema.json`, and the workflow posts them. If it returns plain
   text instead, that text becomes its column.
-- **No network.** A step saves `gh pr view --comments` to a file before Claude runs, and
-  Codex reads that. It never sees Claude's review of the same push.
+- **No network.** A step saves the PR's description and comments to a file before
+  Claude runs (`scripts/save-pr.ts`), and Codex reads that. It never sees Claude's review
+  of the same push, and only comments from the PR's author and people with write access
+  go in.
 - **Skills.** The workflow copies the installed skills to `~/.agents/skills`, where
   Codex finds them, and the note tells it to read `SKILL.md` where the prompt says to
   run a skill. So when a PR is also in the [merge risk](../merge-risk-experiment/README.md)

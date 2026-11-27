@@ -365,6 +365,10 @@ with who each one is on for, past experiments and the PR that introduced each:
 - Codex experiment (`ai-review-codex`): a second review from OpenAI Codex, shown next
   to Claude's. Needs the repo to pass `openai-api-key`. See
   `codex-experiment/README.md`.
+- Gemini experiment (`ai-review-gemini`): a second review from Gemini Neon 4 in
+  Antigravity CLI, run in parallel with Claude's and shown next to it. Goes through
+  the LiteLLM gateway, so it needs the repo to pass `litellm-api-key`. See
+  `gemini-experiment/README.md`.
 
 **Security Notes:**
 
