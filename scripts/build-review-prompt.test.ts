@@ -577,6 +577,15 @@ describe("inGemini", () => {
     expect(inGemini("someone", [GEMINI_LABEL.toUpperCase()])).toBe(true)
   })
 
+  it("includes every PR in a listed repo, in any case", () => {
+    mockFiles({
+      "participants.yml":
+        "participants:\n  - MounirDhahri\nrepos:\n  - artsy/gravity\n",
+    })
+    expect(inGemini("someone", [], "Artsy/Gravity")).toBe(true)
+    expect(inGemini("someone", [], "artsy/eigen")).toBe(false)
+  })
+
   it("leaves out everyone else", () => {
     mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
     expect(inGemini("someone", ["bug"])).toBe(false)

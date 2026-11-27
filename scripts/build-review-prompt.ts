@@ -352,11 +352,14 @@ export const inMergeRisk = (
 /** Whether this PR also gets a Gemini review: listed authors and labelled PRs. */
 export const inGemini = (
   author: string | undefined,
-  labels: string[]
+  labels: string[],
+  repo?: string
 ): boolean =>
   labels.some(label => label.toLowerCase() === GEMINI_LABEL) ||
   (!!author &&
-    loadParticipants("gemini-experiment").includes(author.toLowerCase()))
+    loadParticipants("gemini-experiment").includes(author.toLowerCase())) ||
+  (!!repo &&
+    loadEnrolment("gemini-experiment", "repos").includes(repo.toLowerCase()))
 
 /**
  * Whether this review is in the LiteLLM experiment: listed authors, every PR in a listed
@@ -1070,7 +1073,7 @@ const main = (): void => {
     process.env.HAS_LITELLM_KEY === "true"
   )
   const geminiGateway = pickGateway(
-    inGemini(process.env.PR_AUTHOR, labels),
+    inGemini(process.env.PR_AUTHOR, labels, process.env.GITHUB_REPOSITORY),
     process.env.HAS_LITELLM_KEY === "true"
   )
 
