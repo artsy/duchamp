@@ -23,11 +23,10 @@ comment and resolves the earlier **Gemini:** threads.
 
 1. **The repo passes the LiteLLM key.** Gemini goes through Artsy's LiteLLM gateway, with
    the key repos in the [LiteLLM experiment](../litellm-experiment/README.md) already
-   pass. No other secret, and no change to the repo's `run-claude-review.yml`:
+   pass. No other secret, and no change to the repo's `run-agent-review.yml`:
 
    ```yaml
    secrets:
-     anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
      litellm-api-key: ${{ secrets.AI_REVIEW_LITELLM_API_KEY }}
    ```
 
@@ -42,7 +41,7 @@ Repos that pin duchamp to a commit SHA don't get this until they move the pin.
 
 ## How it runs
 
-Three jobs in `.github/workflows/claude-review.yml`:
+Three jobs in `.github/workflows/agent-review.yml`:
 
 - **`review`** runs Claude, as before.
 - **`gemini`** runs on its own runner at the same time. It checks out the PR without

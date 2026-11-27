@@ -11,7 +11,7 @@ useful. This gives every later change to the review a number to be judged by.
 ## Joining
 
 1. **Enable it in the repo.** Add `closed` to the trigger in the repo's
-   `run-claude-review.yml`. Without it the job never runs there:
+   `run-agent-review.yml`. Without it the job never runs there:
 
    ```yaml
    on:
@@ -54,7 +54,7 @@ verdict, never its text.
 
 ## How it works
 
-The `outcome` job in `claude-review.yml` runs `scripts/review-outcome.ts` when a PR
+The `outcome` job in `agent-review.yml` runs `scripts/review-outcome.ts` when a PR
 closes as merged. For each finding it fetches the file as it was at the commit the
 comment was posted on and as it was at the PR's last commit, and diffs the two. It
 compares file versions and not commits, so it still works after a rebase or force push

@@ -107,6 +107,8 @@ describe("areasFor", () => {
 
   it.each([
     [".github/workflows/claude-review.yml", "AI review"],
+    [".github/workflows/agent-review.yml", "AI review"],
+    [".github/workflows/run-agent-review.yml", "AI review"],
     ["review/datadog/dashboard.json", "AI review"],
     [".claude/agents/duchamp-security-reviewer.md", "AI review"],
     ["docs/enabling-ai-review.md", "AI review"],
@@ -123,6 +125,7 @@ describe("areasFor", () => {
     [".github/workflows/release.yml", "Releases"],
     ["docs/actions.md", "Docs"],
     ["templates/run-claude-review.yml", "AI review"],
+    ["templates/run-agent-review.yml", "AI review"],
     ["templates/run-daily-datadog-triage.yml", "Datadog triage"],
     ["templates/run-dangerfile.yml", "Danger and PR checks"],
     ["danger-yarn.ts", "Danger and PR checks"],

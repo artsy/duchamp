@@ -12,7 +12,6 @@ import { MISSED_LOG_PREFIX } from "./review-missed"
  */
 
 const LOG_CONCURRENCY = 6
-const WORKFLOW = "run-claude-review.yml"
 const OUTCOME_JOBS_FILTER =
   '.jobs[] | select(.name | endswith("outcome")) | select(.conclusion != "skipped") | .id'
 const USAGE =
@@ -94,7 +93,7 @@ const main = async (): Promise<void> => {
       repos,
       since,
       splits: [],
-      workflow: WORKFLOW,
+      workflows: ["run-agent-review.yml", "run-claude-review.yml"],
     })
     runs.push(...repoRuns.map(run => ({ repo, databaseId: run.databaseId })))
     console.error(`${repo}: ${repoRuns.length} runs`)

@@ -15,21 +15,18 @@ any mix of them, and they all work through the gateway.
 
 ## Joining
 
-A review goes through the gateway when both hold:
+Repos that call `agent-review.yml` pass only the LiteLLM key, so every review they run
+goes through the gateway:
 
-1. **The PR is in the experiment:** its author is in `participants.yml`, its repo is
-   under `repos`, or it carries the `ai-review-litellm` label.
-2. **The repo passes the key** in its `run-claude-review.yml`:
+```yaml
+secrets:
+  litellm-api-key: ${{ secrets.AI_REVIEW_LITELLM_API_KEY }}
+```
 
-   ```yaml
-   secrets:
-     anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
-     litellm-api-key: ${{ secrets.AI_REVIEW_LITELLM_API_KEY }}
-     litellm-edge-token: ${{ secrets.AI_REVIEW_LITELLM_EDGE_TOKEN }}
-   ```
-
-Without the key, enrolment does nothing and the review calls Anthropic as before. The
-Anthropic key stays required, so leaving the experiment never breaks a review.
+A repo that still passes `anthropic-api-key` calls Anthropic directly, and goes through
+the gateway only when the PR is in the experiment: its author is in `participants.yml`,
+its repo is under `repos`, or it carries the `ai-review-litellm` label. Without the
+LiteLLM key, enrolment does nothing.
 
 ## How it works
 

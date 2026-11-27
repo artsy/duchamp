@@ -40,6 +40,7 @@ import {
   loadReviewPrompt,
   MAX_INSTRUCTIONS_BYTES,
   MAX_PROMPT_BYTES,
+  needsGateway,
   parseLabels,
   pickGateway,
   pickReviewMode,
@@ -1043,6 +1044,18 @@ describe("pickGateway", () => {
     expect(pickGateway(true, false, gateway)).toBeUndefined()
     expect(pickGateway(false, true, gateway)).toBeUndefined()
     expect(pickGateway(true, true, undefined)).toBeUndefined()
+  })
+})
+
+describe("needsGateway", () => {
+  it("routes through the gateway in the LiteLLM experiment, or when there's no Anthropic key", () => {
+    expect(needsGateway(true, true)).toBe(true)
+    expect(needsGateway(false, false)).toBe(true)
+    expect(needsGateway(true, false)).toBe(true)
+  })
+
+  it("calls Anthropic directly outside the experiment when the caller passes its key", () => {
+    expect(needsGateway(false, true)).toBe(false)
   })
 })
 

@@ -2,7 +2,7 @@
 
 Each review posts its numbers to [volley](https://github.com/artsy/volley), which
 forwards them to Datadog as `ai_pr_review.*` metrics. No key is needed: the
-"Report review usage" step in `claude-review.yml` sets `VOLLEY_URL`, and every repo
+"Report review usage" step in `agent-review.yml` sets `VOLLEY_URL`, and every repo
 using the shared workflow reports.
 
 | Metric | Type | What |

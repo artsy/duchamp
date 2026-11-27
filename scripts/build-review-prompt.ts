@@ -418,8 +418,17 @@ export const loadGateway = (): Gateway | undefined => {
 }
 
 /**
- * The gateway this review goes through: only when the PR is in the experiment and the
- * caller passed `litellm-api-key`. Otherwise the review calls Anthropic directly.
+ * Whether Claude's calls must go through the gateway: PRs in the LiteLLM experiment, and
+ * every PR when the caller passes no Anthropic key, only the LiteLLM one.
+ */
+export const needsGateway = (
+  inExperiment: boolean,
+  hasAnthropicKey: boolean
+): boolean => inExperiment || !hasAnthropicKey
+
+/**
+ * The gateway this review goes through: only when the PR needs it and the caller passed
+ * `litellm-api-key`. Otherwise the review calls Anthropic directly.
  */
 export const pickGateway = (
   inExperiment: boolean,
@@ -1056,7 +1065,10 @@ const main = (): void => {
     labels,
     process.env.GITHUB_REPOSITORY
   )
-  const gateway = pickGateway(litellm, process.env.HAS_LITELLM_KEY === "true")
+  const gateway = pickGateway(
+    needsGateway(litellm, process.env.HAS_ANTHROPIC_KEY !== "false"),
+    process.env.HAS_LITELLM_KEY === "true"
+  )
   const geminiGateway = pickGateway(
     inGemini(process.env.PR_AUTHOR, labels),
     process.env.HAS_LITELLM_KEY === "true"

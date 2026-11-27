@@ -47,7 +47,8 @@ export interface Options {
   repos: string[]
   since: string
   splits: string[]
-  workflow: string
+  /** Caller workflow files to read runs from; a repo may have either name. */
+  workflows: string[]
 }
 
 export const parseArgs = (argv: string[]): Options => {
@@ -55,7 +56,7 @@ export const parseArgs = (argv: string[]): Options => {
     repos: [],
     since: "",
     splits: [],
-    workflow: "run-claude-review.yml",
+    workflows: ["run-agent-review.yml", "run-claude-review.yml"],
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -77,7 +78,7 @@ export const parseArgs = (argv: string[]): Options => {
         i++
         break
       case "--workflow":
-        options.workflow = value
+        options.workflows = [value]
         i++
         break
     }
@@ -199,27 +200,37 @@ export const gh = async (args: string[]): Promise<string> => {
   return stdout
 }
 
+/** Runs from every caller file the repo has; a file the repo doesn't have is skipped. */
 export const listRuns = async (
   repo: string,
   options: Options
 ): Promise<{ databaseId: number; createdAt: string }[]> => {
-  const output = await gh([
-    "run",
-    "list",
-    "-R",
-    `artsy/${repo}`,
-    "--workflow",
-    options.workflow,
-    "--created",
-    `>=${options.since}`,
-    "--status",
-    "completed",
-    "--limit",
-    String(RUN_LIST_LIMIT),
-    "--json",
-    "databaseId,createdAt",
-  ])
-  return JSON.parse(output)
+  const runs: { databaseId: number; createdAt: string }[] = []
+  for (const workflow of options.workflows) {
+    try {
+      const output = await gh([
+        "run",
+        "list",
+        "-R",
+        `artsy/${repo}`,
+        "--workflow",
+        workflow,
+        "--created",
+        `>=${options.since}`,
+        "--status",
+        "completed",
+        "--limit",
+        String(RUN_LIST_LIMIT),
+        "--json",
+        "databaseId,createdAt",
+      ])
+      runs.push(...JSON.parse(output))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (!/could not find any workflows/i.test(message)) throw error
+    }
+  }
+  return runs
 }
 
 /** Runs fn over items with at most `limit` in flight. */
