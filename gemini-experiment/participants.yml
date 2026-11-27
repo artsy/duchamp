@@ -18,6 +18,4 @@
 participants:
   - MounirDhahri
 
-# Every gravity PR until 20 have both reviews, then emptied until the verdict.
-repos:
-  - artsy/gravity
+repos: []
