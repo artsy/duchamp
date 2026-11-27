@@ -1,0 +1,22 @@
+# Copy into a target repo as `.github/workflows/run-autofix-ci.yml`.
+#
+# Autofix PRs are committed with [skip ci]. After reading the diff, add the
+# `autofix/run-ci` label: this pushes an empty commit so CI runs on the reviewed
+# code. Only labels from people with write access count.
+name: Autofix Run CI
+
+# pull_request_target, because the head commit's [skip ci] suppresses pull_request.
+# Safe here: the job never checks out or runs the PR's code, only calls the API.
+on:
+  pull_request_target:
+    types: [labeled]
+
+permissions: {}
+
+jobs:
+  run-ci:
+    if: github.event.label.name == 'autofix/run-ci'
+    uses: artsy/duchamp/.github/workflows/autofix-run-ci.yml@main
+    secrets:
+      app-id: ${{ secrets.AUTOFIX_APP_ID }}
+      app-private-key: ${{ secrets.AUTOFIX_APP_PRIVATE_KEY }}
