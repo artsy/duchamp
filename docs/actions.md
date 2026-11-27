@@ -364,6 +364,10 @@ with who each one is on for, past experiments and the PR that introduced each:
 - Missed-findings experiment (`ai-review-missed-findings`), on for every merged PR in
   repos that list `closed`: records what human reviewers caught that the AI review
   missed. See `missed-findings-experiment/README.md`.
+- Gemini experiment (`ai-review-gemini`): a second review from Gemini Neon 4 in
+  Antigravity CLI, run in parallel with Claude's and shown next to it. Goes through
+  the LiteLLM gateway, so it needs the repo to pass `litellm-api-key`. See
+  `gemini-experiment/README.md`.
 
 **Security Notes:**
 

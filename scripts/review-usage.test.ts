@@ -321,6 +321,7 @@ describe("formatVolleyPayload", () => {
     "mode:rereview",
     "outcome:success",
     "model:claude-opus-5-5",
+    "reviewer:claude",
     "effort:high",
   ]
 
