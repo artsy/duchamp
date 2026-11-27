@@ -52,7 +52,7 @@ Three jobs in `.github/workflows/claude-review.yml`:
   and comments first, before Claude posts anything for this push, so Gemini never sees
   Claude's review. Then it checks out the PR without saving credentials, builds the same
   prompt, installs the same skills under `~/.agents/skills`, installs `agy` and runs it
-  headless with `--json-schema codex-experiment/output-schema.json`, `--effort high` and
+  headless with `--json-schema codex-experiment/output-schema.json`, `--model gemini-4-neon-high` and
   `--dangerously-skip-permissions`, after dropping sudo. It stops after 14 minutes. Every
   step continues on error, so its failures don't turn the check red, and a failed run
   still gets a column that says so.
@@ -71,8 +71,12 @@ instruction pointing at the prompt file.
 
 In LiteLLM's admin UI (artsy-litellm):
 
-- Gemini Neon 4 under the alias `gemini-neon-4`, with the Google API key behind it,
+- Gemini Neon 4 under the public name `gemini-4-neon`, with the Google API key behind it,
   allowed on the key duchamp's callers use.
+  It has to be Google's own ID: `agy` takes the effort in the model name
+  (`gemini-4-neon-high`) and sends `gemini-4-neon`, with the effort in the request.
+- The public host forwarding `/v1beta/models` (artsy/artsy-litellm#16) and Cloudflare
+  letting it skip the WAF (artsy/infrastructure#1604).
 - The Gemini-native API (`/v1beta/models/...:generateContent`), which `agy` speaks.
   `GOOGLE_GEMINI_BASE_URL` is the gateway's `base_url` with no version path, because the
   SDK adds `/v1beta` itself.
@@ -91,7 +95,7 @@ needs an exception for Gemini or the experiment pauses.
   trigger.
 - **Cost and speed.** `scripts/gemini-usage.ts` sends the Gemini review's numbers under
   the same `ai_pr_review.*` names as Claude's, tagged `reviewer:gemini` and
-  `model:gemini-neon-4`; Claude's carry `reviewer:claude`. The dashboard's "Reviewers"
+  `model:gemini-4-neon`; Claude's carry `reviewer:claude`. The dashboard's "Reviewers"
   section compares them. Antigravity reports tokens but no cost, so Gemini's spend comes
   from LiteLLM's Usage page.
 - `inline_comments` counts the comments Gemini returned, some of which may land off the

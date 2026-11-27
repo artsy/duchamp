@@ -82,7 +82,7 @@ describe("geminiMetrics", () => {
           "pr:42",
           "mode:full",
           "outcome:success",
-          "model:gemini-neon-4",
+          "model:gemini-4-neon",
           "reviewer:gemini",
         ])
       )

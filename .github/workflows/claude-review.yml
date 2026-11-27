@@ -640,7 +640,6 @@ jobs:
           echo "GEMINI_STARTED_AT=$(date +%s%3N)" >> "$GITHUB_ENV"
           agy -p "Your instructions are in $PROMPT_FILE. Read all of it, then do what it says." \
             --model "$GEMINI_MODEL" \
-            --effort high \
             --output-format json \
             --json-schema .tooling/codex-experiment/output-schema.json \
             --dangerously-skip-permissions \
@@ -648,7 +647,7 @@ jobs:
             > "$RUNNER_TEMP/gemini-review.json"
         env:
           PROMPT_FILE: ${{ steps.prompt.outputs.gemini_prompt_file }}
-          GEMINI_MODEL: gemini-neon-4
+          GEMINI_MODEL: gemini-4-neon-high
           GEMINI_API_KEY: ${{ secrets.litellm-api-key }}
           GOOGLE_GEMINI_BASE_URL: ${{ steps.experiment.outputs.gemini_base_url }}
 

@@ -95,7 +95,7 @@ export const CODEX_LABEL = "ai-review-codex"
 export const GEMINI_LABEL = "ai-review-gemini"
 
 /** The gateway's alias for Gemini Neon 4, which the Gemini experiment reviews with. */
-export const GEMINI_MODEL = "gemini-neon-4"
+export const GEMINI_MODEL = "gemini-4-neon"
 
 /** Label that opts a single PR into the LiteLLM experiment, in a repo that passes the key. */
 export const LITELLM_LABEL = "ai-review-litellm"
