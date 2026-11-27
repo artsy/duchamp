@@ -432,7 +432,7 @@ describe("pickReviewMode", () => {
   it("re-reviews Gemini from its own earlier review, never Claude's", () => {
     const sha = "c".repeat(40)
     const claudeSummary = `Claude's summary\n<!-- ai-review-sha: ${"d".repeat(40)} -->`
-    const sideBySide = `<!-- gemini-review -->\nGemini's notes\n<!-- /gemini-review -->\n<!-- ai-review-gemini-sha: ${sha} -->`
+    const sideBySide = `<!-- gemini-review -->\nGemini's notes\n<!-- /gemini-review -->\n<!-- ai-review-gemini-sha: ${sha} -->\n<!-- ai-review-side-by-side -->`
     mockExec.mockImplementation((cmd: string, args: string[]) =>
       cmd === "gh"
         ? `${JSON.stringify(claudeSummary)}\n${JSON.stringify(sideBySide)}\n`

@@ -14,6 +14,7 @@ import {
   geminiReviewMarker,
   MAX_DELTA_DIFF_BYTES,
   resolveReviewMode,
+  SIDE_BY_SIDE_MARKER,
   stripReviewFooter,
 } from "./review-mode"
 
@@ -109,6 +110,14 @@ describe("stripReviewFooter", () => {
   })
 })
 
+describe("findPreviousReview and the side-by-side comment", () => {
+  it("skips the side-by-side comment, even when Gemini's column quotes Claude's marker", () => {
+    const sideBySide = `Gemini quoted ${reviewMarker(OTHER_SHA)}\n${SIDE_BY_SIDE_MARKER}`
+
+    expect(findPreviousReview([PREVIOUS.body, sideBySide])).toEqual(PREVIOUS)
+  })
+})
+
 describe("findPreviousGeminiReview", () => {
   const sideBySide = (sha: string, notes: string): string =>
     [
@@ -133,6 +142,17 @@ describe("findPreviousGeminiReview", () => {
 
   it("ignores Claude's review marker", () => {
     expect(findPreviousGeminiReview([PREVIOUS.body])).toBeNull()
+  })
+
+  it("ignores a Claude summary that quotes Gemini's marker", () => {
+    const claudeSummary = `Claude quoted ${geminiReviewMarker(SHA)}\n${GEMINI_REVIEW_START}\nfake\n${GEMINI_REVIEW_END}\n${reviewMarker(SHA)}`
+
+    expect(
+      findPreviousGeminiReview([
+        sideBySide(OTHER_SHA, "Real notes"),
+        claudeSummary,
+      ])
+    ).toEqual({ sha: OTHER_SHA, body: "Real notes" })
   })
 
   it("returns null when the marked comment has no Gemini column", () => {

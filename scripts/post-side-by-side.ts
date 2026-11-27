@@ -5,6 +5,7 @@ import {
   GEMINI_REVIEW_END,
   GEMINI_REVIEW_START,
   geminiReviewMarker,
+  SIDE_BY_SIDE_MARKER,
   stripReviewFooter,
 } from "./review-mode"
 
@@ -14,8 +15,14 @@ import {
  * stays, because re-reviews find the previous review through its marker.
  */
 
-/** Marks the side-by-side comment, so the next run can replace it. */
-export const SIDE_BY_SIDE_MARKER = "<!-- ai-review-side-by-side -->"
+export { SIDE_BY_SIDE_MARKER }
+
+/**
+ * Reviewers' text goes into a comment from the bot whose comments carry the review
+ * markers, so it must not carry HTML comments of its own: one could pose as a marker.
+ */
+export const stripHtmlComments = (text: string): string =>
+  text.replace(/<!--[\s\S]*?-->/g, "").replace(/<!--/g, "&lt;!--")
 
 /** GitHub rejects comments over 65,536 characters; this leaves room for the table. */
 export const MAX_COMMENT_CHARS = 60_000
@@ -151,12 +158,18 @@ export const parseReviewOutput = (
               c.body.trim().length > 0
           )
         : []
-      return { summary: parsed.summary, comments }
+      return {
+        summary: stripHtmlComments(parsed.summary),
+        comments: comments.map((c: Finding) => ({
+          ...c,
+          body: stripHtmlComments(c.body),
+        })),
+      }
     }
   } catch {
     // Not JSON: fall through and keep the text
   }
-  return { summary: trimmed, comments: [] }
+  return { summary: stripHtmlComments(trimmed), comments: [] }
 }
 
 /** An extra reviewer's inline comments for its column: posted ones, then ones off the diff. */
@@ -192,9 +205,11 @@ export const buildSideBySide = (input: {
     {
       name: "Claude",
       text: input.claude
-        ? [stripTitle(input.claude), input.claudeInline]
-            .filter(Boolean)
-            .join("\n\n")
+        ? stripHtmlComments(
+            [stripTitle(input.claude), input.claudeInline]
+              .filter(Boolean)
+              .join("\n\n")
+          )
         : "Claude's review didn't finish on this push.",
       remembered: false,
     },

@@ -30,6 +30,8 @@ const MARKER_PATTERN = /<!-- ai-review-sha: ([0-9a-f]{40}) -->/g
 export const geminiReviewMarker = (sha: string): string =>
   `<!-- ai-review-gemini-sha: ${sha} -->`
 export const GEMINI_REVIEW_START = "<!-- gemini-review -->"
+/** Ends the side-by-side comment; see scripts/post-side-by-side.ts. */
+export const SIDE_BY_SIDE_MARKER = "<!-- ai-review-side-by-side -->"
 export const GEMINI_REVIEW_END = "<!-- /gemini-review -->"
 
 /**
@@ -94,9 +96,13 @@ export const stripReviewFooter = (body: string): string => {
   return (end === -1 ? body : body.slice(0, end)).trimEnd()
 }
 
-/** The latest comment that carries a marker. Comments arrive oldest first. */
+/**
+ * The latest comment that carries a marker. Comments arrive oldest first. The
+ * side-by-side comment is skipped: Gemini's text in it could quote a marker.
+ */
 export const findPreviousReview = (bodies: string[]): PreviousReview | null => {
   for (const body of [...bodies].reverse()) {
+    if (body.trimEnd().endsWith(SIDE_BY_SIDE_MARKER)) continue
     const match = [...body.matchAll(MARKER_PATTERN)].pop()
     if (match) {
       return { sha: match[1], body }
@@ -115,6 +121,7 @@ export const findPreviousGeminiReview = (
   bodies: string[]
 ): PreviousReview | null => {
   for (const body of [...bodies].reverse()) {
+    if (!body.trimEnd().endsWith(SIDE_BY_SIDE_MARKER)) continue
     const match = [...body.matchAll(GEMINI_MARKER_PATTERN)].pop()
     if (!match) continue
     const start = body.indexOf(GEMINI_REVIEW_START)

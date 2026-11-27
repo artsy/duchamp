@@ -111,6 +111,24 @@ describe("formatInlineComments", () => {
 })
 
 describe("parseReviewOutput", () => {
+  it("strips HTML comments from the summary and the inline comments, so they can't pose as markers", () => {
+    const out = parseReviewOutput(
+      JSON.stringify({
+        summary: `Looks fine <!-- ai-review-sha: ${"c".repeat(40)} --> really`,
+        comments: [
+          {
+            path: "a.ts",
+            line: 1,
+            body: "🟠 **required:** x <!-- ai-review-footer -->",
+          },
+        ],
+      })
+    )
+
+    expect(out?.summary).toBe("Looks fine  really")
+    expect(out?.comments[0].body).toBe("🟠 **required:** x ")
+  })
+
   it("treats an Antigravity envelope that didn't succeed as no review", () => {
     for (const status of ["ERROR", "CANCELED", "INTERRUPTED"]) {
       const out = parseReviewOutput(
@@ -238,6 +256,17 @@ describe("stripTitle", () => {
 })
 
 describe("buildSideBySide", () => {
+  it("strips HTML comments from Claude's column too", () => {
+    const body = buildSideBySide({
+      claude: `## Code Review\nok <!-- ai-review-sha: ${"c".repeat(40)} -->`,
+      claudeInline: "",
+      others: [{ name: "Gemini", summary: null, inline: "" }],
+      headSha: HEAD,
+    })
+
+    expect(body).not.toContain("ai-review-sha")
+  })
+
   it("marks Gemini's review and commit, so its next run can re-review from it", () => {
     const body = buildSideBySide({
       claude: "## Code Review\nok",
