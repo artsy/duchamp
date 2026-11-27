@@ -13,7 +13,7 @@ on:
         description: "Unused since the Codex experiment ended. Kept so callers that still pass it don't break"
         required: false
       litellm-api-key:
-        description: "LiteLLM virtual key. Reviews go through the gateway for PRs in the LiteLLM experiment, and for every PR when there's no anthropic-api-key"
+        description: "LiteLLM virtual key. Reviews go through the gateway for PRs in the LiteLLM experiment, and for every PR when there's no anthropic-api-key. Gemini needs it"
         required: false
       litellm-edge-token:
         description: "Value of the LiteLLM gateway's edge header, once it has one (see litellm-experiment/README.md)"
@@ -41,6 +41,16 @@ jobs:
       cancel-in-progress: true
     steps:
       - run: echo "in-progress label added, cancelled any running review"
+
+  # A job has one concurrency group, so Gemini's own group needs its own job.
+  cancel-gemini-on-in-progress:
+    if: github.event.action == 'labeled' && github.event.label.name == 'in-progress'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: claude-review-gemini-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - run: echo "in-progress label added, cancelled any running Gemini review"
 
   # What happened to the review's findings, and what people caught that it missed, for the
   # outcome and missed-findings experiments. Runs only where the caller lists `closed` in
@@ -135,6 +145,7 @@ jobs:
       HAS_ANTHROPIC_KEY: ${{ secrets.anthropic-api-key != '' }}
     outputs:
       should-review: ${{ steps.org-check.outputs.should-review == 'true' && steps.keys.outputs.ok == 'true' }}
+      gemini: ${{ steps.experiments.outputs.gemini }}
     steps:
       - name: Checkout PR repo (sparse - config only)
         uses: actions/checkout@v4
@@ -251,6 +262,15 @@ jobs:
             echo "ok=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Its outputs say whether the Gemini job runs.
+      - name: Check experiments
+        id: experiments
+        if: steps.org-check.outputs.should-review == 'true'
+        run: npx ts-node .tooling/scripts/build-review-prompt.ts --check-experiment
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+
   review:
     needs: check
     if: needs.check.outputs.should-review == 'true'
@@ -263,6 +283,8 @@ jobs:
       contents: write  # Required for resolveReviewThread GraphQL mutation
       pull-requests: write
       id-token: write
+    outputs:
+      claude: ${{ steps.review.outcome }}
     # Step conditions and scripts can't read secrets, so these say whether the caller passed the keys.
     env:
       HAS_LITELLM_KEY: ${{ secrets.litellm-api-key != '' }}
@@ -407,3 +429,243 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           # Forwards the metrics to Datadog; see review/datadog/README.md.
           VOLLEY_URL: https://volley.artsy.net/report
+
+  # The Gemini experiment: a second review from Gemini Neon 4 in Antigravity CLI, through
+  # the LiteLLM gateway, on its own runner beside Claude's. Its failures don't turn the
+  # check red. See gemini-experiment/README.md.
+  gemini:
+    needs: check
+    if: needs.check.outputs.should-review == 'true' && needs.check.outputs.gemini == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    continue-on-error: true
+    concurrency:
+      group: claude-review-gemini-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      HAS_LITELLM_KEY: ${{ secrets.litellm-api-key != '' }}
+      HAS_ANTHROPIC_KEY: ${{ secrets.anthropic-api-key != '' }}
+    # Gemini owes a review unless the prompt said skip, so a failed step still gets a column.
+    outputs:
+      ran: ${{ steps.prompt.outputs.review_mode != 'skip' }}
+    steps:
+      # No credentials left in .git/config, since Antigravity runs with every permission.
+      - name: Checkout PR branch
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout tooling repo
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .tooling
+          persist-credentials: false
+
+      - name: Setup Node.js
+        continue-on-error: true
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable Corepack
+        continue-on-error: true
+        run: corepack enable
+
+      - name: Install tooling dependencies
+        continue-on-error: true
+        run: yarn install --frozen-lockfile
+        working-directory: .tooling
+        env:
+          YARN_IGNORE_PATH: 1
+
+      - name: Check experiments
+        continue-on-error: true
+        id: experiment
+        run: npx ts-node .tooling/scripts/build-review-prompt.ts --check-experiment
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+
+      # The same prompt as Claude's, plus the Antigravity note. Re-reviews build on Gemini's
+      # own last review, from the side-by-side comment. No related-repos token: agy has
+      # every permission and the network, so private repos stay off this runner.
+      - name: Build review prompt
+        continue-on-error: true
+        id: prompt
+        run: npx ts-node .tooling/scripts/build-review-prompt.ts
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          DEFAULT_MODEL: ${{ inputs.model }}
+          REPO_PRIVATE: ${{ github.event.repository.private }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TRIGGER_LABEL: ${{ github.event.action == 'labeled' && github.event.label.name || '' }}
+          GEMINI_PROMPT: "true"
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Install review skills
+        continue-on-error: true
+        if: steps.prompt.outputs.gemini_prompt_file != ''
+        env:
+          STACK_SKILLS: ${{ steps.prompt.outputs.stack_skills }}
+          MERGE_RISK: ${{ steps.prompt.outputs.merge_risk }}
+        run: |
+          mkdir -p "$HOME/.agents/skills"
+          cp -R .tooling/.claude/skills/. "$HOME/.agents/skills/"
+          for skill in $STACK_SKILLS; do
+            cp -R ".tooling/.claude/stack-skills/$skill" "$HOME/.agents/skills/"
+          done
+          if [ "$MERGE_RISK" = "true" ]; then
+            cp -R .tooling/.claude/experiment-skills/merge-risk "$HOME/.agents/skills/"
+          fi
+
+      # Only comments from the author and people with write access, bots excluded, so
+      # Gemini never sees Claude's review or a stranger's instructions.
+      - name: Save the PR for Gemini
+        continue-on-error: true
+        if: steps.prompt.outputs.gemini_pr_file != ''
+        run: npx ts-node .tooling/scripts/save-pr.ts
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_FILE: ${{ steps.prompt.outputs.gemini_pr_file }}
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+
+      # Hosted runners give passwordless sudo and the Docker socket, which would let
+      # Antigravity read the job's tokens from the runner's memory. Both go first.
+      - name: Drop sudo and Docker
+        continue-on-error: true
+        id: drop-sudo
+        if: steps.prompt.outputs.gemini_prompt_file != ''
+        run: |
+          sudo chmod 600 /var/run/docker.sock || true
+          sudo find /etc/sudoers.d -type f -delete
+          if sudo -n true 2>/dev/null; then
+            echo "::error::sudo still works, so Gemini won't run"
+            exit 1
+          fi
+
+      # The installer takes no version, so this runs the latest agy.
+      - name: Install Antigravity CLI
+        continue-on-error: true
+        if: steps.drop-sudo.outcome == 'success'
+        run: |
+          curl -fsSL https://antigravity.google/cli/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          mkdir -p "$HOME/.gemini/antigravity-cli"
+          echo '{"modelProvider": "gemini"}' > "$HOME/.gemini/antigravity-cli/settings.json"
+          "$HOME/.local/bin/agy" --version
+
+      # The prompt can pass the size limit of one command-line argument, so agy reads it
+      # from the file.
+      - name: Run Gemini review
+        id: gemini
+        if: steps.drop-sudo.outcome == 'success'
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          echo "GEMINI_STARTED_AT=$(date +%s%3N)" >> "$GITHUB_ENV"
+          agy -p "Your instructions are in $PROMPT_FILE. Read all of it, then do what it says." \
+            --model "$GEMINI_MODEL" \
+            --output-format json \
+            --json-schema .tooling/gemini-experiment/output-schema.json \
+            --dangerously-skip-permissions \
+            --print-timeout 14m \
+            > "$RUNNER_TEMP/gemini-review.json"
+        env:
+          PROMPT_FILE: ${{ steps.prompt.outputs.gemini_prompt_file }}
+          GEMINI_MODEL: gemini-4-neon-high
+          GEMINI_API_KEY: ${{ secrets.litellm-api-key }}
+          GOOGLE_GEMINI_BASE_URL: ${{ steps.experiment.outputs.gemini_base_url }}
+
+      - name: Upload Gemini's review
+        if: ${{ !cancelled() && steps.gemini.outcome != 'skipped' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemini-review
+          path: ${{ runner.temp }}/gemini-review.json
+          if-no-files-found: ignore
+
+      - name: Report Gemini usage
+        if: ${{ !cancelled() && steps.gemini.outcome != 'skipped' }}
+        continue-on-error: true
+        run: npx ts-node .tooling/scripts/gemini-usage.ts
+        env:
+          GEMINI_REVIEW_FILE: ${{ runner.temp }}/gemini-review.json
+          REVIEW_MODE: ${{ steps.prompt.outputs.review_mode }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          VOLLEY_URL: https://volley.artsy.net/report
+
+  # Posts Gemini's inline comments, then one comment with Claude's and Gemini's reviews
+  # side by side, once both are done. Claude's own summary and inline comments stay. See
+  # scripts/post-side-by-side.ts.
+  side-by-side:
+    needs: [check, review, gemini]
+    # A newer push cancels this run's review; posting then would replace a newer comment.
+    # The same goes for Gemini's job. One that failed or timed out still gets its column.
+    if: >-
+      !cancelled() && needs.check.outputs.should-review == 'true' &&
+      needs.review.result != 'cancelled' && needs.gemini.result != 'cancelled' &&
+      needs.gemini.result != 'skipped' && needs.gemini.outputs.ran != 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout tooling repo
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          repository: artsy/duchamp
+          ref: main
+          path: .tooling
+
+      - name: Setup Node.js
+        continue-on-error: true
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable Corepack
+        continue-on-error: true
+        run: corepack enable
+
+      - name: Install tooling dependencies
+        continue-on-error: true
+        run: yarn install --frozen-lockfile
+        working-directory: .tooling
+        env:
+          YARN_IGNORE_PATH: 1
+
+      - name: Download Gemini's review
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: gemini-review
+          path: ${{ runner.temp }}/reviews
+
+      - name: Post the side-by-side comment
+        continue-on-error: true
+        run: npx ts-node .tooling/scripts/post-side-by-side.ts
+        env:
+          # The review step's own outcome, so a later step failing doesn't hide Claude's column.
+          CLAUDE_OUTCOME: ${{ needs.review.outputs.claude || needs.review.result }}
+          GEMINI_RAN: ${{ needs.gemini.result != 'skipped' && needs.gemini.outputs.ran != 'false' }}
+          GEMINI_REVIEW_FILE: ${{ runner.temp }}/reviews/gemini-review.json
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}

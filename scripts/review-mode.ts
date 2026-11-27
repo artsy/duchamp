@@ -24,6 +24,17 @@ import {
 const MARKER_PATTERN = /<!-- ai-review-sha: ([0-9a-f]{40}) -->/g
 
 /**
+ * Gemini's memory, in the side-by-side comment: the commit it reviewed, and its column
+ * between two markers. See scripts/post-side-by-side.ts.
+ */
+export const geminiReviewMarker = (sha: string): string =>
+  `<!-- ai-review-gemini-sha: ${sha} -->`
+export const GEMINI_REVIEW_START = "<!-- gemini-review -->"
+/** Ends the side-by-side comment; see scripts/post-side-by-side.ts. */
+export const SIDE_BY_SIDE_MARKER = "<!-- ai-review-side-by-side -->"
+export const GEMINI_REVIEW_END = "<!-- /gemini-review -->"
+
+/**
  * The workflow posts the summary, and so the marker, as github-actions[bot].
  * claude[bot] is left out because `@claude` replies post as it too.
  */
@@ -85,12 +96,40 @@ export const stripReviewFooter = (body: string): string => {
   return (end === -1 ? body : body.slice(0, end)).trimEnd()
 }
 
-/** The latest comment that carries a marker. Comments arrive oldest first. */
+/**
+ * The latest comment that carries a marker. Comments arrive oldest first. The
+ * side-by-side comment is skipped: Gemini's text in it could quote a marker.
+ */
 export const findPreviousReview = (bodies: string[]): PreviousReview | null => {
   for (const body of [...bodies].reverse()) {
+    if (body.trimEnd().endsWith(SIDE_BY_SIDE_MARKER)) continue
     const match = [...body.matchAll(MARKER_PATTERN)].pop()
     if (match) {
       return { sha: match[1], body }
+    }
+  }
+  return null
+}
+
+const GEMINI_MARKER_PATTERN = /<!-- ai-review-gemini-sha: ([0-9a-f]{40}) -->/g
+
+/**
+ * Gemini's latest review, from the side-by-side comment: its commit and its own column,
+ * so a re-review reads Gemini's notes and never Claude's.
+ */
+export const findPreviousGeminiReview = (
+  bodies: string[]
+): PreviousReview | null => {
+  for (const body of [...bodies].reverse()) {
+    if (!body.trimEnd().endsWith(SIDE_BY_SIDE_MARKER)) continue
+    const match = [...body.matchAll(GEMINI_MARKER_PATTERN)].pop()
+    if (!match) continue
+    const start = body.indexOf(GEMINI_REVIEW_START)
+    const end = body.indexOf(GEMINI_REVIEW_END, start)
+    if (start === -1 || end === -1) return null
+    return {
+      sha: match[1],
+      body: body.slice(start + GEMINI_REVIEW_START.length, end).trim(),
     }
   }
   return null
@@ -382,7 +421,8 @@ export const resolveReviewMode = (
   repo: string | undefined,
   prNumber: string | undefined,
   ignorePaths: string[],
-  inLean: boolean
+  inLean: boolean,
+  findPrevious: (bodies: string[]) => PreviousReview | null = findPreviousReview
 ): ReviewMode => {
   if (!inLean) {
     return { mode: "full", reason: "not in the lean reviews experiment" }
@@ -392,7 +432,7 @@ export const resolveReviewMode = (
   }
 
   try {
-    const previous = findPreviousReview(fetchBotCommentBodies(repo, prNumber))
+    const previous = findPrevious(fetchBotCommentBodies(repo, prNumber))
     return decideReviewMode(previous, ignorePaths)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

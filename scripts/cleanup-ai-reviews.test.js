@@ -77,7 +77,7 @@ describe("cleanupPreviousAIReviews", () => {
     expect(mutationCalls[0][1]).toEqual({ threadId: "thread-1" })
   })
 
-  it("should leave github-actions threads alone, Codex's included", async () => {
+  it("should resolve Gemini's threads but not other github-actions threads, Codex's included", async () => {
     const threads = [
       {
         id: "codex",
@@ -87,6 +87,18 @@ describe("cleanupPreviousAIReviews", () => {
             {
               author: { __typename: "Bot", login: "github-actions" },
               body: "**Codex:** 🔴 **blocking:** null `artist`.",
+            },
+          ],
+        },
+      },
+      {
+        id: "gemini",
+        isResolved: false,
+        comments: {
+          nodes: [
+            {
+              author: { __typename: "Bot", login: "github-actions" },
+              body: "**Gemini:** 🟠 **required:** check `id`.",
             },
           ],
         },
@@ -116,7 +128,7 @@ describe("cleanupPreviousAIReviews", () => {
     const mutationCalls = mockGithub.graphql.mock.calls.filter(([query]) =>
       query.includes("mutation")
     )
-    expect(mutationCalls).toHaveLength(0)
+    expect(mutationCalls.map(([, vars]) => vars.threadId)).toEqual(["gemini"])
   })
 
   it("should handle no threads", async () => {

@@ -47,17 +47,18 @@ const finding = (overrides: Partial<Finding> = {}): Finding => ({
 })
 
 describe("parseSeverity", () => {
-  it("reads the marker", () => {
+  it("reads the marker, with or without the Gemini prefix", () => {
     expect(parseSeverity("🔴 **blocking:** crash")).toBe("blocking")
     expect(parseSeverity("🟠 **required:** fix")).toBe("required")
     expect(parseSeverity("🔵 **nit:** name")).toBe("nit")
     expect(parseSeverity("⚪ **q:** why?")).toBe("question")
+    expect(parseSeverity("**Gemini:** 🟠 **required:** fix")).toBe("required")
     expect(parseSeverity("no marker")).toBe("none")
   })
 })
 
 describe("findingsFrom", () => {
-  it("keeps Claude's threads, with reactions and human replies, and drops Codex's", () => {
+  it("keeps Claude's and Gemini's threads, with reactions and human replies, and drops Codex's", () => {
     const findings = findingsFrom(
       [
         thread(
@@ -78,6 +79,14 @@ describe("findingsFrom", () => {
         thread(
           comment("github-actions", "**Codex:** 🔵 **nit:** name", {}, "Bot")
         ),
+        thread(
+          comment(
+            "github-actions",
+            "**Gemini:** 🟠 **required:** fix",
+            {},
+            "Bot"
+          )
+        ),
         thread(comment("human", "why?")),
         thread(comment("github-actions", "Coverage report", {}, "Bot")),
       ],
@@ -96,6 +105,11 @@ describe("findingsFrom", () => {
         reaction: "down",
         replies: ["on purpose"],
       },
+      expect.objectContaining({
+        id: 1,
+        reviewer: "gemini",
+        severity: "required",
+      }),
     ])
   })
 

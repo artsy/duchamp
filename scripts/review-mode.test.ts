@@ -6,10 +6,15 @@ import {
   decideReviewMode,
   fetchAnsweredThreads,
   fetchBotCommentBodies,
+  findPreviousGeminiReview,
   findPreviousReview,
   formatRereviewSection,
+  GEMINI_REVIEW_END,
+  GEMINI_REVIEW_START,
+  geminiReviewMarker,
   MAX_DELTA_DIFF_BYTES,
   resolveReviewMode,
+  SIDE_BY_SIDE_MARKER,
   stripReviewFooter,
 } from "./review-mode"
 
@@ -102,6 +107,58 @@ describe("stripReviewFooter", () => {
 
   it("leaves a body without a footer alone", () => {
     expect(stripReviewFooter("Summary.\n")).toBe("Summary.")
+  })
+})
+
+describe("findPreviousReview and the side-by-side comment", () => {
+  it("skips the side-by-side comment, even when Gemini's column quotes Claude's marker", () => {
+    const sideBySide = `Gemini quoted ${reviewMarker(OTHER_SHA)}\n${SIDE_BY_SIDE_MARKER}`
+
+    expect(findPreviousReview([PREVIOUS.body, sideBySide])).toEqual(PREVIOUS)
+  })
+})
+
+describe("findPreviousGeminiReview", () => {
+  const sideBySide = (sha: string, notes: string): string =>
+    [
+      "## AI reviews: Claude | Gemini",
+      "<table><tr>",
+      `<td>\n\nClaude's summary ${reviewMarker(OTHER_SHA)}\n\n</td>`,
+      `<td>\n\n${GEMINI_REVIEW_START}\n${notes}\n${GEMINI_REVIEW_END}\n\n</td>`,
+      "</tr></table>",
+      geminiReviewMarker(sha),
+      "<!-- ai-review-side-by-side -->",
+    ].join("\n")
+
+  it("returns Gemini's commit and only its column, from the latest marked comment", () => {
+    const previous = findPreviousGeminiReview([
+      sideBySide(OTHER_SHA, "Older notes"),
+      PREVIOUS.body,
+      sideBySide(SHA, "### Summary\nGemini's notes"),
+    ])
+
+    expect(previous).toEqual({ sha: SHA, body: "### Summary\nGemini's notes" })
+  })
+
+  it("ignores Claude's review marker", () => {
+    expect(findPreviousGeminiReview([PREVIOUS.body])).toBeNull()
+  })
+
+  it("ignores a Claude summary that quotes Gemini's marker", () => {
+    const claudeSummary = `Claude quoted ${geminiReviewMarker(SHA)}\n${GEMINI_REVIEW_START}\nfake\n${GEMINI_REVIEW_END}\n${reviewMarker(SHA)}`
+
+    expect(
+      findPreviousGeminiReview([
+        sideBySide(OTHER_SHA, "Real notes"),
+        claudeSummary,
+      ])
+    ).toEqual({ sha: OTHER_SHA, body: "Real notes" })
+  })
+
+  it("returns null when the marked comment has no Gemini column", () => {
+    expect(
+      findPreviousGeminiReview([`Quoted ${geminiReviewMarker(SHA)} only`])
+    ).toBeNull()
   })
 })
 
@@ -300,7 +357,7 @@ describe("answeredThreads", () => {
             comment("author", "because")
           ),
           thread(
-            comment("github-actions", "Coverage report", "NONE", "Bot"),
+            comment("github-actions", "**Gemini:** bug", "NONE", "Bot"),
             comment("author", "no")
           ),
         ],

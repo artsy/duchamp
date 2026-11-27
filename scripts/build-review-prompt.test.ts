@@ -5,17 +5,21 @@ import {
   assemblePrompt,
   assessChanges,
   buildPrompt,
+  formatAntigravityNote,
   formatContextSection,
   formatDelivery,
   formatDiffSection,
+  formatGeminiCheck,
   formatInstructionsSection,
   formatMergeRiskSection,
   formatPreamble,
   formatReviewModeOutputs,
   formatSecuritySection,
+  GEMINI_LABEL,
   gatewayHeaders,
   hasSecurityLabel,
   inBestPractices,
+  inGemini,
   inLeanReviews,
   inLiteLLM,
   inMergeRisk,
@@ -46,6 +50,7 @@ import {
   reviewRange,
   SECURITY_LABEL,
   securityLabelJustAdded,
+  writeGeminiPrompt,
   writeSecurityDiff,
 } from "./build-review-prompt"
 import { MAX_DIFF_BYTES } from "./review-diff"
@@ -424,6 +429,39 @@ describe("pickReviewMode", () => {
     expect(mockExec).not.toHaveBeenCalled()
   })
 
+  it("re-reviews Gemini from its own earlier review, never Claude's", () => {
+    const sha = "c".repeat(40)
+    const claudeSummary = `Claude's summary\n<!-- ai-review-sha: ${"d".repeat(40)} -->`
+    const sideBySide = `<!-- gemini-review -->\nGemini's notes\n<!-- /gemini-review -->\n<!-- ai-review-gemini-sha: ${sha} -->\n<!-- ai-review-side-by-side -->`
+    mockExec.mockImplementation((cmd: string, args: string[]) =>
+      cmd === "gh"
+        ? `${JSON.stringify(claudeSummary)}\n${JSON.stringify(sideBySide)}\n`
+        : args[0] === "diff"
+          ? "src/app.ts\n"
+          : ""
+    )
+
+    expect(
+      pickReviewMode(undefined, "artsy/eigen", "42", [], true, true)
+    ).toEqual({
+      mode: "rereview",
+      reason: "changes since earlier review at ccccccc",
+      previous: { sha, body: "Gemini's notes" },
+    })
+  })
+
+  it("gives Gemini a full review when only Claude has reviewed", () => {
+    mockExec.mockImplementation((cmd: string) =>
+      cmd === "gh"
+        ? `${JSON.stringify(`Claude's summary\n<!-- ai-review-sha: ${"d".repeat(40)} -->`)}\n`
+        : ""
+    )
+
+    expect(
+      pickReviewMode(undefined, "artsy/eigen", "42", [], true, true)
+    ).toEqual({ mode: "full", reason: "no earlier review" })
+  })
+
   it("looks up the earlier review otherwise", () => {
     mockExec.mockImplementation(() => {
       throw new Error("gh failed")
@@ -518,6 +556,90 @@ describe("formatPreamble", () => {
     expect(preamble).toContain("`git diff origin/main...HEAD`")
     expect(preamble).toContain("AGENTS.md or CLAUDE.md")
     expect(preamble.endsWith("\n\n")).toBe(true)
+  })
+})
+
+describe("inGemini", () => {
+  it("includes listed authors, in any case", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+    expect(inGemini("mounirdhahri", [])).toBe(true)
+    expect(
+      mockFs.readFileSync.mock.calls.map(([p]) => String(p))
+    ).toContainEqual(
+      expect.stringContaining(
+        path.join("gemini-experiment", "participants.yml")
+      )
+    )
+  })
+
+  it("includes any PR with the label", () => {
+    mockFiles({})
+    expect(inGemini("someone", [GEMINI_LABEL.toUpperCase()])).toBe(true)
+  })
+
+  it("leaves out everyone else", () => {
+    mockFiles({ "participants.yml": "participants:\n  - MounirDhahri\n" })
+    expect(inGemini("someone", ["bug"])).toBe(false)
+    expect(inGemini(undefined, [])).toBe(false)
+  })
+})
+
+describe("formatGeminiCheck", () => {
+  it("runs Gemini through the gateway it was given", () => {
+    expect(formatGeminiCheck({ baseUrl: "https://litellm.artsy.net" })).toBe(
+      "gemini=true\ngemini_base_url=https://litellm.artsy.net\n"
+    )
+  })
+
+  it("skips Gemini without a gateway, so no key or a bad base_url leaves Claude alone", () => {
+    expect(formatGeminiCheck(undefined)).toBe(
+      "gemini=false\ngemini_base_url=\n"
+    )
+  })
+})
+
+describe("formatAntigravityNote", () => {
+  const note = formatAntigravityNote("/tmp/r/gemini-pr.md")
+
+  it("asks for the summary and inline comments as JSON", () => {
+    expect(note).toContain("## Running in Antigravity")
+    expect(note).toContain("cannot post comments")
+    expect(note).toContain("`summary` is the summary comment")
+    expect(note).toContain("on a line the PR adds or changes")
+  })
+
+  it("points at the PR file, CLAUDE.md, skills on disk and no subagents", () => {
+    expect(note).toContain("`/tmp/r/gemini-pr.md`")
+    expect(note).toContain("CLAUDE.md")
+    expect(note).toContain("`~/.agents/skills/<name>/SKILL.md`")
+    expect(note).toContain("subagent")
+  })
+})
+
+describe("writeGeminiPrompt", () => {
+  beforeEach(() => {
+    mockFs.writeFileSync.mockReset()
+  })
+
+  it("writes the same prompt with the Antigravity note at the end", () => {
+    const files = writeGeminiPrompt("PROMPT", "/tmp/r")
+
+    expect(files).toEqual({
+      promptFile: path.join("/tmp/r", "gemini-prompt.md"),
+      prFile: path.join("/tmp/r", "gemini-pr.md"),
+    })
+    expect(mockFs.writeFileSync).toHaveBeenCalledWith(
+      path.join("/tmp/r", "gemini-prompt.md"),
+      `PROMPT${formatAntigravityNote(path.join("/tmp/r", "gemini-pr.md"))}`
+    )
+  })
+
+  it("returns undefined when the write fails", () => {
+    jest.spyOn(console, "error").mockImplementation(() => {})
+    mockFs.writeFileSync.mockImplementation(() => {
+      throw new Error("disk full")
+    })
+    expect(writeGeminiPrompt("PROMPT", "/tmp/r")).toBeUndefined()
   })
 })
 
