@@ -262,7 +262,10 @@ export const pickReviewMode = (
   forGemini = false
 ): ReviewMode => {
   if (forGemini) {
-    return { mode: "full", reason: "Gemini doesn't build on Claude's earlier review" }
+    return {
+      mode: "full",
+      reason: "Gemini doesn't build on Claude's earlier review",
+    }
   }
   return securityLabelJustAdded(triggerLabel)
     ? { mode: "full", reason: `${SECURITY_LABEL} label just added` }

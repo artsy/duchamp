@@ -26,7 +26,10 @@ export const formatPrForModel = (pr: PrView): string => {
     isTrustedComment(
       {
         // gh's comment JSON has no __typename; bots come back as NONE, so they drop out.
-        author: comment.author && { __typename: "User", login: comment.author.login },
+        author: comment.author && {
+          __typename: "User",
+          login: comment.author.login,
+        },
         authorAssociation: comment.authorAssociation,
         body: comment.body,
       },
@@ -43,10 +46,13 @@ export const formatPrForModel = (pr: PrView): string => {
     "",
     "## Comments",
     ...trusted.map(
-      comment => `\n### @${comment.author?.login} (${comment.authorAssociation})\n\n${comment.body}`
+      comment =>
+        `\n### @${comment.author?.login} (${comment.authorAssociation})\n\n${comment.body}`
     ),
     ...(dropped > 0
-      ? [`\n${dropped} comments from people without write access were left out.`]
+      ? [
+          `\n${dropped} comments from people without write access were left out.`,
+        ]
       : []),
     "",
   ].join("\n")
