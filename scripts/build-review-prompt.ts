@@ -93,8 +93,16 @@ export const MERGE_RISK_LABEL = "ai-review-merge-risk"
 /** Label that opts a single PR into the Gemini experiment. */
 export const GEMINI_LABEL = "ai-review-gemini"
 
-/** The gateway's alias for Gemini Neon 4, which the Gemini experiment reviews with. */
-export const GEMINI_MODEL = "gemini-4-neon"
+/**
+ * Antigravity's model names for the Gemini experiment: the effort is part of the name,
+ * and the gateway sees Google's ID without it. Light changes get the cheaper model,
+ * as Claude's do.
+ */
+export const GEMINI_STANDARD_MODEL = "gemini-4-neon-high"
+export const GEMINI_LIGHT_MODEL = "gemini-3.8-flash-medium"
+
+export const geminiModelFor = (tier: ReviewTier): string =>
+  tier === "light" ? GEMINI_LIGHT_MODEL : GEMINI_STANDARD_MODEL
 
 /** Label that opts a single PR into the LiteLLM experiment, in a repo that passes the key. */
 export const LITELLM_LABEL = "ai-review-litellm"
@@ -1230,7 +1238,7 @@ const main = (): void => {
     const delimiter = `EOF_${randomUUID()}`
     fs.appendFileSync(
       outputPath,
-      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\nreplies=${repliesRead}\ngemini_prompt_file=${geminiFiles?.promptFile ?? ""}\ngemini_pr_file=${geminiFiles?.prFile ?? ""}\ngateway=${gateway ? "litellm" : "anthropic"}\n${headersOutput(gateway, "review", changes.tier)}${formatReviewModeOutputs(context.reviewMode)}`
+      `review_prompt<<${delimiter}\n${prompt}\n${delimiter}\nmodel_args=${modelArgs}\ntool_args=${delivery.toolArgs}\nsecurity_pass=${security !== ""}\nbest_practices=${stack.skills.length > 0}\nstack_skills=${stack.skills.join(" ")}\nrelated_repos_read=${related.length > 0}\nmerge_risk=${mergeRiskSection !== ""}\nreplies=${repliesRead}\ngemini_prompt_file=${geminiFiles?.promptFile ?? ""}\ngemini_model=${geminiFiles ? geminiModelFor(changes.tier) : ""}\ngemini_pr_file=${geminiFiles?.prFile ?? ""}\ngateway=${gateway ? "litellm" : "anthropic"}\n${headersOutput(gateway, "review", changes.tier)}${formatReviewModeOutputs(context.reviewMode)}`
     )
     console.log("Review prompt written to GITHUB_OUTPUT")
   } else {

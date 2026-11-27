@@ -1,4 +1,4 @@
-import { geminiMetrics, parseAgyUsage } from "./gemini-usage"
+import { geminiMetrics, parseAgyUsage, splitAgyModel } from "./gemini-usage"
 
 describe("parseAgyUsage", () => {
   it("reads the documented envelope: uppercase status, seconds, cache_read_tokens", () => {
@@ -61,8 +61,29 @@ describe("parseAgyUsage", () => {
   })
 })
 
+describe("splitAgyModel", () => {
+  it("splits Antigravity's name into Google's model ID and the effort", () => {
+    expect(splitAgyModel("gemini-4-neon-high")).toEqual({
+      model: "gemini-4-neon",
+      effort: "high",
+    })
+    expect(splitAgyModel("gemini-3.8-flash-medium")).toEqual({
+      model: "gemini-3.8-flash",
+      effort: "medium",
+    })
+  })
+
+  it("keeps a name without an effort as the model", () => {
+    expect(splitAgyModel("gemini-4-neon")).toEqual({
+      model: "gemini-4-neon",
+      effort: "unknown",
+    })
+  })
+})
+
 describe("geminiMetrics", () => {
   const context = {
+    model: "gemini-4-neon-high",
     repo: "artsy/eigen",
     prNumber: "42",
     reviewMode: "full",
@@ -83,6 +104,7 @@ describe("geminiMetrics", () => {
           "mode:full",
           "outcome:success",
           "model:gemini-4-neon",
+          "effort:high",
           "reviewer:gemini",
         ])
       )
@@ -136,6 +158,37 @@ describe("geminiMetrics", () => {
         tags: expect.arrayContaining(["cost:estimated"]),
       })
     )
+  })
+
+  it("prices a light review at Gemini 3.8 Flash's rates and tags its model and effort", () => {
+    const metrics = geminiMetrics(
+      {
+        status: "success",
+        inputTokens: 200_000,
+        outputTokens: 40_000,
+        cachedTokens: 1_000_000,
+      },
+      { ...context, model: "gemini-3.8-flash-medium" }
+    )
+    // 200k x $0.75/M + 40k x $3.75/M + 1M x $0.075/M = $0.15 + $0.15 + $0.075
+    expect(metrics).toContainEqual(
+      expect.objectContaining({
+        name: "cost_usd",
+        value: 0.375,
+        tags: expect.arrayContaining([
+          "model:gemini-3.8-flash",
+          "effort:medium",
+        ]),
+      })
+    )
+  })
+
+  it("sends no estimate for a model it has no price for", () => {
+    const metrics = geminiMetrics(
+      { status: "success", inputTokens: 1000, outputTokens: 200 },
+      { ...context, model: "gemini-9-unknown-high" }
+    )
+    expect(metrics.map(m => m.name)).not.toContain("cost_usd")
   })
 
   it("sends no cost when there are no token counts either", () => {

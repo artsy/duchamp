@@ -585,7 +585,8 @@ jobs:
             > "$RUNNER_TEMP/gemini-review.json"
         env:
           PROMPT_FILE: ${{ steps.prompt.outputs.gemini_prompt_file }}
-          GEMINI_MODEL: gemini-4-neon-high
+          # Gemini 3.8 Flash for light changes, Neon 4 otherwise; see geminiModelFor.
+          GEMINI_MODEL: ${{ steps.prompt.outputs.gemini_model || 'gemini-4-neon-high' }}
           GEMINI_API_KEY: ${{ secrets.litellm-api-key }}
           GOOGLE_GEMINI_BASE_URL: ${{ steps.experiment.outputs.gemini_base_url }}
 
@@ -604,6 +605,7 @@ jobs:
         run: npx ts-node .tooling/scripts/gemini-usage.ts
         env:
           GEMINI_REVIEW_FILE: ${{ runner.temp }}/gemini-review.json
+          GEMINI_MODEL: ${{ steps.prompt.outputs.gemini_model || 'gemini-4-neon-high' }}
           REVIEW_MODE: ${{ steps.prompt.outputs.review_mode }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           VOLLEY_URL: https://volley.artsy.net/report
